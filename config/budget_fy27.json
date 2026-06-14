@@ -1,0 +1,18 @@
+{
+  "monthly": {
+    "groceries": 30000,
+    "utilities": 15000,
+    "maintenance": 15000,
+    "staff": 40000,
+    "dining": 20000,
+    "transport": 15000,
+    "medical": 20000,
+    "entertainment": 5000,
+    "clothing": 10000,
+    "education": 20000,
+    "home_repair": 20000,
+    "personal_care": 5000,
+    "gifts": 5000,
+    "miscellaneous": 10000
+  }
+}

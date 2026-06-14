@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip3 install *)",
+      "Bash(python3 gmail_auth.py)",
+      "Bash(python3 -c \"import webbrowser; webbrowser.open\\('https://google.com'\\)\")",
+      "Bash(find ~/Desktop -name \"*.json\" 2>/dev/null | grep -i \"credential\\\\|client_secret\\\\|gmail\\\\|google\" | sort)",
+      "Bash(find ~/Downloads -name \"*.json\" 2>/dev/null | grep -i \"credential\\\\|client_secret\\\\|gmail\\\\|google\" | sort)",
+      "Bash(cp ~/Downloads/gmail_credentials.json ~/Desktop/expense-app/config/gmail_credentials.json && echo \"Done\")",
+      "Bash(brew install *)",
+      "Bash(curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc)",
+      "Bash(sudo tee /etc/apt/trusted.gpg.d/ngrok.asc)",
+      "Bash(which ngrok *)"
+    ]
+  }
+}

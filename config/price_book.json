@@ -1,0 +1,94 @@
+{
+  "services": {
+    "plumber": {
+      "keywords": ["plumber", "plumbing", "pipe repair", "tap repair", "drainage"],
+      "min": 300,
+      "max": 2000,
+      "unit": "per visit (Mumbai)"
+    },
+    "electrician": {
+      "keywords": ["electrician", "wiring", "electrical repair", "mcb", "switchboard"],
+      "min": 300,
+      "max": 2000,
+      "unit": "per visit (Mumbai)"
+    },
+    "carpenter": {
+      "keywords": ["carpenter", "carpentry", "furniture repair", "wood work", "wardrobe"],
+      "min": 500,
+      "max": 3000,
+      "unit": "per visit (Mumbai)"
+    },
+    "ac_service": {
+      "keywords": ["ac service", "air conditioner", "ac repair", "ac cleaning", "hvac"],
+      "min": 500,
+      "max": 3000,
+      "unit": "per unit"
+    },
+    "pest_control": {
+      "keywords": ["pest control", "cockroach", "termite", "rodent control", "fumigation"],
+      "min": 800,
+      "max": 5000,
+      "unit": "per treatment"
+    },
+    "painting": {
+      "keywords": ["painting", "painter", "wall paint", "whitewash", "distemper"],
+      "min": 8000,
+      "max": 50000,
+      "unit": "per room/job"
+    },
+    "deep_cleaning": {
+      "keywords": ["deep cleaning", "sofa cleaning", "carpet cleaning", "home cleaning"],
+      "min": 1500,
+      "max": 8000,
+      "unit": "per session"
+    },
+    "grocery": {
+      "keywords": ["bigbasket", "blinkit", "zepto", "swiggy instamart", "groceries"],
+      "min": 500,
+      "max": 8000,
+      "unit": "per order"
+    },
+    "auto_rickshaw": {
+      "keywords": ["auto", "rickshaw", "ola auto", "rapido auto"],
+      "min": 30,
+      "max": 300,
+      "unit": "per ride (Mumbai)"
+    },
+    "cab": {
+      "keywords": ["ola", "uber", "cab", "taxi"],
+      "min": 100,
+      "max": 1500,
+      "unit": "per ride (Mumbai)"
+    },
+    "restaurant": {
+      "keywords": ["restaurant", "hotel", "cafe", "zomato", "swiggy", "food delivery"],
+      "min": 200,
+      "max": 3000,
+      "unit": "per meal (family)"
+    },
+    "medicine": {
+      "keywords": ["pharmacy", "chemist", "medicine", "medplus", "apollo pharmacy", "netmeds"],
+      "min": 100,
+      "max": 5000,
+      "unit": "per purchase"
+    },
+    "doctor": {
+      "keywords": ["doctor", "consultation", "clinic", "hospital", "physician"],
+      "min": 500,
+      "max": 3000,
+      "unit": "per consultation (Mumbai)"
+    },
+    "salon": {
+      "keywords": ["salon", "haircut", "hair cut", "barber", "parlour", "spa"],
+      "min": 200,
+      "max": 3000,
+      "unit": "per visit"
+    },
+    "lpg_cylinder": {
+      "keywords": ["lpg", "gas cylinder", "indane", "hp gas", "bharatgas"],
+      "min": 800,
+      "max": 1200,
+      "unit": "per cylinder"
+    }
+  }
+}

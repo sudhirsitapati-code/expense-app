@@ -1,0 +1,95 @@
+{
+  "recurring": [
+    {
+      "description": "Tata Play / DTH subscription",
+      "payee_keywords": ["tata play", "tataplay", "dth"],
+      "amount_min": 200,
+      "amount_max": 800,
+      "category": "utilities"
+    },
+    {
+      "description": "Electricity bill (BEST / Tata Power / Adani)",
+      "payee_keywords": ["best", "tata power", "adani electricity", "msedcl"],
+      "amount_min": 500,
+      "amount_max": 8000,
+      "category": "utilities"
+    },
+    {
+      "description": "Piped gas bill (MGL / Mahanagar Gas)",
+      "payee_keywords": ["mgl", "mahanagar gas", "igl"],
+      "amount_min": 200,
+      "amount_max": 2000,
+      "category": "utilities"
+    },
+    {
+      "description": "Internet / broadband (ACT / Jio Fiber / Airtel)",
+      "payee_keywords": ["act fibernet", "jio fiber", "airtel broadband", "hathway"],
+      "amount_min": 500,
+      "amount_max": 2000,
+      "category": "utilities"
+    },
+    {
+      "description": "Mobile recharge (Jio / Airtel / Vi)",
+      "payee_keywords": ["jio", "airtel", "vodafone", "vi recharge"],
+      "amount_min": 100,
+      "amount_max": 1000,
+      "category": "utilities"
+    },
+    {
+      "description": "Society maintenance",
+      "payee_keywords": ["society maintenance", "maintenance charges", "hsg society"],
+      "amount_min": 1000,
+      "amount_max": 10000,
+      "category": "maintenance"
+    },
+    {
+      "description": "Netflix subscription",
+      "payee_keywords": ["netflix"],
+      "amount_min": 100,
+      "amount_max": 800,
+      "category": "entertainment"
+    },
+    {
+      "description": "Amazon Prime subscription",
+      "payee_keywords": ["amazon prime", "prime video"],
+      "amount_min": 100,
+      "amount_max": 400,
+      "category": "entertainment"
+    },
+    {
+      "description": "Spotify subscription",
+      "payee_keywords": ["spotify"],
+      "amount_min": 50,
+      "amount_max": 200,
+      "category": "entertainment"
+    },
+    {
+      "description": "Milk / dairy delivery (daily)",
+      "payee_keywords": ["milkbasket", "country delight", "akshayakalpa", "dairy"],
+      "amount_min": 500,
+      "amount_max": 5000,
+      "category": "groceries"
+    },
+    {
+      "description": "Water can / purifier rental",
+      "payee_keywords": ["water can", "aquaguard", "kent", "eureka forbes"],
+      "amount_min": 100,
+      "amount_max": 1000,
+      "category": "utilities"
+    },
+    {
+      "description": "Cook / maid salary",
+      "payee_keywords": ["cook salary", "maid salary", "bai salary", "domestic help"],
+      "amount_min": 2000,
+      "amount_max": 20000,
+      "category": "staff"
+    },
+    {
+      "description": "Driver salary",
+      "payee_keywords": ["driver salary", "chauffeur"],
+      "amount_min": 5000,
+      "amount_max": 25000,
+      "category": "staff"
+    }
+  ]
+}

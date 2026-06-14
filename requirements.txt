@@ -1,0 +1,11 @@
+openai>=1.0.0
+flask>=3.0.0
+twilio>=9.0.0
+google-auth>=2.29.0
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.130.0
+openpyxl>=3.1.0
+pdfplumber>=0.11.0
+python-dotenv>=1.0.0
+apscheduler>=3.10.0
+requests>=2.31.0
