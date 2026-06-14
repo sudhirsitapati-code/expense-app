@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Expense Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+    header { background: #1a1a2e; color: white; padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 1.4rem; font-weight: 600; }
+    header span { font-size: 0.85rem; opacity: 0.6; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 28px 20px; }
+
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .stat-card { background: white; border-radius: 12px; padding: 20px 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+    .stat-card .label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-bottom: 8px; }
+    .stat-card .value { font-size: 1.9rem; font-weight: 700; }
+    .stat-card.green .value { color: #16a34a; }
+    .stat-card.orange .value { color: #ea580c; }
+    .stat-card.blue .value { color: #2563eb; }
+    .stat-card.red .value { color: #dc2626; }
+
+    .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 14px; color: #333; }
+
+    .table-wrap { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); overflow: hidden; margin-bottom: 28px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f8f9fb; text-align: left; padding: 12px 16px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: #888; border-bottom: 1px solid #eee; }
+    td { padding: 13px 16px; font-size: 0.88rem; border-bottom: 1px solid #f3f3f3; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafafa; }
+
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    .badge.auto { background: #dcfce7; color: #16a34a; }
+    .badge.approved { background: #dbeafe; color: #2563eb; }
+    .badge.escalate { background: #fff7ed; color: #ea580c; }
+    .badge.rejected { background: #fee2e2; color: #dc2626; }
+    .badge.pending { background: #f3f4f6; color: #6b7280; }
+
+    .amount { font-weight: 600; }
+    .meta { color: #999; font-size: 0.8rem; }
+
+    .filters { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-btn { padding: 6px 16px; border-radius: 20px; border: 1px solid #ddd; background: white; font-size: 0.83rem; cursor: pointer; transition: all 0.15s; }
+    .filter-btn.active, .filter-btn:hover { background: #1a1a2e; color: white; border-color: #1a1a2e; }
+
+    .empty { text-align: center; padding: 48px; color: #bbb; font-size: 0.9rem; }
+
+    .refresh { background: #1a1a2e; color: white; border: none; padding: 8px 18px; border-radius: 8px; font-size: 0.85rem; cursor: pointer; }
+    .refresh:hover { background: #2d2d4e; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🏠 Household Expense Dashboard</h1>
+  <button class="refresh" onclick="location.reload()">↻ Refresh</button>
+</header>
+
+<div class="container">
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card green">
+      <div class="label">Auto Approved</div>
+      <div class="value" id="count-auto">—</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="label">Approved by Sudhir</div>
+      <div class="value" id="count-approved">—</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="label">Pending Approval</div>
+      <div class="value" id="count-pending">—</div>
+    </div>
+    <div class="stat-card red">
+      <div class="label">Rejected</div>
+      <div class="value" id="count-rejected">—</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="label">Total Spend (Month)</div>
+      <div class="value" id="total-spend">—</div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <button class="filter-btn active" onclick="filterTable('ALL', this)">All</button>
+    <button class="filter-btn" onclick="filterTable('AUTO_APPROVE', this)">Auto Approved</button>
+    <button class="filter-btn" onclick="filterTable('ESCALATE', this)">Pending</button>
+    <button class="filter-btn" onclick="filterTable('APPROVED', this)">Approved</button>
+    <button class="filter-btn" onclick="filterTable('REJECTED', this)">Rejected</button>
+  </div>
+
+  <!-- Table -->
+  <div class="section-title">All Expenses</div>
+  <div class="table-wrap">
+    <table id="expense-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Submitter</th>
+          <th>Vendor</th>
+          <th>Category</th>
+          <th>Amount</th>
+          <th>Payment</th>
+          <th>Status</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        <tr><td colspan="8" class="empty">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+  let allData = [];
+
+  function badgeHtml(action) {
+    const map = {
+      AUTO_APPROVE: ['auto', 'Auto Approved'],
+      APPROVED: ['approved', 'Approved'],
+      APPROVED_LOWER: ['approved', 'Approved (Lower)'],
+      ESCALATE: ['escalate', 'Pending'],
+      REJECTED: ['rejected', 'Rejected'],
+      PENDING_CLARIFICATION: ['pending', 'Clarification'],
+    };
+    const [cls, label] = map[action] || ['pending', action];
+    return `<span class="badge ${cls}">${label}</span>`;
+  }
+
+  function formatDate(ts) {
+    if (!ts) return '—';
+    return ts.slice(0, 10);
+  }
+
+  function formatAmount(n) {
+    return '₹' + Number(n).toLocaleString('en-IN');
+  }
+
+  function renderTable(data) {
+    const tbody = document.getElementById('table-body');
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty">No expenses found.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.slice().reverse().map(e => `
+      <tr data-action="${e.action}">
+        <td class="meta">${formatDate(e.timestamp)}</td>
+        <td>${(e.submitter || '').replace(/\b\w/g, c => c.toUpperCase())}</td>
+        <td><strong>${e.vendor || '—'}</strong><br><span class="meta">${e.description || ''}</span></td>
+        <td class="meta">${e.category || '—'}</td>
+        <td class="amount">${formatAmount(e.approved_amount || e.amount)}</td>
+        <td class="meta">${e.payment_method || '—'}</td>
+        <td>${badgeHtml(e.action)}</td>
+        <td class="meta">${e.market_rate ? '📊 ' + e.market_rate : ''}${e.budget_alert ? ' ⚠️ Budget' : ''}</td>
+      </tr>
+    `).join('');
+  }
+
+  function filterTable(action, btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (action === 'ALL') {
+      renderTable(allData);
+    } else {
+      renderTable(allData.filter(e => e.action === action || (action === 'APPROVED' && e.action === 'APPROVED_LOWER')));
+    }
+  }
+
+  function updateStats(data) {
+    const now = new Date();
+    const monthPrefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+    document.getElementById('count-auto').textContent = data.filter(e => e.action === 'AUTO_APPROVE').length;
+    document.getElementById('count-approved').textContent = data.filter(e => e.action === 'APPROVED' || e.action === 'APPROVED_LOWER').length;
+    document.getElementById('count-pending').textContent = data.filter(e => e.action === 'ESCALATE').length;
+    document.getElementById('count-rejected').textContent = data.filter(e => e.action === 'REJECTED').length;
+
+    const monthSpend = data
+      .filter(e => (e.action === 'AUTO_APPROVE' || e.action === 'APPROVED' || e.action === 'APPROVED_LOWER') && (e.timestamp || '').startsWith(monthPrefix))
+      .reduce((sum, e) => sum + (e.approved_amount || e.amount || 0), 0);
+    document.getElementById('total-spend').textContent = formatAmount(monthSpend);
+  }
+
+  fetch('/api/expenses')
+    .then(r => r.json())
+    .then(data => {
+      allData = data;
+      renderTable(data);
+      updateStats(data);
+    })
+    .catch(() => {
+      document.getElementById('table-body').innerHTML = '<tr><td colspan="8" class="empty">No expense data yet. Submit an expense via WhatsApp to get started!</td></tr>';
+      ['count-auto','count-approved','count-pending','count-rejected','total-spend'].forEach(id => {
+        document.getElementById(id).textContent = '0';
+      });
+    });
+</script>
+</body>
+</html>

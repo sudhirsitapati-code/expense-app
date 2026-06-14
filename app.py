@@ -8,7 +8,7 @@ import os
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from flask import Flask, request
+from flask import Flask, request, render_template, jsonify
 
 from src.approval_engine import ApprovalEngine, ExpenseRequest
 from src.reconcile import run_reconciliation
@@ -197,6 +197,23 @@ def webhook():
         )
 
     return build_twiml_reply(""), 200
+
+
+@app.route("/", methods=["GET"])
+def dashboard():
+    return render_template("dashboard.html")
+
+
+@app.route("/api/expenses", methods=["GET"])
+def api_expenses():
+    log_path = os.path.join(os.path.dirname(__file__), "data", "approval_log.json")
+    if not os.path.exists(log_path):
+        return jsonify([])
+    with open(log_path) as f:
+        try:
+            return jsonify(json.load(f))
+        except json.JSONDecodeError:
+            return jsonify([])
 
 
 @app.route("/health", methods=["GET"])
