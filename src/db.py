@@ -8,7 +8,8 @@ import os
 
 _raw = os.getenv("DATABASE_URL", "")
 DATABASE_URL = _raw.replace("postgresql://", "postgres://", 1)
-print(f"[db] DATABASE_URL present={bool(_raw)} starts_with={_raw[:20] if _raw else 'EMPTY'}")
+_db_keys = [k for k in os.environ if "DATA" in k.upper() or "POST" in k.upper() or "PG" in k.upper() or "SQL" in k.upper()]
+print(f"[db] DATABASE_URL present={bool(_raw)}, DB-related env keys: {_db_keys}")
 
 # ── PostgreSQL path ───────────────────────────────────────────────────────────
 
