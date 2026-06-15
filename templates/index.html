@@ -438,7 +438,7 @@ async function submitExpense(e) {
 }
 
 // ── APPROVALS ──────────────────────────────────────────────────────────────
-const MONTH_NAMES = ['','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+const MONTH_NAMES = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function monthLabel(ym) {
   if (!ym) return '';
   const [y, m] = ym.split('-').map(Number);
