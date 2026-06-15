@@ -877,11 +877,10 @@ def import_from_icici_transactions() -> int:
     One-time import: pull records from icici_transactions.json into master ledger.
     Deduplicates by txn_id. Returns count of newly added records.
     """
-    src_path = os.path.join(DATA_DIR, "icici_transactions.json")
     existing = _load_json(LEDGER_PATH)
     existing_ids = {t["txn_id"] for t in existing}
 
-    source = _load_json(src_path)
+    source = _db.load("icici_transactions")
     added = 0
 
     for t in source:

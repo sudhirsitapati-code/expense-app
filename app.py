@@ -685,7 +685,14 @@ def api_ledger_sync():
     force    = bool(data.get("force", False))
     result   = ledger_sync_gmail(days_back=days, force=force)
 
-    # Also pull in any PDF-parsed ICICI transactions
+    # Fetch + parse PDF statements from Gmail, then import into ledger
+    try:
+        pdf_result = fetch_and_parse_statements(force_reprocess=force)
+        result["pdf_statements"] = pdf_result.get("statements", 0)
+        result["pdf_new"] = pdf_result.get("new", 0)
+    except Exception as e:
+        result["pdf_error"] = str(e)
+
     pdf_imported = import_from_icici_transactions()
     result["pdf_imported"] = pdf_imported
 
