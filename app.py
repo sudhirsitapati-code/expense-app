@@ -278,10 +278,10 @@ def api_mis():
         "maintenance":"Maintenance Expense","home_repair":"One Time Charge",
     }
 
-    # ── FY26 for period: sum actual monthly data for the matched FY months ────
+    # ── FY26 full-year actual (always shown as annual benchmark) ─────────────
     def _fy26_period(heading):
         monthly = FY26_MONTHLY.get(heading, {})
-        return max(0, sum(monthly.get(m, 0) for m in fy_mon_names))
+        return max(0, sum(monthly.values()))
 
     # ── FY27 budget scaled to period ─────────────────────────────────────────
     def _budget(heading):
