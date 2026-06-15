@@ -21,7 +21,7 @@ from src.master_ledger import (
     sync_from_gmail as ledger_sync_gmail,
     get_cc_balance, reconcile_with_approvals,
     import_from_icici_transactions,
-    repair_pdf_descriptions,
+    repair_pdf_descriptions, deduplicate_ledger,
     LEDGER_PATH, _load_json as _ml_load_json, _save_json as _ml_save_json,
     _parse_date as _ml_parse_date,
 )
@@ -708,8 +708,9 @@ def api_ledger_sync():
     force = bool(data.get("force", False))
     result = ledger_sync_gmail(days_back=days, force=force)
 
-    # Fix account names + reclassify unknown entries
+    # Fix account names, reclassify unknown entries, remove cross-source duplicates
     repair_pdf_descriptions()
+    result["deduped"] = deduplicate_ledger()
 
     # Reconcile with approval log
     log = _load_json(APPROVAL_LOG)
@@ -746,6 +747,7 @@ def _run_statement_sync(force: bool):
         result["pdf_new"]        = pdf_result.get("new", 0)
         result["pdf_imported"]   = import_from_icici_transactions()
         result["pdf_repaired"]   = repair_pdf_descriptions()
+        result["deduped"]        = deduplicate_ledger()
         log = _load_json(APPROVAL_LOG)
         result["reconciled"]     = reconcile_with_approvals(log)
         result["status"] = "ok"

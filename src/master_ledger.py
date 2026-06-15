@@ -880,13 +880,75 @@ def get_cc_balance() -> dict:
 
 # ── Public API functions ──────────────────────────────────────────────────────
 
+def deduplicate_ledger() -> int:
+    """Remove duplicate transactions caused by same txn appearing in Gmail alert + PDF.
+    Groups by (date, account, debit, credit). Keeps the richest entry, merges fields.
+    Returns number of duplicates removed.
+    """
+    from collections import defaultdict
+    ledger = _load_json(LEDGER_PATH)
+
+    def _score(t):
+        s = 0
+        if t.get("confidence") == "manual":  s += 100
+        if t.get("raw_description"):          s += 20
+        if t.get("paid_to"):                  s += 10
+        if t.get("type") and t["type"] not in ("", "Expense", "expense"): s += 5
+        if t.get("heading") and t["heading"] not in ("Unknown", "Misc", "", None): s += 5
+        if t.get("source") == "pdf_import":   s += 2
+        return s
+
+    groups = defaultdict(list)
+    for txn in ledger:
+        key = (
+            txn.get("date", ""),
+            txn.get("account", ""),
+            round(float(txn.get("debit") or 0), 2),
+            round(float(txn.get("credit") or 0), 2),
+        )
+        groups[key].append(txn)
+
+    to_remove = set()
+    for key, txns in groups.items():
+        if len(txns) <= 1:
+            continue
+        txns.sort(key=_score, reverse=True)
+        winner = txns[0]
+        for loser in txns[1:]:
+            # Merge useful fields the winner lacks
+            if not winner.get("raw_description") and loser.get("raw_description"):
+                winner["raw_description"] = loser["raw_description"]
+            if not winner.get("paid_to") and loser.get("paid_to"):
+                winner["paid_to"] = loser["paid_to"]
+            if not winner.get("gmail_id") and loser.get("gmail_id"):
+                winner["gmail_id"] = loser["gmail_id"]
+            if (not winner.get("type") or winner["type"] in ("", "Unknown")) and loser.get("type"):
+                winner["type"] = loser["type"]
+            if (not winner.get("heading") or winner["heading"] in ("", "Unknown", "Misc")) and loser.get("heading"):
+                winner["heading"] = loser["heading"]
+            to_remove.add(loser["txn_id"])
+
+    if to_remove:
+        ledger = [t for t in ledger if t["txn_id"] not in to_remove]
+        _save_json(LEDGER_PATH, ledger)
+    return len(to_remove)
+
+
 def import_from_icici_transactions() -> int:
     """
     One-time import: pull records from icici_transactions.json into master ledger.
-    Deduplicates by txn_id. Returns count of newly added records.
+    Deduplicates by txn_id and by (date, account, amount) to prevent cross-source dupes.
+    Returns count of newly added records.
     """
     existing = _load_json(LEDGER_PATH)
     existing_ids = {t["txn_id"] for t in existing}
+    # Secondary dedup key: same transaction already in ledger from another source
+    existing_dupe_keys = {
+        (t.get("date",""), t.get("account",""),
+         round(float(t.get("debit") or 0), 2),
+         round(float(t.get("credit") or 0), 2))
+        for t in existing
+    }
 
     source = _db.load("icici_transactions")
     added = 0
@@ -905,6 +967,10 @@ def import_from_icici_transactions() -> int:
 
         debit  = t.get("debit") or (t.get("amount", 0) if t.get("type") == "debit" else 0)
         credit = t.get("credit") or (t.get("amount", 0) if t.get("type") == "credit" else 0)
+
+        dupe_key = (dt_str, t.get("account", ""), round(float(debit), 2), round(float(credit), 2))
+        if dupe_key in existing_dupe_keys:
+            continue
 
         txn = {
             "txn_id":          txn_id,
@@ -939,6 +1005,7 @@ def import_from_icici_transactions() -> int:
 
         existing.append(txn)
         existing_ids.add(txn_id)
+        existing_dupe_keys.add(dupe_key)
         added += 1
 
     if added:
