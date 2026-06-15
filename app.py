@@ -5,6 +5,7 @@ Flask app — all routes: WhatsApp webhook, HTML screens, JSON APIs.
 
 import json
 import os
+import threading
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -714,47 +715,70 @@ def api_ledger_sync():
     return jsonify({"status": "ok", **result})
 
 
-@app.route("/api/master-ledger/sync-statements", methods=["POST"])
-@login_required
-def api_ledger_sync_statements():
-    """Parse ICICI PDF statements from Gmail and import into master ledger."""
-    data  = request.get_json() or {}
-    force = bool(data.get("force", False))
+_stmt_sync_state = {"running": False, "result": None, "error": None, "started_at": None}
+
+
+def _run_statement_sync(force: bool):
+    """Heavy PDF sync — runs in background thread to avoid request timeout/OOM."""
     result = {}
-
-    # On force, purge pre-FY27 pdf_import entries from master ledger first
-    if force:
-        _fy27_start = datetime(2026, 4, 1)
-        _ledger = _ml_load_json(LEDGER_PATH)
-        _before = len(_ledger)
-        _ledger = [
-            t for t in _ledger
-            if not (
-                t.get("source") == "pdf_import"
-                and (lambda d: d is None or d < _fy27_start)(_ml_parse_date(t.get("date", "")))
-            )
-        ]
-        if len(_ledger) < _before:
-            _ml_save_json(LEDGER_PATH, _ledger)
-            result["pdf_purged"] = _before - len(_ledger)
-
-    # Fetch + parse PDF statements from Gmail
     try:
+        # Purge pre-FY27 pdf_import entries on force
+        if force:
+            _fy27_start = datetime(2026, 4, 1)
+            _ledger = _ml_load_json(LEDGER_PATH)
+            _before = len(_ledger)
+            _ledger = [
+                t for t in _ledger
+                if not (
+                    t.get("source") == "pdf_import"
+                    and (lambda d: d is None or d < _fy27_start)(_ml_parse_date(t.get("date", "")))
+                )
+            ]
+            if len(_ledger) < _before:
+                _ml_save_json(LEDGER_PATH, _ledger)
+                result["pdf_purged"] = _before - len(_ledger)
+
         pdf_result = fetch_and_parse_statements(force_reprocess=force)
         result["pdf_statements"] = pdf_result.get("statements", 0)
         result["pdf_new"]        = pdf_result.get("new", 0)
+        result["pdf_imported"]   = import_from_icici_transactions()
+        result["pdf_repaired"]   = repair_pdf_descriptions()
+        log = _load_json(APPROVAL_LOG)
+        result["reconciled"]     = reconcile_with_approvals(log)
+        result["status"] = "ok"
     except Exception as e:
-        result["pdf_error"] = str(e)
+        result["status"] = "error"
+        result["error"]  = str(e)
+    finally:
+        _stmt_sync_state["result"]  = result
+        _stmt_sync_state["running"] = False
 
-    # Import parsed transactions into master ledger
-    result["pdf_imported"] = import_from_icici_transactions()
-    result["pdf_repaired"]  = repair_pdf_descriptions()
 
-    # Reconcile with approval log
-    log = _load_json(APPROVAL_LOG)
-    result["reconciled"] = reconcile_with_approvals(log)
+@app.route("/api/master-ledger/sync-statements", methods=["POST"])
+@login_required
+def api_ledger_sync_statements():
+    """Start PDF statement sync in background. Returns immediately — poll /sync-status."""
+    if _stmt_sync_state["running"]:
+        return jsonify({"status": "already_running", "message": "Sync already in progress — check /api/master-ledger/sync-status"})
+    data  = request.get_json() or {}
+    force = bool(data.get("force", False))
+    _stmt_sync_state["running"]    = True
+    _stmt_sync_state["result"]     = None
+    _stmt_sync_state["error"]      = None
+    _stmt_sync_state["started_at"] = datetime.now().isoformat()
+    threading.Thread(target=_run_statement_sync, args=(force,), daemon=True).start()
+    return jsonify({"status": "started", "message": "Sync running in background — poll /api/master-ledger/sync-status"})
 
-    return jsonify({"status": "ok", **result})
+
+@app.route("/api/master-ledger/sync-status", methods=["GET"])
+@login_required
+def api_ledger_sync_status():
+    """Check status of background PDF statement sync."""
+    return jsonify({
+        "running":    _stmt_sync_state["running"],
+        "started_at": _stmt_sync_state["started_at"],
+        "result":     _stmt_sync_state["result"],
+    })
 
 
 @app.route("/api/master-ledger/<txn_id>", methods=["PATCH"])

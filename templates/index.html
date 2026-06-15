@@ -243,6 +243,8 @@
     </div>
     <div class="col-sm-2 d-flex gap-2 align-items-center">
       <button class="btn btn-sm btn-primary" onclick="syncLedger()"><i class="bi bi-cloud-download me-1"></i>Sync Gmail</button>
+      <button class="btn btn-sm btn-outline-secondary" id="btnSyncPDF" onclick="syncPDFs(false)"><i class="bi bi-file-earmark-pdf me-1"></i>Sync PDFs</button>
+      <button class="btn btn-sm btn-outline-danger" id="btnForcePDF" onclick="syncPDFs(true)" title="Force re-parse all statements"><i class="bi bi-arrow-clockwise me-1"></i>Force</button>
       <span id="syncStatus" class="text-muted small"></span>
     </div>
   </div>
@@ -718,6 +720,49 @@ async function saveEdit() {
   });
   editModal.hide();
   loadLedger();
+}
+
+async function syncPDFs(force) {
+  const btn  = document.getElementById(force ? 'btnForcePDF' : 'btnSyncPDF');
+  const st   = document.getElementById('syncStatus');
+  const both = [document.getElementById('btnSyncPDF'), document.getElementById('btnForcePDF')];
+  both.forEach(b => b.disabled = true);
+  st.textContent = force ? 'Starting force re-parse…' : 'Starting PDF sync…';
+  try {
+    const r = await fetch('/api/master-ledger/sync-statements', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({force})
+    });
+    const d = await r.json();
+    if (d.status === 'already_running') { st.textContent = 'Already running — polling…'; }
+    else if (d.status !== 'started')    { st.textContent = 'Error: ' + (d.message||'unknown'); both.forEach(b=>b.disabled=false); return; }
+    // Poll until done
+    let dots = 0;
+    const poll = setInterval(async () => {
+      dots = (dots + 1) % 4;
+      st.textContent = 'Processing PDFs' + '.'.repeat(dots + 1);
+      try {
+        const sr = await fetch('/api/master-ledger/sync-status');
+        const sd = await sr.json();
+        if (!sd.running && sd.result) {
+          clearInterval(poll);
+          both.forEach(b => b.disabled = false);
+          const res = sd.result;
+          if (res.status === 'error') { st.textContent = 'Error: ' + res.error; return; }
+          const parts = [];
+          if (res.pdf_purged)    parts.push(`${res.pdf_purged} old purged`);
+          if (res.pdf_statements) parts.push(`${res.pdf_statements} statements`);
+          if (res.pdf_new)       parts.push(`${res.pdf_new} parsed`);
+          if (res.pdf_imported)  parts.push(`${res.pdf_imported} imported`);
+          if (res.reconciled)    parts.push(`${res.reconciled} matched`);
+          st.textContent = '✓ ' + (parts.join(' · ') || 'done');
+          loadLedger();
+        }
+      } catch(e) { /* keep polling */ }
+    }, 3000);
+  } catch(err) {
+    st.textContent = 'Error: ' + err.message;
+    both.forEach(b => b.disabled = false);
+  }
 }
 
 async function syncLedger() {
