@@ -121,7 +121,17 @@ HEADING_RULES = [
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+from src import db as _db
+
+_PATH_TO_KEY = {
+    LEDGER_PATH: "master_ledger",
+}
+
+
 def _load_json(path):
+    key = _PATH_TO_KEY.get(path)
+    if key:
+        return _db.load(key)
     if not os.path.exists(path):
         return []
     with open(path) as f:
@@ -132,6 +142,10 @@ def _load_json(path):
 
 
 def _save_json(path, data):
+    key = _PATH_TO_KEY.get(path)
+    if key:
+        _db.save(key, data)
+        return
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         json.dump(data, f, indent=2, default=str)
@@ -632,18 +646,13 @@ PROCESSED_IDS_PATH = os.path.join(DATA_DIR, "processed_gmail_ids.json")
 
 
 def _get_processed_ids() -> set:
-    if not os.path.exists(PROCESSED_IDS_PATH):
-        return set()
-    with open(PROCESSED_IDS_PATH) as f:
-        return set(json.load(f))
+    return set(_db.load("processed_gmail_ids", default=[]))
 
 
 def _mark_processed(msg_id: str):
     ids = _get_processed_ids()
     ids.add(msg_id)
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(PROCESSED_IDS_PATH, "w") as f:
-        json.dump(list(ids), f)
+    _db.save("processed_gmail_ids", list(ids))
 
 
 def sync_from_gmail(days_back: int = 90) -> dict:

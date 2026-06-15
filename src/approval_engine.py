@@ -23,6 +23,8 @@ with open(os.path.join(CONFIG_DIR, "budget_fy27.json")) as f:
 
 APPROVAL_LOG_PATH = os.path.join(DATA_DIR, "approval_log.json")
 
+from src import db as _db
+
 
 @dataclass
 class ExpenseRequest:
@@ -85,10 +87,7 @@ class ApprovalEngine:
 
     def _get_current_month_spend(self, category: str) -> float:
         try:
-            if not os.path.exists(APPROVAL_LOG_PATH):
-                return 0.0
-            with open(APPROVAL_LOG_PATH) as f:
-                log = json.load(f)
+            log = _db.load("approval_log")
             month_prefix = datetime.now().strftime("%Y-%m")
             return sum(
                 e.get("amount", 0) for e in log
@@ -218,14 +217,7 @@ Reply ONLY with JSON."""
         )
 
     def _save_to_log(self, req: ExpenseRequest, decision: ApprovalDecision):
-        os.makedirs(DATA_DIR, exist_ok=True)
-        log = []
-        if os.path.exists(APPROVAL_LOG_PATH):
-            with open(APPROVAL_LOG_PATH) as f:
-                try:
-                    log = json.load(f)
-                except json.JSONDecodeError:
-                    log = []
+        log = _db.load("approval_log")
         entry = {
             "request_id": req.request_id,
             "timestamp": req.timestamp,
@@ -246,14 +238,10 @@ Reply ONLY with JSON."""
             "confirmed_by": "post_facto" if decision.confirmed_paid else None,
         }
         log.append(entry)
-        with open(APPROVAL_LOG_PATH, "w") as f:
-            json.dump(log, f, indent=2)
+        _db.save("approval_log", log)
 
     def update_log_with_sudhir_response(self, request_id: str, response: str):
-        if not os.path.exists(APPROVAL_LOG_PATH):
-            return
-        with open(APPROVAL_LOG_PATH) as f:
-            log = json.load(f)
+        log = _db.load("approval_log")
         for entry in log:
             if entry["request_id"] == request_id:
                 resp_upper = response.strip().upper()
@@ -273,5 +261,4 @@ Reply ONLY with JSON."""
                         pass
                 entry["response_timestamp"] = datetime.now().isoformat()
                 break
-        with open(APPROVAL_LOG_PATH, "w") as f:
-            json.dump(log, f, indent=2)
+        _db.save("approval_log", log)

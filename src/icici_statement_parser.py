@@ -39,35 +39,25 @@ def _get_service():
     return build("gmail", "v1", credentials=get_credentials())
 
 
+from src import db as _db
+
+
 def _get_processed_ids() -> set:
-    if not os.path.exists(PROCESSED_STMT_IDS_PATH):
-        return set()
-    with open(PROCESSED_STMT_IDS_PATH) as f:
-        return set(json.load(f))
+    return set(_db.load("processed_statement_ids", default=[]))
 
 
 def _save_processed_id(msg_id: str):
-    os.makedirs(DATA_DIR, exist_ok=True)
     ids = _get_processed_ids()
     ids.add(msg_id)
-    with open(PROCESSED_STMT_IDS_PATH, "w") as f:
-        json.dump(list(ids), f)
+    _db.save("processed_statement_ids", list(ids))
 
 
 def _load_transactions() -> list:
-    if not os.path.exists(TRANSACTIONS_PATH):
-        return []
-    with open(TRANSACTIONS_PATH) as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return []
+    return _db.load("icici_transactions")
 
 
 def _save_transactions(transactions: list):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(TRANSACTIONS_PATH, "w") as f:
-        json.dump(transactions, f, indent=2)
+    _db.save("icici_transactions", transactions)
 
 
 def _make_txn_id(date: str, description: str, amount: float) -> str:

@@ -27,6 +27,7 @@ from src.whatsapp_handler import (
     send_auto_approval_notice, send_clarification_request,
     SUDHIR, HOUSEHOLD_MEMBERS,
 )
+from src import db
 
 load_dotenv()
 
@@ -39,9 +40,12 @@ BASE_DIR = os.path.dirname(__file__)
 DATA_DIR = os.path.join(BASE_DIR, "data")
 CONFIG_DIR = os.path.join(BASE_DIR, "config")
 
+# Legacy file paths kept for local dev fallback; production uses db module
 APPROVAL_LOG = os.path.join(DATA_DIR, "approval_log.json")
 RECONCILE_LOG = os.path.join(DATA_DIR, "reconcile_log.json")
 TRANSACTIONS_PATH = os.path.join(DATA_DIR, "icici_transactions.json")
+
+db.init_db()
 
 PENDING_CLARIFICATION: dict = {}
 NUMBER_TO_NAME = {v: k for k, v in HOUSEHOLD_MEMBERS.items() if v}
@@ -67,7 +71,16 @@ def login_required(f):
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+_PATH_TO_KEY = {
+    APPROVAL_LOG:    "approval_log",
+    RECONCILE_LOG:   "reconcile_log",
+    TRANSACTIONS_PATH: "icici_transactions",
+}
+
 def _load_json(path):
+    key = _PATH_TO_KEY.get(path)
+    if key:
+        return db.load(key)
     if not os.path.exists(path):
         return []
     with open(path) as f:
@@ -78,18 +91,22 @@ def _load_json(path):
 
 
 def _save_json(path, data):
+    key = _PATH_TO_KEY.get(path)
+    if key:
+        db.save(key, data)
+        return
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
 
 def _update_log_entry(request_id: str, updates: dict):
-    log = _load_json(APPROVAL_LOG)
+    log = db.load("approval_log")
     for entry in log:
         if entry.get("request_id") == request_id:
             entry.update(updates)
             break
-    _save_json(APPROVAL_LOG, log)
+    db.save("approval_log", log)
 
 
 # ── AUTH ─────────────────────────────────────────────────────────────────────
