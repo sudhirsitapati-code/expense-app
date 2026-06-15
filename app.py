@@ -628,6 +628,13 @@ def api_approval_log_raw():
     return jsonify({"total": len(log), "last_30": log[-30:]})
 
 
+@app.route("/api/db-status", methods=["GET"])
+@login_required
+def api_db_status():
+    """Debug: show DB connection health and stored keys."""
+    return jsonify(db.db_status())
+
+
 @app.route("/api/approvals-structured", methods=["GET"])
 @login_required
 def api_approvals_structured():
@@ -647,13 +654,15 @@ def api_approvals_structured():
             return (e.get("response_timestamp") or e.get("timestamp",""))[:7]
         return (e.get("timestamp",""))[:7]
 
-    # All months that have at least one approved entry (for the month picker)
+    today_prefix = now.strftime("%Y-%m")
+    # All months that have at least one approved entry (for the month picker), not in the future
     months_with_data = sorted({
         _effective_month(e)
         for e in log
         if (e.get("action") in approved_actions
             or (e.get("action") == "ESCALATE" and "sudhir_response" in e))
         and len(_effective_month(e)) == 7
+        and _effective_month(e) <= today_prefix
     }, reverse=True)
 
     pending      = [e for e in log if e.get("action") == "ESCALATE" and "sudhir_response" not in e]

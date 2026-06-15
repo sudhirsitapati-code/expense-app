@@ -18,6 +18,7 @@ def _conn():
 def init_db():
     """Create kv_store table if it doesn't exist. Call once at startup."""
     if not DATABASE_URL:
+        print("[db] No DATABASE_URL — using local file storage")
         return
     try:
         with _conn() as conn:
@@ -30,8 +31,9 @@ def init_db():
                     )
                 """)
             conn.commit()
+        print("[db] PostgreSQL kv_store ready")
     except Exception as e:
-        print(f"DB init error: {e}")
+        print(f"[db] INIT ERROR — will fall back to files: {e}")
 
 
 def load(key: str, default=None):
@@ -47,14 +49,15 @@ def load(key: str, default=None):
                 row = cur.fetchone()
                 return row[0] if row else default
     except Exception as e:
-        print(f"DB load error ({key}): {e}")
+        print(f"[db] LOAD ERROR ({key}): {e}")
         return _file_load(key, default)
 
 
 def save(key: str, value):
-    """Persist a JSON-serialisable value under key."""
+    """Persist a JSON-serialisable value under key. Raises on DB failure."""
     if not DATABASE_URL:
-        return _file_save(key, value)
+        _file_save(key, value)
+        return
     try:
         with _conn() as conn:
             with conn.cursor() as cur:
@@ -66,8 +69,29 @@ def save(key: str, value):
                 """, (key, json.dumps(value)))
             conn.commit()
     except Exception as e:
-        print(f"DB save error ({key}): {e}")
-        _file_save(key, value)
+        print(f"[db] SAVE ERROR ({key}): {e}")
+        raise   # propagate so callers know the save failed
+
+
+def db_status() -> dict:
+    """Return connection health info — used by /api/db-status endpoint."""
+    if not DATABASE_URL:
+        return {"backend": "file", "ok": True}
+    try:
+        with _conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM kv_store")
+                count = cur.fetchone()[0]
+                cur.execute("SELECT key, updated_at FROM kv_store ORDER BY updated_at DESC")
+                rows = cur.fetchall()
+        return {
+            "backend": "postgres",
+            "ok": True,
+            "keys": count,
+            "entries": [{"key": r[0], "updated_at": str(r[1])} for r in rows],
+        }
+    except Exception as e:
+        return {"backend": "postgres", "ok": False, "error": str(e)}
 
 
 # ── File fallback (local dev) ─────────────────────────────────────────────────
