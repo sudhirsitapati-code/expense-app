@@ -21,6 +21,8 @@ from src.master_ledger import (
     get_cc_balance, reconcile_with_approvals,
     import_from_icici_transactions,
     repair_pdf_descriptions,
+    LEDGER_PATH, _load_json as _ml_load_json, _save_json as _ml_save_json,
+    _parse_date as _ml_parse_date,
 )
 from src.whatsapp_handler import (
     build_twiml_reply, parse_incoming,
@@ -704,6 +706,22 @@ def api_ledger_sync():
     days     = int(data.get("days", 90))
     force    = bool(data.get("force", False))
     result   = ledger_sync_gmail(days_back=days, force=force)
+
+    # On force sync, purge pre-FY27 pdf_import entries from master ledger
+    if force:
+        _fy27_start = datetime(2026, 4, 1)
+        _ledger = _ml_load_json(LEDGER_PATH)
+        _before = len(_ledger)
+        _ledger = [
+            t for t in _ledger
+            if not (
+                t.get("source") == "pdf_import"
+                and (lambda d: d is None or d < _fy27_start)(_ml_parse_date(t.get("date", "")))
+            )
+        ]
+        if len(_ledger) < _before:
+            _ml_save_json(LEDGER_PATH, _ledger)
+            result["pdf_purged"] = _before - len(_ledger)
 
     # Fetch + parse PDF statements from Gmail, then import into ledger
     try:
