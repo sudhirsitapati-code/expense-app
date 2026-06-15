@@ -947,7 +947,29 @@ def repair_pdf_descriptions() -> int:
     Returns count of repaired entries.
     """
     ledger = _load_json(LEDGER_PATH)
-    source_map = {t.get("txn_id"): t for t in _db.load("icici_transactions") if t.get("txn_id")}
+
+    # Normalise legacy account names: icicXXXX → ICICI-XXXX
+    _ACCT_RE = re.compile(r"^icic(\d{4})$", re.IGNORECASE)
+    acct_fixed = 0
+    for txn in ledger:
+        m = _ACCT_RE.match(txn.get("account", ""))
+        if m:
+            txn["account"] = f"ICICI-{m.group(1)}"
+            acct_fixed += 1
+    if acct_fixed:
+        _save_json(LEDGER_PATH, ledger)
+
+    icici_txns = _db.load("icici_transactions")
+    icici_fixed = 0
+    for t in icici_txns:
+        m = _ACCT_RE.match(t.get("account", ""))
+        if m:
+            t["account"] = f"ICICI-{m.group(1)}"
+            icici_fixed += 1
+    if icici_fixed:
+        _db.save("icici_transactions", icici_txns)
+
+    source_map = {t.get("txn_id"): t for t in icici_txns if t.get("txn_id")}
     repaired = 0
     for txn in ledger:
         if txn.get("source") != "pdf_import" or txn.get("confidence") == "manual":
