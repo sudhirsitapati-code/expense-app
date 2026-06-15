@@ -21,7 +21,10 @@ from src.icici_classifier import classify_transactions
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 ICICI_LABEL = os.getenv("ICICI_GMAIL_LABEL", "ICICI-Expenses")
-PDF_PASSWORD = os.getenv("ICICI_PDF_PASSWORD", "")
+# Try both cases — summary statements use SUDH3108, e-statements use sudh3108
+_PDF_PASSWORD_PRIMARY = os.getenv("ICICI_PDF_PASSWORD", "SUDH3108")
+_PDF_PASSWORDS = [_PDF_PASSWORD_PRIMARY, _PDF_PASSWORD_PRIMARY.lower(), _PDF_PASSWORD_PRIMARY.upper()]
+PDF_PASSWORD = _PDF_PASSWORD_PRIMARY  # kept for legacy callers
 
 TRANSACTIONS_PATH = os.path.join(DATA_DIR, "icici_transactions.json")
 PROCESSED_STMT_IDS_PATH = os.path.join(DATA_DIR, "processed_statement_ids.json")
@@ -88,15 +91,17 @@ def _fy_fields(dt: Optional[datetime]) -> dict:
     return {"month_no": fn, "month_name": _FY_MONTH_NAME.get(fn, "")}
 
 
-def _extract_account_from_text(text: str) -> str:
-    """Try to extract the last 4 digits of the ICICI account from statement header."""
-    m = re.search(r"[Aa]ccount\s*[Nn]o[\.\:]?\s*[\dX]{4,}(\d{4})", text)
-    if m:
-        return f"icic{m.group(1)}"
-    m = re.search(r"(\d{4})\s*$", text[:500], re.MULTILINE)
-    if m:
-        return f"icic{m.group(1)}"
-    return "icici"
+
+def _open_pdf(pdf_bytes: bytes):
+    """Try all password variants; return open pdfplumber object or raise."""
+    for pw in _PDF_PASSWORDS:
+        try:
+            pdf = pdfplumber.open(io.BytesIO(pdf_bytes), password=pw)
+            _ = pdf.pages  # force open
+            return pdf
+        except Exception:
+            pass
+    raise ValueError("No password variant worked for this PDF")
 
 
 def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
@@ -105,8 +110,7 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
     account = "icici"
 
     try:
-        pdf_file = io.BytesIO(pdf_bytes)
-        with pdfplumber.open(pdf_file, password=PDF_PASSWORD) as pdf:
+        with _open_pdf(pdf_bytes) as pdf:
             full_text = ""
             for page in pdf.pages:
                 text = page.extract_text() or ""
@@ -124,9 +128,11 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             # Try to get account from header
             account = _extract_account_from_text(full_text)
 
-            # Fallback to text parsing if no tables worked
-            if not transactions:
-                transactions = _parse_from_text(full_text)
+            # Always also try text parsing — ICICI e-statements embed
+            # transactions in raw text even when table extraction fails
+            text_txns = _parse_from_text(full_text)
+            if text_txns and len(text_txns) > len(transactions):
+                transactions = text_txns
 
     except Exception as e:
         print(f"PDF parse error: {e}")
@@ -203,9 +209,92 @@ def _parse_transaction_row(row: list) -> Optional[dict]:
     return {"date": row_clean[0], "description": description, "amount": amount, "txn_direction": direction}
 
 
+def _extract_account_from_text(text: str) -> str:
+    """Extract last 4 digits of account number from statement text."""
+    # Prefer masked account number pattern: XXXXXXXX7281 (8+ X's followed by digits)
+    # over Customer ID (XXXXX6511 = shorter X sequence)
+    for pat in [
+        r"[Xx]{6,}(\d{4})\b",                                      # long masked account e.g. XXXXXXXX7281
+        r"[Aa]ccount\s*(?:[Nn]o|[Nn]umber)[\.\:]?\s*[\dX]{6,}(\d{4})",  # Account No: XXXXXXXX7281
+        r"[Aa]/[Cc]\s+[Xx]{4,}(\d{4})\b",                         # A/c XXXX1234
+        r"Statement.*?[Aa]ccount\s+[Xx\d]{6,}(\d{4})",            # in statement header line
+    ]:
+        m = re.search(pat, text[:2000])
+        if m:
+            return f"icic{m.group(1)}"
+    # Fallback: full numeric account number (12+ digits)
+    m = re.search(r"\b\d{8,}(\d{4})\b", text[:1000])
+    if m:
+        return f"icic{m.group(1)}"
+    return "icici"
+
+
 def _parse_from_text(text: str) -> list:
-    """Fallback: parse transactions from raw PDF text."""
+    """
+    Parse transactions from raw ICICI statement text.
+    Handles two column formats:
+      - Savings/legacy: ...amount Dr/Cr
+      - Current/e-statement: date mode particulars deposits withdrawals balance
+    """
     transactions = []
+
+    # Format 1: ICICI e-statement (current/savings detailed)
+    # Line: DD-MM-YYYY  [MODE]  PARTICULARS  [DEPOSITS]  [WITHDRAWALS]  BALANCE
+    # The line has the date at start; deposits/withdrawals are optional (only one present per row)
+    efmt = re.compile(
+        r"^(\d{2}-\d{2}-\d{4})\s+"        # date
+        r"(?:\S+\s+)?"                      # optional MODE token
+        r"(.+?)\s+"                         # particulars (greedy)
+        r"([\d,]+\.\d{2})\s+"              # amount1
+        r"(?:([\d,]+\.\d{2})\s+)?"         # amount2 optional
+        r"(-?[\d,]+\.\d{2})\s*$",          # balance
+        re.MULTILINE
+    )
+    seen = set()
+    for m in efmt.finditer(text):
+        date_str, desc, amt1, amt2, balance = m.groups()
+        desc = desc.strip()
+        # Skip header row
+        if desc.upper() in ("PARTICULARS", "MODE PARTICULARS", "DATE"):
+            continue
+        # Skip B/F (brought forward) line
+        if "B/F" in desc.upper() or "B/F" == desc.strip():
+            continue
+        # Skip Total row
+        if "Total:" in desc or desc.strip() == "Total:":
+            continue
+
+        # If two amounts present, amt1=deposits, amt2=withdrawals
+        # If one amount, check balance direction to decide
+        if amt2:
+            dep = float(amt1.replace(",", ""))
+            wdl = float(amt2.replace(",", ""))
+            if wdl > 0:
+                amount, direction = wdl, "debit"
+            else:
+                amount, direction = dep, "credit"
+        else:
+            amount = float(amt1.replace(",", ""))
+            # Heuristic: if balance went more negative → debit
+            direction = "debit"  # default; classifier will refine
+
+        if amount < 1:
+            continue
+        key = f"{date_str}|{desc}|{amount}"
+        if key in seen:
+            continue
+        seen.add(key)
+        transactions.append({
+            "date": date_str,
+            "description": desc,
+            "amount": amount,
+            "txn_direction": direction,
+        })
+
+    if transactions:
+        return transactions
+
+    # Format 2: legacy Dr/Cr format
     pattern = re.compile(
         r"(\d{2}[/-]\d{2}[/-]\d{2,4})\s+(.+?)\s+([\d,]+\.\d{2})\s*(Dr|Cr)?",
         re.IGNORECASE
