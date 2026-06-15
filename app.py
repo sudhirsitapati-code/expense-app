@@ -19,6 +19,7 @@ from src.master_ledger import (
     load_ledger, get_uncertain, update_transaction,
     sync_from_gmail as ledger_sync_gmail,
     get_cc_balance, reconcile_with_approvals,
+    import_from_icici_transactions,
 )
 from src.whatsapp_handler import (
     build_twiml_reply, parse_incoming,
@@ -570,7 +571,11 @@ def api_ledger_sync():
     days     = int(data.get("days", 90))
     result   = ledger_sync_gmail(days_back=days)
 
-    # Also reconcile SBI entries with approval log
+    # Also pull in any PDF-parsed ICICI transactions
+    pdf_imported = import_from_icici_transactions()
+    result["pdf_imported"] = pdf_imported
+
+    # Reconcile SBI/ICICI entries with approval log
     log = _load_json(APPROVAL_LOG)
     matched = reconcile_with_approvals(log)
     result["reconciled"] = matched
@@ -611,7 +616,8 @@ def api_approvals_structured():
     pending      = [e for e in log if e.get("action") == "ESCALATE" and "sudhir_response" not in e]
     this_month   = [e for e in log
                     if (e.get("timestamp",""))[:7] == month_prefix
-                    and e.get("action") in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER")]
+                    and (e.get("action") in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER")
+                         or (e.get("action") == "ESCALATE" and "sudhir_response" in e))]
     unauthorized = [e for e in recon if not e.get("matched") and not e.get("is_recurring") and not e.get("ignored")]
     tracker      = [e for e in log
                     if e.get("action") in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER")

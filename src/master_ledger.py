@@ -215,23 +215,32 @@ def _classify_heading(desc: str, txn_type: str) -> tuple[Optional[str], bool]:
 
 def _extract_paid_to(desc: str, bank: str) -> str:
     """Clean up raw bank description to a readable vendor name."""
-    # Strip common bank prefixes
-    prefixes = [
-        r"^UPI-", r"^NEFT-", r"^IMPS-", r"^POS-", r"^ATM-",
-        r"^UPI/", r"^NEFT/", r"^IMPS/", r"^POS ",
-        r"^PURCHASE AT ", r"^BILL PAYMENT-", r"^ECS-",
-        r"\d{6,}/", r"/\d{4,}/",
-    ]
     cleaned = desc.strip()
-    for p in prefixes:
-        cleaned = re.sub(p, "", cleaned, flags=re.IGNORECASE).strip()
+
+    # Strip VPS* payment gateway prefix (ICICI debit card POS)
+    cleaned = re.sub(r"^VPS\*", "", cleaned, flags=re.I).strip()
+    # Strip other common prefixes
+    for p in [r"^UPI-", r"^NEFT-", r"^IMPS-", r"^POS-", r"^ATM-",
+              r"^UPI/", r"^NEFT/", r"^IMPS/", r"^POS ",
+              r"^PURCHASE AT ", r"^BILL PAYMENT-", r"^ECS-",
+              r"\d{6,}/", r"/\d{4,}/"]:
+        cleaned = re.sub(p, "", cleaned, flags=re.I).strip()
+
+    # Known VPS* → readable name mappings
+    VENDOR_MAP = {
+        "COPPER CHIM": "Copper Chimney", "COPPER CHIMNEY": "Copper Chimney",
+        "HAMLEYS": "Hamleys", "MANSURI CAT": "Mansuri Caterers",
+        "BOMBAY GYM": "Bombay Gymkhana", "BIGBASKET": "BigBasket",
+        "SWIGGY": "Swiggy", "ZOMATO": "Zomato",
+    }
+    upper = cleaned.upper()
+    for k, v in VENDOR_MAP.items():
+        if k in upper:
+            return v
 
     # Take first meaningful part
     parts = re.split(r"[/|\\]", cleaned)
-    vendor = parts[0].strip()
-
-    # Title case, cap length
-    vendor = vendor[:50].title()
+    vendor = parts[0].strip()[:50].title()
     return vendor or desc[:30].title()
 
 
@@ -365,49 +374,97 @@ def _get_gmail_service():
 
 
 def _decode_body(msg: dict) -> str:
-    import base64
+    """Extract readable text from email — prefers plain text, falls back to HTML stripped."""
+    import base64, re as _re
+
+    def _decode(data: str) -> str:
+        return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+
+    def _parts_text(parts, mime):
+        for p in parts:
+            if p.get("mimeType") == mime:
+                d = p.get("body", {}).get("data", "")
+                if d:
+                    return _decode(d)
+            sub = p.get("parts", [])
+            if sub:
+                r = _parts_text(sub, mime)
+                if r:
+                    return r
+        return ""
+
     payload = msg.get("payload", {})
     parts   = payload.get("parts", [])
-    if parts:
-        for part in parts:
-            if part.get("mimeType") == "text/plain":
-                data = part.get("body", {}).get("data", "")
-                if data:
-                    return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
-    data = payload.get("body", {}).get("data", "")
-    if data:
-        return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
-    return ""
+
+    # Try plain text first
+    text = _parts_text(parts, "text/plain")
+    if not text:
+        # Fallback: body directly
+        d = payload.get("body", {}).get("data", "")
+        if d:
+            text = _decode(d)
+
+    if not text:
+        # Try HTML and strip tags
+        html = _parts_text(parts, "text/html")
+        if html:
+            text = _re.sub(r"<[^>]+>", " ", html)
+            text = _re.sub(r"\s+", " ", text).strip()
+
+    return text
 
 
 def _parse_icici_savings(body: str, gmail_id: str) -> Optional[dict]:
-    """ICICI savings account debit/credit alert."""
-    # Debit
-    m_amt   = re.search(r"INR\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?debited", body, re.I)
-    m_credit= re.search(r"INR\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?credited", body, re.I)
-    m_acct  = re.search(r"(?:Account|A/c)[^\d]*(\d{3,4})", body, re.I)
-    m_date  = re.search(r"on\s+(\d{2}[-/]\d{2}[-/]\d{2,4})", body, re.I)
-    m_info  = re.search(r"(?:Info|for|towards)[:\s]+([^\n\.]{5,60})", body, re.I)
+    """ICICI savings account debit/credit alert.
 
-    if not (m_amt or m_credit):
+    Actual formats observed:
+      'A purchase of Rs. 5,740.00 has been made using your Debit Card linked to
+       ICICI Bank Account XX331 on 13-Jun-26. Info: VPS*COPPER CHIM.'
+      'INR X has been debited from your ICICI Bank Account XX1234 on DD-MM-YY'
+      'Rs. X has been credited to your ICICI Bank Account XX1234 on DD-MM-YY'
+    """
+    # Amount — several formats
+    m_amt = (
+        re.search(r"[Rr]s\.?\s*([\d,]+(?:\.\d{2})?)\s+has been (?:made|debited|paid)", body, re.I) or
+        re.search(r"purchase of\s+[Rr]s\.?\s*([\d,]+(?:\.\d{2})?)", body, re.I) or
+        re.search(r"INR\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?debited", body, re.I) or
+        re.search(r"payment of\s+[Rr]s\s*([\d,]+(?:\.\d{2})?)", body, re.I) or
+        re.search(r"[Rr]s\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?(?:debited|paid|deducted)", body, re.I)
+    )
+    m_cr = (
+        re.search(r"INR\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?credited", body, re.I) or
+        re.search(r"[Rr]s\.?\s*([\d,]+(?:\.\d{2})?)\s+has been credited", body, re.I) or
+        re.search(r"credited.*?[Rr]s\.?\s*([\d,]+(?:\.\d{2})?)", body, re.I)
+    )
+
+    if not (m_amt or m_cr):
         return None
 
     is_debit = bool(m_amt)
-    amount   = float((m_amt or m_credit).group(1).replace(",",""))
+    amount   = float((m_amt or m_cr).group(1).replace(",", ""))
+
+    m_acct  = re.search(r"(?:Account|Savings Account)\s+(?:No\.?\s+)?(?:XX+)?(\d{3,4})", body, re.I)
+    m_date  = re.search(r"on\s+(\w{3,4}\s+\d{1,2},?\s+\d{4}|\d{1,2}[-/]\w{3,9}[-/]\d{2,4}|\d{2}[-/]\d{2}[-/]\d{2,4})", body, re.I)
+    m_info  = (
+        re.search(r"Info[:\s]+([^\n\.]{3,60})", body, re.I) or
+        re.search(r"towards\s+([A-Z][A-Za-z\s]{3,40}?)(?:\s+from|\s+on|\.|$)", body, re.I) or
+        re.search(r"payment\s+(?:to|of)\s+([A-Z][A-Za-z\s]{3,40}?)(?:\s+from|\s+on|\.|$)", body, re.I)
+    )
+
     acct_no  = f"ICICI-{m_acct.group(1)}" if m_acct else "ICICI-????"
     date_str = m_date.group(1) if m_date else datetime.now().strftime("%d/%m/%Y")
     desc     = m_info.group(1).strip() if m_info else body[:80]
 
     return {
-        "gmail_id":       gmail_id,
-        "bank":           "ICICI",
-        "account":        acct_no,
-        "account_type":   "savings",
+        "gmail_id":        gmail_id,
+        "bank":            "ICICI",
+        "account":         acct_no,
+        "account_type":    "savings",
         "raw_description": desc,
-        "debit":          amount if is_debit else 0,
-        "credit":         0 if is_debit else amount,
-        "date":           date_str,
-        "source":         "gmail_alert",
+        "debit":           amount if is_debit else 0,
+        "credit":          0 if is_debit else amount,
+        "date":            date_str,
+        "source":          "gmail_alert",
     }
 
 
@@ -440,21 +497,26 @@ def _parse_icici_credit_card(body: str, gmail_id: str) -> Optional[dict]:
 
 
 def _parse_sbi_savings(body: str, gmail_id: str) -> Optional[dict]:
-    """SBI savings debit/credit alert."""
-    m_debit  = re.search(r"Rs\.?\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?debited", body, re.I)
-    m_credit = re.search(r"Rs\.?\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?credited", body, re.I)
-    m_acct   = re.search(r"account\s+(?:no\.?\s+)?(?:XX|x+)?(\d{3,4})", body, re.I)
-    m_date   = re.search(r"on\s+(\d{2}[-/]\d{2}[-/]\d{2,4})", body, re.I)
-    m_info   = re.search(r"Info[:\s]+([^\n\.]{5,60})", body, re.I)
+    """SBI savings debit/credit alert — emails are HTML-only."""
+    # Strip style blocks and tags first
+    clean = re.sub(r"<style[^>]*>.*?</style>", " ", body, flags=re.S | re.I)
+    clean = re.sub(r"<[^>]+>", " ", clean)
+    clean = re.sub(r"\s+", " ", clean).strip()
+
+    m_debit  = re.search(r"[Rr]s\.?\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?(?:debited|deducted)", clean, re.I)
+    m_credit = re.search(r"[Rr]s\.?\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?credited", clean, re.I)
+    m_acct   = re.search(r"(?:account|A/c)[^\d]*(?:XX|x+)?(\d{3,5})", clean, re.I)
+    m_date   = re.search(r"(?:on|dated)\s+(\d{1,2}[-/]\w{3,9}[-/]\d{2,4}|\d{2}[-/]\d{2}[-/]\d{2,4})", clean, re.I)
+    m_info   = re.search(r"(?:Info|towards|narration|remarks)[:\s]+([A-Za-z0-9*\s\-&\.\/]{3,60}?)(?:\.|  |\n|Rs)", clean, re.I)
 
     if not (m_debit or m_credit):
         return None
 
     is_debit = bool(m_debit)
-    amount   = float((m_debit or m_credit).group(1).replace(",",""))
+    amount   = float((m_debit or m_credit).group(1).replace(",", ""))
     acct_no  = f"SBI-{m_acct.group(1)}" if m_acct else "SBI-????"
     date_str = m_date.group(1) if m_date else datetime.now().strftime("%d/%m/%Y")
-    desc     = m_info.group(1).strip() if m_info else body[:80]
+    desc     = m_info.group(1).strip() if m_info else clean[:80]
 
     return {
         "gmail_id":        gmail_id,
@@ -497,11 +559,30 @@ def _parse_sbi_credit_card(body: str, gmail_id: str) -> Optional[dict]:
     }
 
 
-def _detect_and_parse(body: str, gmail_id: str) -> Optional[dict]:
-    """Detect bank/account type from email body and parse."""
+def _strip_html(html: str) -> str:
+    """Strip HTML tags and normalize whitespace."""
+    clean = re.sub(r"<style[^>]*>.*?</style>", " ", html, flags=re.S | re.I)
+    clean = re.sub(r"<script[^>]*>.*?</script>", " ", clean, flags=re.S | re.I)
+    clean = re.sub(r"<[^>]+>", " ", clean)
+    clean = re.sub(r"&nbsp;", " ", clean, flags=re.I)
+    clean = re.sub(r"&amp;", "&", clean, flags=re.I)
+    return re.sub(r"\s+", " ", clean).strip()
+
+
+def _detect_and_parse(raw_body: str, gmail_id: str) -> Optional[dict]:
+    """Detect bank/account type from email body and parse.
+
+    Uses the clean text version for pattern matching so HTML emails work too.
+    """
+    # Use plain text as-is; if it looks like HTML, strip tags first
+    body = raw_body
+    if "<html" in raw_body.lower() or "<style" in raw_body.lower():
+        body = _strip_html(raw_body)
+
     b = body.lower()
     is_icici = "icici bank" in b or "icicibank" in b
-    is_sbi   = "sbi" in b or "state bank" in b
+    is_sbi   = ("state bank" in b or "sbi card" in b) and "icici" not in b
+    is_kotak = "kotak" in b
     is_cc    = "credit card" in b or "sbi card" in b
 
     if is_icici and is_cc:
@@ -512,7 +593,39 @@ def _detect_and_parse(body: str, gmail_id: str) -> Optional[dict]:
         return _parse_sbi_credit_card(body, gmail_id)
     if is_sbi:
         return _parse_sbi_savings(body, gmail_id)
+    if is_kotak:
+        return _parse_kotak(body, gmail_id)
     return None
+
+
+def _parse_kotak(body: str, gmail_id: str) -> Optional[dict]:
+    """Kotak Mahindra Bank alert."""
+    m_dr  = re.search(r"[Rr]s\.?\s*([\d,]+(?:\.\d{2})?)\s+(?:debited|paid|Payment Gateway)", body, re.I)
+    m_cr  = re.search(r"[Rr]s\.?\s*([\d,]+(?:\.\d{2})?)\s+(?:credited|received)", body, re.I)
+    m_acct= re.search(r"(?:Account|A/c)[^\d]*(\d{3,5})", body, re.I)
+    m_date= re.search(r"on\s+(\d{1,2}[-/]\w{3,9}[-/]\d{2,4}|\d{2}[-/]\d{2}[-/]\d{2,4})", body, re.I)
+    m_info= re.search(r"(?:Info|towards|at|Merchant)[:\s]+([A-Za-z0-9*\s\-&\.]{3,50}?)(?:\.|  |\n|Rs)", body, re.I)
+
+    if not (m_dr or m_cr):
+        return None
+
+    is_debit = bool(m_dr)
+    amount   = float((m_dr or m_cr).group(1).replace(",", ""))
+    acct_no  = f"KOTAK-{m_acct.group(1)}" if m_acct else "KOTAK-????"
+    date_str = m_date.group(1) if m_date else datetime.now().strftime("%d/%m/%Y")
+    desc     = m_info.group(1).strip() if m_info else body[:80]
+
+    return {
+        "gmail_id":        gmail_id,
+        "bank":            "KOTAK",
+        "account":         acct_no,
+        "account_type":    "savings",
+        "raw_description": desc,
+        "debit":           amount if is_debit else 0,
+        "credit":          0 if is_debit else amount,
+        "date":            date_str,
+        "source":          "gmail_alert",
+    }
 
 
 PROCESSED_IDS_PATH = os.path.join(DATA_DIR, "processed_gmail_ids.json")
@@ -549,13 +662,18 @@ def sync_from_gmail(days_back: int = 90) -> dict:
     existing_ids  = {t["txn_id"] for t in existing}
 
     # Search bank alert emails (last N days)
+    # Actual senders confirmed from Gmail inspection:
+    #   ICICI: alert@icici.bank.in, customernotification@icici.bank.in
+    #   SBI:   yonobysbi@alerts.sbi.bank.in, sbialerts@sbi.co.in
+    #   Kotak: bankalerts@kotak.bank.in (if applicable)
     cutoff = (datetime.now() - timedelta(days=days_back)).strftime("%Y/%m/%d")
     query  = (
         f"after:{cutoff} "
-        "(from:alerts@icicibank.com OR from:donotreply@icicibank.com "
-        "OR from:alerts@sbi.co.in OR from:sbialerts@sbi.co.in "
-        "OR from:sbicardservices@sbi.co.in OR from:info@sbicard.com "
-        "OR from:creditcards@icicibank.com OR from:notify@icicibank.com)"
+        "(from:alert@icici.bank.in OR from:customernotification@icici.bank.in "
+        "OR from:yonobysbi@alerts.sbi.bank.in OR from:sbialerts@sbi.co.in "
+        "OR from:bankalerts@kotak.bank.in OR from:alerts@sbi.co.in "
+        "OR from:sbicardservices@sbi.co.in OR from:info@sbicard.com) "
+        "(debited OR credited OR purchase OR \"transaction alert\")"
     )
 
     new_txns = []
@@ -741,6 +859,74 @@ def get_cc_balance() -> dict:
 
 
 # ── Public API functions ──────────────────────────────────────────────────────
+
+def import_from_icici_transactions() -> int:
+    """
+    One-time import: pull records from icici_transactions.json into master ledger.
+    Deduplicates by txn_id. Returns count of newly added records.
+    """
+    src_path = os.path.join(DATA_DIR, "icici_transactions.json")
+    existing = _load_json(LEDGER_PATH)
+    existing_ids = {t["txn_id"] for t in existing}
+
+    source = _load_json(src_path)
+    added = 0
+
+    for t in source:
+        txn_id = t.get("txn_id")
+        if not txn_id or txn_id in existing_ids:
+            continue
+
+        dt_str = t.get("date", "")
+        dt = _parse_date(dt_str)
+        if not dt:
+            dt = datetime.now()
+        fy = _fy_info(dt)
+
+        debit  = t.get("amount", 0) if t.get("type") == "debit" else 0
+        credit = t.get("amount", 0) if t.get("type") == "credit" else 0
+
+        txn = {
+            "txn_id":          txn_id,
+            "date":            dt_str,
+            "fy_month_no":     fy["fy_month_no"],
+            "fy_month_name":   fy["fy_month_name"],
+            "fy_year":         fy["fy_year"],
+            "account":         t.get("account", "ICICI-????"),
+            "account_type":    "savings",
+            "bank":            "ICICI",
+            "raw_description": t.get("description", ""),
+            "paid_to":         t.get("paid_to", ""),
+            "debit":           debit,
+            "credit":          credit,
+            "type":            t.get("acc_type", ""),
+            "heading":         t.get("heading"),
+            "remarks":         t.get("remarks", ""),
+            "uncertain":       t.get("confidence", "rule") != "manual",
+            "uncertain_fields": [],
+            "confidence":      t.get("confidence", "rule"),
+            "source":          "pdf_import",
+            "gmail_id":        None,
+            "ai_saving_tip":   None,
+            "saving_agreed":   None,
+            "reconciled_with": None,
+            "created_at":      datetime.now().isoformat(),
+        }
+
+        # Re-classify if type/heading not set
+        if not txn["type"]:
+            txn = classify_transaction(txn)
+
+        existing.append(txn)
+        existing_ids.add(txn_id)
+        added += 1
+
+    if added:
+        existing.sort(key=lambda t: t.get("date", ""), reverse=True)
+        _save_json(LEDGER_PATH, existing)
+
+    return added
+
 
 def load_ledger() -> list:
     return _load_json(LEDGER_PATH)

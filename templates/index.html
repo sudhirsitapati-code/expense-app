@@ -675,7 +675,11 @@ async function syncLedger() {
     });
     const d = await r.json();
     if (d.error) { st.textContent = 'Gmail not connected yet'; return; }
-    st.textContent = `✓ ${d.new} new · ${d.reconciled||0} matched · ${d.uncertain} to review`;
+    const parts = [`✓ ${d.new} from Gmail`];
+    if (d.pdf_imported) parts.push(`${d.pdf_imported} from PDF`);
+    if (d.reconciled)   parts.push(`${d.reconciled} matched`);
+    parts.push(`${d.uncertain} to review`);
+    st.textContent = parts.join(' · ');
     loadLedger();
   } catch(err) {
     st.textContent = 'Error: ' + err.message;
