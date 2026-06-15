@@ -701,13 +701,28 @@ def api_master_ledger():
 @app.route("/api/master-ledger/sync", methods=["POST"])
 @login_required
 def api_ledger_sync():
-    """Pull new bank alerts from Gmail, classify, merge into master ledger."""
-    data     = request.get_json() or {}
-    days     = int(data.get("days", 90))
-    force    = bool(data.get("force", False))
-    result   = ledger_sync_gmail(days_back=days, force=force)
+    """Pull new bank alert emails from Gmail only (fast). PDF statements use /sync-statements."""
+    data  = request.get_json() or {}
+    days  = int(data.get("days", 90))
+    force = bool(data.get("force", False))
+    result = ledger_sync_gmail(days_back=days, force=force)
 
-    # On force sync, purge pre-FY27 pdf_import entries from master ledger
+    # Reconcile with approval log
+    log = _load_json(APPROVAL_LOG)
+    matched = reconcile_with_approvals(log)
+    result["reconciled"] = matched
+    return jsonify({"status": "ok", **result})
+
+
+@app.route("/api/master-ledger/sync-statements", methods=["POST"])
+@login_required
+def api_ledger_sync_statements():
+    """Parse ICICI PDF statements from Gmail and import into master ledger."""
+    data  = request.get_json() or {}
+    force = bool(data.get("force", False))
+    result = {}
+
+    # On force, purge pre-FY27 pdf_import entries from master ledger first
     if force:
         _fy27_start = datetime(2026, 4, 1)
         _ledger = _ml_load_json(LEDGER_PATH)
@@ -723,25 +738,21 @@ def api_ledger_sync():
             _ml_save_json(LEDGER_PATH, _ledger)
             result["pdf_purged"] = _before - len(_ledger)
 
-    # Fetch + parse PDF statements from Gmail, then import into ledger
+    # Fetch + parse PDF statements from Gmail
     try:
         pdf_result = fetch_and_parse_statements(force_reprocess=force)
         result["pdf_statements"] = pdf_result.get("statements", 0)
-        result["pdf_new"] = pdf_result.get("new", 0)
+        result["pdf_new"]        = pdf_result.get("new", 0)
     except Exception as e:
         result["pdf_error"] = str(e)
 
-    pdf_imported = import_from_icici_transactions()
-    result["pdf_imported"] = pdf_imported
+    # Import parsed transactions into master ledger
+    result["pdf_imported"] = import_from_icici_transactions()
+    result["pdf_repaired"]  = repair_pdf_descriptions()
 
-    # Backfill descriptions on any blank-description pdf_import entries
-    repaired = repair_pdf_descriptions()
-    result["pdf_repaired"] = repaired
-
-    # Reconcile SBI/ICICI entries with approval log
+    # Reconcile with approval log
     log = _load_json(APPROVAL_LOG)
-    matched = reconcile_with_approvals(log)
-    result["reconciled"] = matched
+    result["reconciled"] = reconcile_with_approvals(log)
 
     return jsonify({"status": "ok", **result})
 
