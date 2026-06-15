@@ -5,6 +5,7 @@ with full ACC26-compatible fields, and saves to data/icici_transactions.json.
 """
 
 import base64
+import gc
 import hashlib
 import io
 import json
@@ -355,7 +356,7 @@ def fetch_and_parse_statements(force_reprocess: bool = False) -> dict:
     service = _get_service()
     processed_ids = _get_processed_ids() if not force_reprocess else set()
     if force_reprocess:
-        # Drop all previously statement-imported transactions so re-parse replaces them cleanly
+        # Drop statement-imported transactions so re-parse replaces them cleanly
         existing = [t for t in _load_transactions() if t.get("source") != "icici_statement"]
     else:
         existing = _load_transactions()
@@ -370,34 +371,46 @@ def fetch_and_parse_statements(force_reprocess: bool = False) -> dict:
         q=f"(from:customernotification@icici.bank.in OR from:alert@icici.bank.in "
           f"OR from:estatement@icici.bank.in OR {label_query}) "
           "has:attachment filename:pdf",
-        maxResults=50
+        maxResults=20
     ).execute()
 
-    for msg_ref in messages_result.get("messages", []):
-        msg_id = msg_ref["id"]
-        if msg_id in processed_ids:
-            continue
+    msgs_to_process = [
+        m for m in messages_result.get("messages", [])
+        if m["id"] not in processed_ids
+    ]
 
-        pdfs = _get_pdf_attachments(service, msg_id)
-        if not pdfs:
+    for msg_ref in msgs_to_process:
+        msg_id = msg_ref["id"]
+        try:
+            pdfs = _get_pdf_attachments(service, msg_id)
+        except Exception as e:
+            print(f"[stmt] Failed to fetch attachments for {msg_id}: {e}")
+            _save_processed_id(msg_id)
             continue
 
         for pdf_bytes in pdfs:
-            txns = _parse_pdf_transactions(pdf_bytes)
-            added = 0
-            for t in txns:
-                tid = t.get("txn_id")
-                if tid and tid not in existing_ids:
-                    existing.append(t)
-                    existing_ids.add(tid)
-                    added += 1
-            if added:
-                new_count += added
-                statements_processed += 1
+            try:
+                txns = _parse_pdf_transactions(pdf_bytes)
+                added = 0
+                for t in txns:
+                    tid = t.get("txn_id")
+                    if tid and tid not in existing_ids:
+                        existing.append(t)
+                        existing_ids.add(tid)
+                        added += 1
+                if added:
+                    new_count += added
+                    statements_processed += 1
+            except Exception as e:
+                print(f"[stmt] Parse error in message {msg_id}: {e}")
+            finally:
+                del pdf_bytes
+                gc.collect()
 
         _save_processed_id(msg_id)
+        # Save incrementally so progress isn't lost if next email OOMs
+        _save_transactions(existing)
 
-    _save_transactions(existing)
     print(f"Processed {statements_processed} statement(s), {new_count} new transaction(s).")
     return {
         "statements": statements_processed,
