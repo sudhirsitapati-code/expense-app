@@ -990,26 +990,51 @@ def repair_pdf_descriptions() -> int:
         _db.save("icici_transactions", icici_txns)
 
     source_map = {t.get("txn_id"): t for t in icici_txns if t.get("txn_id")}
+
+    # Fallback index by (date, amount, account) for when txn_id hash changed
+    fallback_map = {}
+    for t in icici_txns:
+        key = (t.get("date", ""), str(t.get("amount", "")), t.get("account", ""))
+        fallback_map.setdefault(key, t)
+
     repaired = 0
     for txn in ledger:
         if txn.get("source") != "pdf_import" or txn.get("confidence") == "manual":
             continue
         needs_desc = not txn.get("raw_description")
-        needs_class = not txn.get("type") or not txn.get("heading") or txn.get("heading") == "Unknown"
+        needs_class = not txn.get("type") or not txn.get("heading") or txn.get("heading") in ("Unknown", "")
         if not needs_desc and not needs_class:
             continue
+
+        # Try txn_id match first, fall back to (date, amount, account)
         src = source_map.get(txn["txn_id"])
+        if not src:
+            amount = txn.get("debit") or txn.get("credit") or 0
+            fkey = (txn.get("date", ""), str(float(amount)), txn.get("account", ""))
+            src = fallback_map.get(fkey)
+
         if needs_desc:
-            if not src:
-                continue
-            txn["raw_description"] = src.get("transaction_details") or src.get("description", "")
+            if src:
+                txn["raw_description"] = src.get("transaction_details") or src.get("description", "")
+            # 7281 OD account: if still no description but we can infer from amount context, leave for rule below
+
         if not txn.get("paid_to") and src and src.get("paid_to"):
             txn["paid_to"] = src["paid_to"]
-        if needs_class and txn.get("raw_description"):
-            classified = classify_transaction(dict(txn))
-            txn["type"] = classified.get("type") or txn.get("type", "")
-            txn["heading"] = classified.get("heading") or txn.get("heading")
-            txn["paid_to"] = txn.get("paid_to") or classified.get("paid_to", "")
+
+        if needs_class:
+            desc = txn.get("raw_description", "")
+            if desc:
+                classified = classify_transaction(dict(txn))
+                txn["type"]    = classified.get("type") or txn.get("type", "")
+                txn["heading"] = classified.get("heading") or txn.get("heading")
+                txn["paid_to"] = txn.get("paid_to") or classified.get("paid_to", "")
+            elif txn.get("account") == "ICICI-7281":
+                # 7281 OD account with no description: default to Financial Expense
+                # (all 7281 charges are either OD interest or bank fees)
+                txn["type"]    = "Expense"
+                txn["heading"] = "Financial Expense"
+                txn["uncertain"] = True
+
         repaired += 1
     if repaired:
         _save_json(LEDGER_PATH, ledger)
