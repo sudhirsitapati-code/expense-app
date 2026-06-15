@@ -156,10 +156,26 @@ def api_mis():
     with open(os.path.join(CONFIG_DIR, "budget_fy27.json")) as f:
         budget_monthly = json.load(f)["monthly"]
 
-    # FY26 actuals by ACC26 heading (e.g. "Groceries", "Staff Salary")
-    fy26_by_heading = _load_json(os.path.join(DATA_DIR, "fy26_actuals.json")) or {}
-    if isinstance(fy26_by_heading, list):
-        fy26_by_heading = {}  # handle empty/old format
+    # FY26 actuals by ACC26 heading — sourced from ExpenseSummary sheet of ACC26ver5_MASTER.xlsx
+    # Stored here so they survive Railway's ephemeral filesystem (data/ is gitignored)
+    FY26_ACTUALS = {
+        "Misc": 189000, "Cash": 258000, "Electricity & Gas": 393000,
+        "Groceries": 1689000, "Staff Salary": 2631000,
+        "Alcohol": 75000, "Wellness": 388000,
+        "Clothes": 391000, "Gifts": 100000, "Medical": 591000,
+        "Amma": 114000, "Ketki": 1545000, "Children Education": 3033000,
+        "Charity": 1526000, "Uspaar": 1304000,
+        "Holiday": 2189000, "Eating Out": 520000, "Entertainment": 226000,
+        "Malhar": 965000, "Maintenance Expense": 88000, "Home office": 234000,
+        "One Time Charge": 771000, "Kalpataru Maintenance": 549000,
+        "Financial Expense / OD Interest": 9000, "Insurance": 364000,
+        "Home Loan": 13067000, "Tax": 45100000,
+    }
+    # Merge with any locally saved file (allows future updates without redeploying)
+    fy26_by_heading = dict(FY26_ACTUALS)
+    local_fy26 = _load_json(os.path.join(DATA_DIR, "fy26_actuals.json"))
+    if isinstance(local_fy26, dict):
+        fy26_by_heading.update(local_fy26)  # handle empty/old format
 
     log = _load_json(APPROVAL_LOG)
 
