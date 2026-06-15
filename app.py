@@ -708,6 +708,9 @@ def api_ledger_sync():
     force = bool(data.get("force", False))
     result = ledger_sync_gmail(days_back=days, force=force)
 
+    # Fix account names + reclassify unknown entries
+    repair_pdf_descriptions()
+
     # Reconcile with approval log
     log = _load_json(APPROVAL_LOG)
     matched = reconcile_with_approvals(log)
@@ -778,6 +781,26 @@ def api_ledger_sync_status():
         "running":    _stmt_sync_state["running"],
         "started_at": _stmt_sync_state["started_at"],
         "result":     _stmt_sync_state["result"],
+    })
+
+
+@app.route("/api/debug/ledger-accounts", methods=["GET"])
+@login_required
+def api_debug_ledger_accounts():
+    """Show distinct account names and sample descriptions per account."""
+    from collections import defaultdict
+    ledger = _ml_load_json(LEDGER_PATH)
+    by_account = defaultdict(list)
+    for t in ledger:
+        by_account[t.get("account", "?")].append({
+            "desc": t.get("raw_description", "")[:80],
+            "type": t.get("type", ""),
+            "heading": t.get("heading", ""),
+            "source": t.get("source", ""),
+        })
+    return jsonify({
+        acct: {"count": len(txns), "samples": txns[:5]}
+        for acct, txns in sorted(by_account.items())
     })
 
 
