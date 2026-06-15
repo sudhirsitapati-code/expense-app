@@ -6,7 +6,7 @@ Falls back to local file storage when DATABASE_URL is not set (local dev).
 import json
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "").replace("postgresql://", "postgres://", 1)
 
 # ── PostgreSQL path ───────────────────────────────────────────────────────────
 
