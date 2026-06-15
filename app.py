@@ -164,6 +164,7 @@ def api_reconcile_log():
 
 
 @app.route("/api/mis", methods=["GET"])
+@login_required
 def api_mis():
     """Return MIS data grouped by super-category.
     Query param: period = month | quarter | ytd  (default: month)
