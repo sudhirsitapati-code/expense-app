@@ -154,28 +154,43 @@ def api_mis():
     period = request.args.get("period", "month")
 
     with open(os.path.join(CONFIG_DIR, "budget_fy27.json")) as f:
-        budget_monthly = json.load(f)["monthly"]
+        _bfile = json.load(f)
+    budget_annual = _bfile["annual"]   # FY27 annual by ACC26 heading (Blueprint)
+    budget_monthly_app = _bfile["monthly"]  # monthly by app category (approval engine)
 
-    # FY26 actuals by ACC26 heading — sourced from ExpenseSummary sheet of ACC26ver5_MASTER.xlsx
-    # Stored here so they survive Railway's ephemeral filesystem (data/ is gitignored)
-    FY26_ACTUALS = {
-        "Misc": 189000, "Cash": 258000, "Electricity & Gas": 393000,
-        "Groceries": 1689000, "Staff Salary": 2631000,
-        "Alcohol": 75000, "Wellness": 388000,
-        "Clothes": 391000, "Gifts": 100000, "Medical": 591000,
-        "Amma": 114000, "Ketki": 1545000, "Children Education": 3033000,
-        "Charity": 1526000, "Uspaar": 1304000,
-        "Holiday": 2189000, "Eating Out": 520000, "Entertainment": 226000,
-        "Malhar": 965000, "Maintenance Expense": 88000, "Home office": 234000,
-        "One Time Charge": 771000, "Kalpataru Maintenance": 549000,
-        "Financial Expense / OD Interest": 9000, "Insurance": 364000,
-        "Home Loan": 13067000, "Tax": 45100000,
+    # ── FY26 monthly data — from Summaryexpenses sheet, ACC26ver5_MASTER.xlsx ──
+    # Calendar month abbreviations: Apr=FY1, May=FY2 … Mar=FY12
+    FY26_MONTHLY = {
+        "Misc":           {"Apr":16685,"May":836,"Jun":16239,"Jul":6208,"Aug":59760,"Sep":625,"Oct":34168,"Nov":16938,"Dec":2676,"Jan":6562,"Feb":16537,"Mar":11382},
+        "Clothes":        {"Apr":0,"May":25990,"Jun":54219,"Jul":66865,"Aug":64337,"Sep":0,"Oct":57982,"Nov":38164,"Dec":19461,"Jan":8290,"Feb":47896,"Mar":7652},
+        "Gifts":          {"Apr":6500,"May":3950,"Jun":0,"Jul":0,"Aug":8825,"Sep":0,"Oct":40000,"Nov":33099,"Dec":0,"Jan":3540,"Feb":1571,"Mar":2863},
+        "Cash":           {"Apr":10000,"May":0,"Jun":20000,"Jul":25000,"Aug":50000,"Sep":10000,"Oct":10000,"Nov":80000,"Dec":0,"Jan":11600,"Feb":31000,"Mar":10000},
+        "Maintenance Expense": {"Apr":17440,"May":9814,"Jun":12775,"Jul":2411,"Aug":3029,"Sep":750,"Oct":22850,"Nov":5887,"Dec":0,"Jan":2500,"Feb":6243,"Mar":4404},
+        "Malhar":         {"Apr":40800,"May":53930,"Jun":93923,"Jul":89728,"Aug":51314,"Sep":91350,"Oct":177919,"Nov":165493,"Dec":0,"Jan":81581,"Feb":88880,"Mar":30382},
+        "Home office":    {"Apr":88350,"May":25461,"Jun":10450,"Jul":23057,"Aug":24447,"Sep":11933,"Oct":9455,"Nov":24783,"Dec":0,"Jan":7430,"Feb":3096,"Mar":5320},
+        "Electricity & Gas": {"Apr":50780,"May":52723,"Jun":52068,"Jul":31128,"Aug":25843,"Sep":24863,"Oct":47174,"Nov":38834,"Dec":0,"Jan":37325,"Feb":24186,"Mar":7616},
+        "Alcohol":        {"Apr":14900,"May":0,"Jun":0,"Jul":9400,"Aug":1450,"Sep":0,"Oct":0,"Nov":48700,"Dec":0,"Jan":0,"Feb":0,"Mar":500},
+        "Medical":        {"Apr":14143,"May":96808,"Jun":27382,"Jul":77477,"Aug":56988,"Sep":77126,"Oct":72143,"Nov":45345,"Dec":1210,"Jan":57526,"Feb":20200,"Mar":45100},
+        "Holiday":        {"Apr":17031,"May":486489,"Jun":132378,"Jul":952200,"Aug":73464,"Sep":4218,"Oct":93531,"Nov":149259,"Dec":0,"Jan":8128,"Feb":56366,"Mar":215510},
+        "Groceries":      {"Apr":89175,"May":120368,"Jun":90011,"Jul":106208,"Aug":135331,"Sep":172407,"Oct":155555,"Nov":253751,"Dec":5404,"Jan":220193,"Feb":140067,"Mar":200420},
+        "Eating Out":     {"Apr":46057,"May":27258,"Jun":25723,"Jul":48862,"Aug":49917,"Sep":51657,"Oct":69146,"Nov":48007,"Dec":20773,"Jan":53623,"Feb":36546,"Mar":42347},
+        "Amma":           {"Apr":27679,"May":16458,"Jun":7276,"Jul":10068,"Aug":12826,"Sep":52229,"Oct":1375,"Nov":-1356,"Dec":0,"Jan":15595,"Feb":-26776,"Mar":-1823},
+        "Wellness":       {"Apr":63157,"May":22672,"Jun":38199,"Jul":46159,"Aug":13292,"Sep":59132,"Oct":52176,"Nov":61175,"Dec":0,"Jan":7745,"Feb":13545,"Mar":10649},
+        "Ketki":          {"Apr":426656,"May":115151,"Jun":-15927,"Jul":78940,"Aug":126146,"Sep":50147,"Oct":326622,"Nov":203580,"Dec":65053,"Jan":40084,"Feb":27653,"Mar":101024},
+        "Staff Salary":   {"Apr":118522,"May":258292,"Jun":269854,"Jul":195408,"Aug":178854,"Sep":176859,"Oct":188398,"Nov":419898,"Dec":99438,"Jan":279669,"Feb":224518,"Mar":221018},
+        "Financial Expense / OD Interest": {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":360000},
+        "Entertainment":  {"Apr":1148,"May":5278,"Jun":68503,"Jul":40408,"Aug":14280,"Sep":21692,"Oct":19600,"Nov":15839,"Dec":9485,"Jan":4214,"Feb":649,"Mar":25143},
+        "One Time Charge":{"Apr":45325,"May":12530,"Jun":4750,"Jul":79984,"Aug":76574,"Sep":149914,"Oct":64441,"Nov":199349,"Dec":71035,"Jan":24050,"Feb":31250,"Mar":11850},
+        "Children Education": {"Apr":981577,"May":68350,"Jun":550856,"Jul":101149,"Aug":124383,"Sep":54100,"Oct":38700,"Nov":514160,"Dec":0,"Jan":29700,"Feb":45500,"Mar":524550},
+        "Kalpataru Maintenance": {"Apr":35997,"May":35933,"Jun":35879,"Jul":-7041,"Aug":197231,"Sep":36587,"Oct":35879,"Nov":71168,"Dec":0,"Jan":35879,"Feb":35879,"Mar":35933},
+        "Charity":        {"Apr":20000,"May":0,"Jun":0,"Jul":167800,"Aug":105725,"Sep":24048,"Oct":300000,"Nov":115000,"Dec":150000,"Jan":625100,"Feb":0,"Mar":18000},
+        "Uspaar":         {"Apr":133783,"May":140978,"Jun":214372,"Jul":97910,"Aug":204600,"Sep":72828,"Oct":38984,"Nov":170003,"Dec":0,"Jan":103660,"Feb":40350,"Mar":86325},
+        "Insurance":      {"Apr":118000,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":102820,"Nov":0,"Dec":142800,"Jan":0,"Feb":0,"Mar":0},
+        "Home Loan":      {"Apr":903259,"May":1146721,"Jun":916551,"Jul":1201557,"Aug":554547,"Sep":992227,"Oct":963511,"Nov":1007410,"Dec":1777170,"Jan":1389117,"Feb":928825,"Mar":1285719},
+        "Tax":            {"Apr":0,"May":0,"Jun":0,"Jul":13519347,"Aug":0,"Sep":3630000,"Oct":61499379,"Nov":0,"Dec":0,"Jan":0,"Feb":3848950,"Mar":0},
     }
-    # Merge with any locally saved file (allows future updates without redeploying)
-    fy26_by_heading = dict(FY26_ACTUALS)
-    local_fy26 = _load_json(os.path.join(DATA_DIR, "fy26_actuals.json"))
-    if isinstance(local_fy26, dict):
-        fy26_by_heading.update(local_fy26)  # handle empty/old format
+    # Calendar month number → FY month abbreviation
+    CAL_TO_FY_MON = {4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec",1:"Jan",2:"Feb",3:"Mar"}
 
     log = _load_json(APPROVAL_LOG)
 
@@ -184,10 +199,10 @@ def api_mis():
     cal_month = now.month
     fy_start_year = now.year if cal_month >= 4 else now.year - 1
 
-    def _period_months(period):
-        if period == "month":
+    def _period_months(p):
+        if p == "month":
             return [now.strftime("%Y-%m")]
-        elif period == "quarter":
+        elif p == "quarter":
             fy_month = (cal_month - 4) % 12 + 1
             q_start_fy = ((fy_month - 1) // 3) * 3 + 1
             months = []
@@ -211,91 +226,71 @@ def api_mis():
     period_months = _period_months(period)
     n_months = len(period_months)
 
-    # ── Mappings ──────────────────────────────────────────────────────────────
-    # App category → ACC26 headings (for pulling FY26 data)
-    CAT_TO_HEADINGS = {
-        "groceries":     ["Groceries"],
-        "staff":         ["Staff Salary"],
-        "utilities":     ["Electricity & Gas"],
-        "miscellaneous": ["Misc"],
-        "personal_care": ["Wellness"],
-        "clothing":      ["Clothes"],
-        "gifts":         ["Gifts"],
-        "medical":       ["Medical"],
-        "education":     ["Children Education"],
-        "dining":        ["Eating Out"],
-        "entertainment": ["Entertainment"],
-        "transport":     ["Holiday"],
-        "maintenance":   ["Maintenance Expense", "Kalpataru Maintenance"],
-        "home_repair":   ["One Time Charge", "Home office"],
+    # FY month names covered by this period (for FY26 lookup)
+    fy_mon_names = [CAL_TO_FY_MON[int(m.split("-")[1])] for m in period_months]
+
+    # ── Heading → super-category ──────────────────────────────────────────────
+    HEADING_SUPER = {
+        "Groceries":"Household","Staff Salary":"Household","Electricity & Gas":"Household",
+        "Misc":"Household","Cash":"Household",
+        "Alcohol":"Personal","Wellness":"Personal",
+        "Clothes":"Family","Gifts":"Family","Medical":"Family",
+        "Amma":"Family","Ketki":"Family","Children Education":"Family",
+        "Charity":"Giving","Uspaar":"Giving",
+        "Holiday":"Lifestyle","Eating Out":"Lifestyle","Entertainment":"Lifestyle",
+        "Malhar":"Property","Maintenance Expense":"Property","Home office":"Property",
+        "One Time Charge":"Property","Kalpataru Maintenance":"Property",
+        "Financial Expense / OD Interest":"Financial","Insurance":"Financial",
+        "Home Loan":"Financial","Tax":"Financial",
     }
-    # App category → super-category
-    SUPER_CAT = {
-        "groceries": "Household", "staff": "Household",
-        "utilities": "Household", "miscellaneous": "Household",
-        "personal_care": "Personal",
-        "clothing": "Family", "gifts": "Family",
-        "medical": "Family", "education": "Family",
-        "dining": "Lifestyle", "entertainment": "Lifestyle", "transport": "Lifestyle",
-        "maintenance": "Property", "home_repair": "Property",
+    SUPER_ORDER = ["Household","Personal","Family","Giving","Lifestyle","Property","Financial"]
+
+    # App category → ACC26 heading (for FY27 actual from approval log)
+    APP_TO_HEADING = {
+        "groceries":"Groceries","staff":"Staff Salary","utilities":"Electricity & Gas",
+        "miscellaneous":"Misc","personal_care":"Wellness","clothing":"Clothes",
+        "gifts":"Gifts","medical":"Medical","education":"Children Education",
+        "dining":"Eating Out","entertainment":"Entertainment","transport":"Holiday",
+        "maintenance":"Maintenance Expense","home_repair":"One Time Charge",
     }
-    SUPER_ORDER = ["Household", "Personal", "Family", "Giving", "Lifestyle", "Property", "Financial"]
 
-    # ── FY26 full-year per app-category (sum of mapped headings) ─────────────
-    def _fy26_for_cat(cat):
-        return sum(fy26_by_heading.get(h, 0) for h in CAT_TO_HEADINGS.get(cat, []))
+    # ── FY26 for period: sum actual monthly data for the matched FY months ────
+    def _fy26_period(heading):
+        monthly = FY26_MONTHLY.get(heading, {})
+        return max(0, sum(monthly.get(m, 0) for m in fy_mon_names))
 
-    # ── FY27 budget: full year for ytd, scaled for month/quarter ─────────────
-    def _budget_for_cat(cat):
-        monthly = budget_monthly.get(cat, 0)
-        return monthly * 12 if period == "ytd" else monthly * n_months
+    # ── FY27 budget scaled to period ─────────────────────────────────────────
+    def _budget(heading):
+        annual = budget_annual.get(heading, 0)
+        return annual if period == "ytd" else round(annual / 12 * n_months)
 
-    # ── FY27 actual for the period ────────────────────────────────────────────
+    # ── FY27 actual from approval log ─────────────────────────────────────────
     fy27_actual: dict = {}
     for e in log:
-        if e.get("action") not in ("AUTO_APPROVE", "APPROVED", "APPROVED_LOWER"):
+        if e.get("action") not in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER"):
             continue
         if (e.get("timestamp") or "")[:7] not in period_months:
             continue
-        cat = e.get("category", "miscellaneous")
+        heading = APP_TO_HEADING.get(e.get("category","miscellaneous"), "Misc")
         amt = e.get("approved_amount") or e.get("amount", 0)
-        fy27_actual[cat] = fy27_actual.get(cat, 0) + amt
+        fy27_actual[heading] = fy27_actual.get(heading, 0) + amt
 
     # ── Build grouped rows ────────────────────────────────────────────────────
+    all_headings = set(budget_annual.keys()) | set(FY26_MONTHLY.keys())
     by_super: dict = {s: [] for s in SUPER_ORDER}
-    for cat in sorted(budget_monthly.keys()):
-        super_cat = SUPER_CAT.get(cat, "Household")
-        fy26 = round(_fy26_for_cat(cat))
-        budget = _budget_for_cat(cat)
-        actual = round(fy27_actual.get(cat, 0))
+
+    for heading in sorted(all_headings):
+        super_cat = HEADING_SUPER.get(heading, "Household")
+        fy26 = round(_fy26_period(heading))
+        budget = _budget(heading)
+        actual = round(fy27_actual.get(heading, 0))
         pct = round(actual / budget * 100) if budget else 0
         by_super.setdefault(super_cat, []).append({
-            "category": cat,
+            "category": heading,
             "fy26_actual": fy26,
             "fy27_budget": budget,
             "fy27_actual": actual,
             "pct": pct,
-        })
-
-    # Add FY26-only super-categories (Giving, Financial) as reference rows
-    HEADING_SUPER = {
-        "Charity": "Giving", "Uspaar": "Giving",
-        "Financial Expense / OD Interest": "Financial",
-        "Insurance": "Financial", "Home Loan": "Financial", "Tax": "Financial",
-        "Amma": "Family", "Ketki": "Family",
-        "Malhar": "Property", "Cash": "Household", "Alcohol": "Personal",
-    }
-    already_mapped = {h for cat in CAT_TO_HEADINGS.values() for h in cat}
-    for heading, fy26_amt in fy26_by_heading.items():
-        if heading in already_mapped:
-            continue
-        super_cat = HEADING_SUPER.get(heading, "Household")
-        by_super.setdefault(super_cat, []).append({
-            "category": heading,
-            "fy26_actual": round(fy26_amt),
-            "fy27_budget": 0,
-            "fy27_actual": 0,
-            "pct": 0,
         })
 
     groups = []
