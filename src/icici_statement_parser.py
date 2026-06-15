@@ -67,12 +67,18 @@ def _make_txn_id(date: str, description: str, amount: float, direction: str = ""
 
 
 def _parse_date(date_str: str) -> Optional[datetime]:
-    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y"):
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y", "%d.%m.%Y"):
         try:
             return datetime.strptime(date_str.strip(), fmt)
         except ValueError:
             continue
     return None
+
+
+def _norm_date(date_str: str) -> str:
+    """Normalise any supported date format to DD/MM/YYYY."""
+    dt = _parse_date(date_str)
+    return dt.strftime("%d/%m/%Y") if dt else date_str
 
 
 def _fy_fields(dt: Optional[datetime]) -> dict:
@@ -229,12 +235,12 @@ def _extract_account_from_text(text: str) -> str:
     ]:
         m = re.search(pat, text[:2000])
         if m:
-            return f"icic{m.group(1)}"
+            return f"ICICI-{m.group(1)}"
     # Fallback: full numeric account number (10+ digits like 003801011331)
     m = re.search(r"\b\d{6,}(\d{4})\b", text[:3000])
     if m:
-        return f"icic{m.group(1)}"
-    return "icici"
+        return f"ICICI-{m.group(1)}"
+    return "ICICI"
 
 
 def _parse_savings_statement_text(text: str) -> list:
@@ -265,9 +271,9 @@ def _parse_savings_statement_text(text: str) -> list:
         m = row_pat.match(lines[row_i].strip())
         _, date_dot, amount_str, balance_str = m.groups()
 
-        # Convert DD.MM.YYYY → DD-MM-YYYY
+        # Convert DD.MM.YYYY → DD/MM/YYYY (canonical date format)
         d, mo, yr = date_dot.split(".")
-        date_str = f"{d}-{mo}-{yr}"
+        date_str = f"{d}/{mo}/{yr}"
 
         # paid_to: closest non-empty, non-header line above the row line
         paid_to = ""
@@ -383,7 +389,7 @@ def _parse_from_text(text: str) -> list:
             continue
         seen.add(key)
         transactions.append({
-            "date": date_str,
+            "date": _norm_date(date_str),
             "description": desc,
             "amount": amount,
             "txn_direction": direction,
@@ -406,7 +412,7 @@ def _parse_from_text(text: str) -> list:
         if amount < 1:
             continue
         transactions.append({
-            "date": date_str.strip(),
+            "date": _norm_date(date_str.strip()),
             "description": description.strip(),
             "amount": amount,
             "txn_direction": "credit" if (dr_cr or "").lower() == "cr" else "debit",

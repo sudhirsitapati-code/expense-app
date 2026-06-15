@@ -715,10 +715,10 @@ def sync_from_gmail(days_back: int = 90, force: bool = False) -> dict:
                 continue
 
             # Build full transaction record
-            date_str = parsed["date"]
-            dt = _parse_date(date_str)
+            dt = _parse_date(parsed["date"])
             if not dt:
                 dt = datetime.now()
+            date_str = dt.strftime("%d/%m/%Y")
 
             fy = _fy_info(dt)
             txn_id = _txn_id(
@@ -888,10 +888,11 @@ def import_from_icici_transactions() -> int:
         if not txn_id or txn_id in existing_ids:
             continue
 
-        dt_str = t.get("date", "")
-        dt = _parse_date(dt_str)
+        raw_date = t.get("date", "")
+        dt = _parse_date(raw_date)
         if not dt:
             dt = datetime.now()
+        dt_str = dt.strftime("%d/%m/%Y")
         fy = _fy_info(dt)
 
         debit  = t.get("debit") or (t.get("amount", 0) if t.get("type") == "debit" else 0)
