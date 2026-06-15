@@ -784,6 +784,51 @@ def api_ledger_sync_status():
     })
 
 
+@app.route("/api/master-ledger/bulk-classify", methods=["POST"])
+@login_required
+def api_bulk_classify():
+    """Bulk-set type+heading for transactions matching account + date range.
+    Skips transfers, income, investments, and manually-confirmed entries.
+    Body: {accounts, date_from, date_to, type, heading}
+    """
+    data       = request.get_json() or {}
+    accounts   = [a.upper() for a in data.get("accounts", [])]
+    date_from  = _ml_parse_date(data.get("date_from", ""))
+    date_to    = _ml_parse_date(data.get("date_to", ""))
+    new_type   = data.get("type", "Expense")
+    new_heading= data.get("heading", "")
+
+    if not accounts or not date_from or not date_to or not new_heading:
+        return jsonify({"error": "accounts, date_from, date_to, heading required"}), 400
+
+    SKIP_TYPES    = {"transfer", "income", "investment", "Transfer", "Income", "Investment"}
+    SKIP_HEADINGS = {"Salary", "Interbank", "Home Loan", "Loan Repayment", "Tax",
+                     "Financial Expense", "Insurance", "GCPL Share Sale", "Foreign Investment",
+                     "Uspaar", "Art", "Property Investment"}
+
+    ledger = _ml_load_json(LEDGER_PATH)
+    updated = 0
+    for txn in ledger:
+        if txn.get("account", "").upper() not in accounts:
+            continue
+        if txn.get("confidence") == "manual":
+            continue
+        if txn.get("type") in SKIP_TYPES or txn.get("heading") in SKIP_HEADINGS:
+            continue
+        dt = _ml_parse_date(txn.get("date", ""))
+        if not dt or not (date_from <= dt <= date_to):
+            continue
+        txn["type"]       = new_type
+        txn["heading"]    = new_heading
+        txn["confidence"] = "manual"
+        txn["uncertain"]  = False
+        updated += 1
+
+    if updated:
+        _ml_save_json(LEDGER_PATH, ledger)
+    return jsonify({"status": "ok", "updated": updated})
+
+
 @app.route("/api/debug/ledger-accounts", methods=["GET"])
 @login_required
 def api_debug_ledger_accounts():
