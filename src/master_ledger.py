@@ -43,6 +43,9 @@ STAFF_NAMES = ["shiloj", "mohammed", "mohamad", "shiloj james", "md "]
 TRANSFER_KEYWORDS = [
     "neft", "imps", "rtgs", "trf to", "transfer to", "fund transfer",
     "internal transfer", "self transfer", "upi/", "upi-",
+    "@okaxis", "@oksbi", "@okicici", "@ybl", "@ibl",
+    "bil/neft", "bil/imps", ":transfer ", "007281:", "011331:",
+    "trfr to", "fund trf", "online transfer",
 ]
 INCOME_KEYWORDS = [
     "salary cr", "sal cr", "salary credit", "interest credit", "int cr",
@@ -457,7 +460,7 @@ def _parse_icici_savings(body: str, gmail_id: str) -> Optional[dict]:
     is_debit = bool(m_amt)
     amount   = float((m_amt or m_cr).group(1).replace(",", ""))
 
-    m_acct  = re.search(r"(?:Account|Savings Account)\s+(?:No\.?\s+)?(?:XX+)?(\d{3,4})", body, re.I)
+    m_acct  = re.search(r"(?:Account|Savings Account)\s+(?:No\.?\s+)?X*(\d{3,4})", body, re.I)
     m_date  = re.search(r"on\s+(\w{3,4}\s+\d{1,2},?\s+\d{4}|\d{1,2}[-/]\w{3,9}[-/]\d{2,4}|\d{2}[-/]\d{2}[-/]\d{2,4})", body, re.I)
     m_info  = (
         re.search(r"Info[:\s]+([^\n\.]{3,60})", body, re.I) or
@@ -465,7 +468,11 @@ def _parse_icici_savings(body: str, gmail_id: str) -> Optional[dict]:
         re.search(r"payment\s+(?:to|of)\s+([A-Z][A-Za-z\s]{3,40}?)(?:\s+from|\s+on|\.|$)", body, re.I)
     )
 
-    acct_no  = f"ICICI-{m_acct.group(1)}" if m_acct else "ICICI-????"
+    # Normalise 3-digit suffixes to their known 4-digit account numbers
+    _ACCT_ALIAS = {"331": "1331", "281": "7281"}
+    raw_suffix  = m_acct.group(1) if m_acct else None
+    suffix      = _ACCT_ALIAS.get(raw_suffix, raw_suffix)
+    acct_no     = f"ICICI-{suffix}" if suffix else "ICICI-????"
     date_str = m_date.group(1) if m_date else datetime.now().strftime("%d/%m/%Y")
     desc     = m_info.group(1).strip() if m_info else body[:80]
 
@@ -948,13 +955,25 @@ def repair_pdf_descriptions() -> int:
     """
     ledger = _load_json(LEDGER_PATH)
 
-    # Normalise legacy account names: icicXXXX → ICICI-XXXX
-    _ACCT_RE = re.compile(r"^icic(\d{4})$", re.IGNORECASE)
+    # Normalise legacy / truncated account names
+    _ACCT_RE    = re.compile(r"^icic(\d{3,4})$", re.IGNORECASE)
+    _ALIAS_MAP  = {"331": "1331", "281": "7281"}   # 3-digit → 4-digit canonical
+
+    def _fix_account(name: str) -> str:
+        m = _ACCT_RE.match(name or "")
+        if m:
+            sfx = m.group(1)
+            return f"ICICI-{_ALIAS_MAP.get(sfx, sfx)}"
+        sfx = _ALIAS_MAP.get((name or "").replace("ICICI-", ""))
+        if sfx:
+            return f"ICICI-{sfx}"
+        return name
+
     acct_fixed = 0
     for txn in ledger:
-        m = _ACCT_RE.match(txn.get("account", ""))
-        if m:
-            txn["account"] = f"ICICI-{m.group(1)}"
+        fixed = _fix_account(txn.get("account", ""))
+        if fixed != txn.get("account"):
+            txn["account"] = fixed
             acct_fixed += 1
     if acct_fixed:
         _save_json(LEDGER_PATH, ledger)
@@ -962,9 +981,9 @@ def repair_pdf_descriptions() -> int:
     icici_txns = _db.load("icici_transactions")
     icici_fixed = 0
     for t in icici_txns:
-        m = _ACCT_RE.match(t.get("account", ""))
-        if m:
-            t["account"] = f"ICICI-{m.group(1)}"
+        fixed = _fix_account(t.get("account", ""))
+        if fixed != t.get("account"):
+            t["account"] = fixed
             icici_fixed += 1
     if icici_fixed:
         _db.save("icici_transactions", icici_txns)
