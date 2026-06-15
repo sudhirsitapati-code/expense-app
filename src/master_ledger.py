@@ -46,6 +46,7 @@ TRANSFER_KEYWORDS = [
     "@okaxis", "@oksbi", "@okicici", "@ybl", "@ibl",
     "bil/neft", "bil/imps", ":transfer ", "007281:", "011331:",
     "trfr to", "fund trf", "online transfer",
+    "inft/", "/inft/", "net banking inf", "inf/inft", "/inf/",
 ]
 INCOME_KEYWORDS = [
     "salary cr", "sal cr", "salary credit", "interest credit", "int cr",
