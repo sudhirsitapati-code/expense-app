@@ -655,7 +655,7 @@ def _mark_processed(msg_id: str):
     _db.save("processed_gmail_ids", list(ids))
 
 
-def sync_from_gmail(days_back: int = 90) -> dict:
+def sync_from_gmail(days_back: int = 90, force: bool = False) -> dict:
     """
     Pull bank alert emails from Gmail (last N days).
     Deduplicates by txn_id, classifies, saves to master_ledger.json.
@@ -666,6 +666,9 @@ def sync_from_gmail(days_back: int = 90) -> dict:
     except Exception as e:
         return {"error": str(e), "new": 0, "skipped": 0, "uncertain": 0}
 
+    if force:
+        _db.save("processed_gmail_ids", [])
+        _db.save("processed_statement_ids", [])
     processed_ids = _get_processed_ids()
     existing      = _load_json(LEDGER_PATH)
     existing_ids  = {t["txn_id"] for t in existing}

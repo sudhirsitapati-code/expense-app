@@ -682,7 +682,8 @@ def api_ledger_sync():
     """Pull new bank alerts from Gmail, classify, merge into master ledger."""
     data     = request.get_json() or {}
     days     = int(data.get("days", 90))
-    result   = ledger_sync_gmail(days_back=days)
+    force    = bool(data.get("force", False))
+    result   = ledger_sync_gmail(days_back=days, force=force)
 
     # Also pull in any PDF-parsed ICICI transactions
     pdf_imported = import_from_icici_transactions()
