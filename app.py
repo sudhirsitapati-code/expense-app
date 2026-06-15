@@ -15,6 +15,11 @@ from src.approval_engine import ApprovalEngine, ExpenseRequest
 from src.reconcile import run_reconciliation
 from src.acc27_writer import sync_approved_to_history, export_monthly_excel
 from src.icici_statement_parser import fetch_and_parse_statements
+from src.master_ledger import (
+    load_ledger, get_uncertain, update_transaction,
+    sync_from_gmail as ledger_sync_gmail,
+    get_cc_balance, reconcile_with_approvals,
+)
 from src.whatsapp_handler import (
     build_twiml_reply, parse_incoming,
     send_approval_request, send_approval_result,
@@ -507,6 +512,180 @@ def api_update_transaction(txn_id):
             _save_json(TRANSACTIONS_PATH, transactions)
             return jsonify({"status": "ok"})
     return jsonify({"error": "not found"}), 404
+
+
+# ── MASTER LEDGER APIs ────────────────────────────────────────────────────────
+
+@app.route("/api/master-ledger", methods=["GET"])
+@login_required
+def api_master_ledger():
+    """Return master ledger entries. Filters: uncertain, account, bank, month."""
+    txns = load_ledger()
+
+    # Optional filters
+    only_uncertain = request.args.get("uncertain") == "1"
+    account_filter = request.args.get("account")
+    bank_filter    = request.args.get("bank")
+    month_filter   = request.args.get("month")   # YYYY-MM
+    search         = request.args.get("q","").lower()
+
+    if only_uncertain:
+        txns = [t for t in txns if t.get("uncertain")]
+    if account_filter:
+        txns = [t for t in txns if t.get("account") == account_filter]
+    if bank_filter:
+        txns = [t for t in txns if t.get("bank") == bank_filter]
+    if month_filter:
+        txns = [t for t in txns if (t.get("date",""))[:7] == month_filter
+                or t.get("date","").endswith(month_filter[-2:] + "/" + month_filter[:4])]
+    if search:
+        txns = [t for t in txns
+                if search in (t.get("raw_description","")).lower()
+                or search in (t.get("paid_to","")).lower()
+                or search in (t.get("heading") or "").lower()]
+
+    # Summary stats
+    total_debit  = sum(t.get("debit",0)  for t in txns)
+    total_credit = sum(t.get("credit",0) for t in txns)
+    uncertain_ct = sum(1 for t in txns if t.get("uncertain"))
+
+    # Accounts list for filter dropdown
+    all_accounts = sorted({t.get("account","") for t in load_ledger() if t.get("account")})
+
+    return jsonify({
+        "transactions": txns,
+        "total_debit":  total_debit,
+        "total_credit": total_credit,
+        "uncertain":    uncertain_ct,
+        "accounts":     all_accounts,
+        "count":        len(txns),
+    })
+
+
+@app.route("/api/master-ledger/sync", methods=["POST"])
+@login_required
+def api_ledger_sync():
+    """Pull new bank alerts from Gmail, classify, merge into master ledger."""
+    data     = request.get_json() or {}
+    days     = int(data.get("days", 90))
+    result   = ledger_sync_gmail(days_back=days)
+
+    # Also reconcile SBI entries with approval log
+    log = _load_json(APPROVAL_LOG)
+    matched = reconcile_with_approvals(log)
+    result["reconciled"] = matched
+
+    return jsonify({"status": "ok", **result})
+
+
+@app.route("/api/master-ledger/<txn_id>", methods=["PATCH"])
+@login_required
+def api_ledger_update(txn_id):
+    """Update type, heading, paid_to, remarks, saving_agreed for a transaction."""
+    data    = request.get_json() or {}
+    allowed = {"paid_to","type","heading","remarks","saving_agreed"}
+    updates = {k: v for k, v in data.items() if k in allowed}
+    if not updates:
+        return jsonify({"error": "no valid fields"}), 400
+    ok = update_transaction(txn_id, updates)
+    return jsonify({"status": "ok"}) if ok else (jsonify({"error": "not found"}), 404)
+
+
+@app.route("/api/cc-balance", methods=["GET"])
+@login_required
+def api_cc_balance():
+    """Credit card unpaid balances per card."""
+    return jsonify(get_cc_balance())
+
+
+@app.route("/api/approvals-structured", methods=["GET"])
+@login_required
+def api_approvals_structured():
+    """Return approval log structured into pending / month / unauthorized / tracker."""
+    log   = _load_json(APPROVAL_LOG)
+    recon = _load_json(RECONCILE_LOG)
+
+    now          = datetime.now()
+    month_prefix = now.strftime("%Y-%m")
+
+    pending      = [e for e in log if e.get("action") == "ESCALATE" and "sudhir_response" not in e]
+    this_month   = [e for e in log
+                    if (e.get("timestamp",""))[:7] == month_prefix
+                    and e.get("action") in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER")]
+    unauthorized = [e for e in recon if not e.get("matched") and not e.get("is_recurring") and not e.get("ignored")]
+    tracker      = [e for e in log
+                    if e.get("action") in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER")
+                    and not e.get("confirmed_paid")]
+
+    return jsonify({
+        "pending":      pending,
+        "this_month":   this_month,
+        "unauthorized": unauthorized,
+        "tracker":      tracker,
+    })
+
+
+@app.route("/api/insights", methods=["GET"])
+@login_required
+def api_insights():
+    """AI-generated spending insights from master ledger + approval log."""
+    try:
+        from openai import AzureOpenAI
+        client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_KEY"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION","2024-12-01-preview"),
+        )
+        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT","gpt-5.5")
+    except Exception:
+        return jsonify({"insights":[]})
+
+    ledger = load_ledger()
+    now    = datetime.now()
+    month_prefix = now.strftime("%Y-%m")
+
+    # Last 3 months summary by heading
+    from collections import defaultdict
+    by_heading: dict = defaultdict(float)
+    for t in ledger:
+        if t.get("debit") and t.get("heading"):
+            by_heading[t["heading"]] += t["debit"]
+
+    # Budget from file
+    budget_path = os.path.join(CONFIG_DIR, "budget_fy27.json")
+    with open(budget_path) as f:
+        budget_annual = json.load(f).get("annual",{})
+
+    summary = [
+        {"heading": h, "spend": round(v), "budget": budget_annual.get(h,0)}
+        for h, v in sorted(by_heading.items(), key=lambda x: -x[1])[:15]
+    ]
+
+    prompt = f"""You are a personal finance advisor for an Indian household (Mumbai, upper-income).
+Analyse this spending data and give 5 concise, actionable insights to reduce expenses.
+Focus on high-spend categories vs budget, patterns worth questioning, and concrete alternatives.
+
+Spending summary (from bank transactions): {json.dumps(summary)}
+
+Reply as JSON array of 5 objects: [{{"title":"...", "detail":"...", "category":"...", "potential_saving":"₹X,XXX/month"}}]
+Be specific, not generic. No obvious tips."""
+
+    try:
+        resp = client.chat.completions.create(
+            model=deployment, max_tokens=800,
+            messages=[{"role":"system","content":"Reply only with JSON."},
+                      {"role":"user","content":prompt}]
+        )
+        text = resp.choices[0].message.content.strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        insights = json.loads(text)
+    except Exception as e:
+        insights = [{"title":"Unable to generate insights","detail":str(e),"category":"","potential_saving":""}]
+
+    return jsonify({"insights": insights})
 
 
 @app.route("/export", methods=["GET"])

@@ -1,0 +1,768 @@
+"""
+master_ledger.py
+Unified transaction ledger for all 7 bank accounts.
+Parses Gmail alerts, applies business rules, classifies with AI.
+
+Accounts handled:
+  - 4 ICICI savings accounts (detected from alert account number)
+  - 1 SBI savings account
+  - 2 credit cards (ICICI CC / SBI Card)
+
+Business rules:
+  - Cash basis: expense recorded when cash paid
+  - Credit card: accrued on spend; tracked as Credit Card Loan (investment)
+  - Cash to Shiloj / Mohammed: Short Term Advance (investment) until bill submitted
+  - NEFT/IMPS/UPI between own accounts: Transfer
+  - Loan EMI, SIP, MF: Investment
+  - Salary, interest credits: Income
+  - GCPL reimbursements: Official
+"""
+
+import hashlib
+import json
+import os
+import re
+from datetime import datetime, timedelta
+from typing import Optional
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+
+LEDGER_PATH        = os.path.join(DATA_DIR, "master_ledger.json")
+CC_BALANCE_PATH    = os.path.join(DATA_DIR, "cc_balance.json")
+
+# FY calendar mapping
+CAL_TO_FY_NO   = {4:1,5:2,6:3,7:4,8:5,9:6,10:7,11:8,12:9,1:10,2:11,3:12}
+CAL_TO_FY_MON  = {4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",
+                   10:"Oct",11:"Nov",12:"Dec",1:"Jan",2:"Feb",3:"Mar"}
+
+# ── Business rule keywords ────────────────────────────────────────────────────
+
+STAFF_NAMES = ["shiloj", "mohammed", "mohamad", "shiloj james", "md "]
+
+TRANSFER_KEYWORDS = [
+    "neft", "imps", "rtgs", "trf to", "transfer to", "fund transfer",
+    "internal transfer", "self transfer", "upi/", "upi-",
+]
+INCOME_KEYWORDS = [
+    "salary cr", "sal cr", "salary credit", "interest credit", "int cr",
+    "dividend", "refund", "reversal cr", "credit reversal", "cashback",
+    "gcpl salary", "godrej salary",
+]
+INVESTMENT_KEYWORDS = [
+    "sip", "mutual fund", "mf/", "nps", "ppf", "emi", "loan emi",
+    "infina finance", "mizugami", "home loan", "mortgage",
+    "investment", "fd open", "rd open",
+]
+OFFICIAL_KEYWORDS = [
+    "gcpl", "godrej consumer", "reimbursement", "reimb", "official",
+]
+
+# ── ACC26 heading classification rules (keyword → heading) ────────────────────
+
+HEADING_RULES = [
+    (["grocery", "bigbasket", "dmart", "reliance fresh", "nature basket",
+      "grofer", "blinkit", "zepto", "swiggy instamart", "jiomart"], "Groceries"),
+    (["salary", "sal ", "staff pay", "domestic", "cook pay",
+      "driver pay", "maid", "nanny"], "Staff Salary"),
+    (["electricity", "mahadiscom", "msedcl", "best ", "gas ", "igl ",
+      "piped gas", "adani gas", "bses", "tata power", "torrent power"], "Electricity & Gas"),
+    (["kalpataru", "maintenance soc", "society maint", "housing soc",
+      "bmc ", "icard", "icic0018 soc"], "Kalpataru Maintenance"),
+    (["school", "tuition", "coaching", "iit", "icse", "cbse",
+      "symbiosis", "cambridge", "academy", "college fee",
+      "children education", "ed fee"], "Children Education"),
+    (["ketki", "ketaki", "wife", "mrs sitapati"], "Ketki"),
+    (["hotel", "holiday", "airbnb", "makemytrip", "yatra", "cleartrip",
+      "flight", "indigo", "air india", "vistara", "spicejet",
+      "booking.com", "trivago", "oyo rooms", "travel"], "Holiday"),
+    (["kalpalata", "charity", "donation", "trust ", "foundation",
+      "ngo ", "relief fund"], "Charity"),
+    (["uspaar", "saving ", "frugal"], "Uspaar"),
+    (["malhar", "building ", "property tax", "construction",
+      "architect", "interior", "renovation"], "Malhar"),
+    (["amma", "mother", "mom pay", "ammal"], "Amma"),
+    (["doctor", "hospital", "pharmacy", "medical", "apollo",
+      "fortis", "lilavati", "hinduja", "nanawati", "medic",
+      "clinic", "diagnostic", "pathology", "lab test"], "Medical"),
+    (["gym", "fitness", "cult.fit", "yoga", "spa ", "bombay gymkhana",
+      "gymkhana", "salon", "hair ", "massage", "wellness"], "Wellness"),
+    (["zara", "h&m", "marks & spencer", "westside", "shoppers stop",
+      "myntra", "ajio", "fabindia", "lifestyle store", "clothes",
+      "garment", "fashion", "shirt", "trouser"], "Clothes"),
+    (["amazon gift", "gift ", "present ", "birthday", "anniversary gift",
+      "flower"], "Gifts"),
+    (["swiggy", "zomato", "dineout", "eazydiner", "restaurant",
+      "cafe ", "bistro ", "dining", "food delivery", "eatout"], "Eating Out"),
+    (["netflix", "amazon prime", "hotstar", "spotify", "apple music",
+      "pvr ", "inox ", "bookmyshow", "entertainment", "gaming",
+      "playstation", "steam"], "Entertainment"),
+    (["insurance", "lic ", "hdfc life", "max life", "icici pru",
+      "bajaj allianz", "star health", "mediclai"], "Insurance"),
+    (["home loan", "housing loan", "emi sbi", "emi icici",
+      "loan repay", "mortgage emi"], "Home Loan"),
+    (["income tax", "tds ", "gst ", "advance tax",
+      "tax payment", "oltas"], "Tax"),
+    (["atm ", "atm/", "cash withdrawal", "cash wd"], "Cash"),
+    (["alcohol", "wine ", "beer ", "whisky", "vodka", "liquor",
+      "beverage", "bar tab"], "Alcohol"),
+    (["amazon", "flipkart", "meesho", "nykaa", "misc purchase",
+      "online purchase"], "Misc"),
+    (["maintenance", "plumber", "electrician", "carpenter", "repair",
+      "servicing", "ac service", "pest control"], "Maintenance Expense"),
+    (["office supply", "stationery", "printer", "laptop", "monitor",
+      "home office", "wfh"], "Home office"),
+    (["one time", "special purchase", "luxury", "appliance",
+      "furniture", "artwork", "antique"], "One Time Charge"),
+    (["financial charge", "bank charge", "od interest", "overdraft",
+      "late fee", "penalty"], "Financial Expense / OD Interest"),
+]
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _load_json(path):
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return []
+
+
+def _save_json(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2, default=str)
+
+
+def _txn_id(date: str, account: str, description: str, amount: float) -> str:
+    raw = f"{date}|{account}|{description}|{amount}"
+    return hashlib.sha1(raw.encode()).hexdigest()[:16]
+
+
+def _parse_date(s: str) -> Optional[datetime]:
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s.strip(), fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _fy_info(dt: datetime) -> dict:
+    return {
+        "fy_month_no":   CAL_TO_FY_NO[dt.month],
+        "fy_month_name": CAL_TO_FY_MON[dt.month],
+        "fy_year":       dt.year if dt.month >= 4 else dt.year - 1,
+    }
+
+
+# ── Rule-based classifier ─────────────────────────────────────────────────────
+
+def _classify_type(desc: str, account_type: str, paid_to: str) -> tuple[str, bool]:
+    """Returns (type, certain)."""
+    d = desc.lower()
+    p = paid_to.lower()
+
+    # Staff cash advance
+    if any(s in p or s in d for s in STAFF_NAMES):
+        return "investment", True   # Short Term Advance until bill
+
+    if account_type == "credit_card":
+        return "expense", True      # Credit card: accrue on spend
+
+    if any(k in d for k in INCOME_KEYWORDS):
+        return "income", True
+
+    if any(k in d for k in INVESTMENT_KEYWORDS):
+        return "investment", True
+
+    if any(k in d for k in OFFICIAL_KEYWORDS):
+        return "official", True
+
+    if any(k in d for k in TRANSFER_KEYWORDS):
+        return "transfer", True
+
+    return "expense", False         # Default; uncertain
+
+
+def _classify_heading(desc: str, txn_type: str) -> tuple[Optional[str], bool]:
+    """Returns (heading, certain)."""
+    if txn_type in ("income", "transfer", "official"):
+        return None, True           # No heading needed for these types
+
+    if txn_type == "investment":
+        d = desc.lower()
+        if any(k in d for k in STAFF_NAMES):
+            return "Short Term Advance", True
+        if any(k in d for k in ["home loan", "mortgage", "housing loan"]):
+            return "Home Loan", True
+        if any(k in d for k in ["insurance", "lic", "premium"]):
+            return "Insurance", True
+        if any(k in d for k in ["sip", "mutual fund", "mf/"]):
+            return "Investment", True
+        return "Investment", False
+
+    d = desc.lower()
+    for keywords, heading in HEADING_RULES:
+        if any(k in d for k in keywords):
+            return heading, True
+
+    return "Misc", False            # Uncertain default
+
+
+def _extract_paid_to(desc: str, bank: str) -> str:
+    """Clean up raw bank description to a readable vendor name."""
+    # Strip common bank prefixes
+    prefixes = [
+        r"^UPI-", r"^NEFT-", r"^IMPS-", r"^POS-", r"^ATM-",
+        r"^UPI/", r"^NEFT/", r"^IMPS/", r"^POS ",
+        r"^PURCHASE AT ", r"^BILL PAYMENT-", r"^ECS-",
+        r"\d{6,}/", r"/\d{4,}/",
+    ]
+    cleaned = desc.strip()
+    for p in prefixes:
+        cleaned = re.sub(p, "", cleaned, flags=re.IGNORECASE).strip()
+
+    # Take first meaningful part
+    parts = re.split(r"[/|\\]", cleaned)
+    vendor = parts[0].strip()
+
+    # Title case, cap length
+    vendor = vendor[:50].title()
+    return vendor or desc[:30].title()
+
+
+def classify_transaction(txn: dict) -> dict:
+    """Apply rules + populate type, heading, paid_to, uncertain flag."""
+    desc  = txn.get("raw_description", "")
+    acct  = txn.get("account_type", "savings")
+    existing_paid_to = txn.get("paid_to", "")
+
+    paid_to = existing_paid_to or _extract_paid_to(desc, txn.get("bank", ""))
+    txn["paid_to"] = paid_to
+
+    # Only classify if not already manually set
+    if txn.get("confidence") == "manual":
+        return txn
+
+    txn_type, type_certain = _classify_type(desc, acct, paid_to)
+    heading, heading_certain = _classify_heading(desc, txn_type)
+
+    txn["type"]    = txn_type
+    txn["heading"] = heading
+
+    uncertain_fields = []
+    if not type_certain:
+        uncertain_fields.append("type")
+    if heading and not heading_certain:
+        uncertain_fields.append("heading")
+
+    txn["uncertain"]        = bool(uncertain_fields)
+    txn["uncertain_fields"] = uncertain_fields
+    txn["confidence"]       = "rule"
+
+    return txn
+
+
+# ── AI batch classifier (Azure OpenAI) ────────────────────────────────────────
+
+def ai_classify_batch(transactions: list[dict]) -> list[dict]:
+    """Use Azure OpenAI to classify uncertain transactions in batches of 15."""
+    try:
+        from openai import AzureOpenAI
+        client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_KEY"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
+        )
+        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5.5")
+    except Exception:
+        return transactions
+
+    BATCH = 15
+    type_values    = ["expense","income","investment","transfer","official"]
+    heading_values = [
+        "Groceries","Staff Salary","Electricity & Gas","Misc","Cash","Alcohol",
+        "Wellness","Clothes","Gifts","Medical","Amma","Ketki","Children Education",
+        "Charity","Uspaar","Holiday","Eating Out","Entertainment","Malhar",
+        "Maintenance Expense","Home office","One Time Charge","Kalpataru Maintenance",
+        "Financial Expense / OD Interest","Insurance","Home Loan","Tax",
+        "Short Term Advance","Credit Card Loan","Investment",
+    ]
+
+    uncertain = [t for t in transactions if t.get("uncertain") and t.get("confidence") != "manual"]
+    if not uncertain:
+        return transactions
+
+    for i in range(0, len(uncertain), BATCH):
+        batch = uncertain[i:i + BATCH]
+        items = [
+            {"id": t["txn_id"], "desc": t["raw_description"],
+             "amount": t.get("debit") or t.get("credit",0),
+             "bank": t.get("bank",""), "account_type": t.get("account_type","savings")}
+            for t in batch
+        ]
+        prompt = f"""Classify each bank transaction for an Indian household expense tracker.
+
+Types: {type_values}
+Headings (for expense/investment only): {heading_values}
+
+Rules:
+- 'transfer' = NEFT/IMPS/UPI between own accounts
+- 'investment' = loan EMI, SIP, mutual fund, insurance premium
+- 'income' = salary credit, interest, dividend, refund
+- 'official' = employer reimbursement (GCPL/Godrej)
+- 'expense' = all other debits
+
+Transactions: {json.dumps(items, indent=2)}
+
+Reply with JSON array, same order: [{{"id":"...", "type":"...", "heading":"..." or null, "paid_to":"<clean vendor name>", "certain":true/false}}]
+Only output JSON, no explanation."""
+
+        try:
+            resp = client.chat.completions.create(
+                model=deployment, max_tokens=1500,
+                messages=[
+                    {"role":"system","content":"Reply only with JSON."},
+                    {"role":"user","content":prompt},
+                ]
+            )
+            text = resp.choices[0].message.content.strip()
+            if text.startswith("```"):
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            results = json.loads(text)
+
+            # Apply AI results back to transactions
+            result_map = {r["id"]: r for r in results}
+            for txn in batch:
+                r = result_map.get(txn["txn_id"])
+                if not r:
+                    continue
+                txn["type"]    = r.get("type", txn["type"])
+                txn["heading"] = r.get("heading", txn["heading"])
+                if r.get("paid_to"):
+                    txn["paid_to"] = r["paid_to"]
+                txn["uncertain"] = not r.get("certain", False)
+                txn["uncertain_fields"] = [] if r.get("certain") else txn.get("uncertain_fields", [])
+                txn["confidence"] = "ai"
+        except Exception as e:
+            print(f"AI batch classify error: {e}")
+
+    return transactions
+
+
+# ── Gmail sync ────────────────────────────────────────────────────────────────
+
+def _get_gmail_service():
+    from googleapiclient.discovery import build
+    from src.gmail_utils import get_credentials
+    return build("gmail", "v1", credentials=get_credentials())
+
+
+def _decode_body(msg: dict) -> str:
+    import base64
+    payload = msg.get("payload", {})
+    parts   = payload.get("parts", [])
+    if parts:
+        for part in parts:
+            if part.get("mimeType") == "text/plain":
+                data = part.get("body", {}).get("data", "")
+                if data:
+                    return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+    data = payload.get("body", {}).get("data", "")
+    if data:
+        return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+    return ""
+
+
+def _parse_icici_savings(body: str, gmail_id: str) -> Optional[dict]:
+    """ICICI savings account debit/credit alert."""
+    # Debit
+    m_amt   = re.search(r"INR\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?debited", body, re.I)
+    m_credit= re.search(r"INR\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?credited", body, re.I)
+    m_acct  = re.search(r"(?:Account|A/c)[^\d]*(\d{3,4})", body, re.I)
+    m_date  = re.search(r"on\s+(\d{2}[-/]\d{2}[-/]\d{2,4})", body, re.I)
+    m_info  = re.search(r"(?:Info|for|towards)[:\s]+([^\n\.]{5,60})", body, re.I)
+
+    if not (m_amt or m_credit):
+        return None
+
+    is_debit = bool(m_amt)
+    amount   = float((m_amt or m_credit).group(1).replace(",",""))
+    acct_no  = f"ICICI-{m_acct.group(1)}" if m_acct else "ICICI-????"
+    date_str = m_date.group(1) if m_date else datetime.now().strftime("%d/%m/%Y")
+    desc     = m_info.group(1).strip() if m_info else body[:80]
+
+    return {
+        "gmail_id":       gmail_id,
+        "bank":           "ICICI",
+        "account":        acct_no,
+        "account_type":   "savings",
+        "raw_description": desc,
+        "debit":          amount if is_debit else 0,
+        "credit":         0 if is_debit else amount,
+        "date":           date_str,
+        "source":         "gmail_alert",
+    }
+
+
+def _parse_icici_credit_card(body: str, gmail_id: str) -> Optional[dict]:
+    """ICICI credit card spend alert."""
+    m_amt  = re.search(r"(?:Rs\.?|INR)\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?(?:spent|used|debited)", body, re.I)
+    m_card = re.search(r"Credit Card\s+(?:ending\s+)?(?:XX|x+)?(\d{3,4})", body, re.I)
+    m_date = re.search(r"on\s+(\d{2}[-/]\d{2}[-/]\d{2,4})", body, re.I)
+    m_at   = re.search(r"(?:at|for)\s+([A-Za-z0-9&\s\-\.]{3,50}?)(?:\.|on\s+\d|\n)", body, re.I)
+
+    if not m_amt:
+        return None
+
+    amount  = float(m_amt.group(1).replace(",",""))
+    card_no = f"ICICI-CC-{m_card.group(1)}" if m_card else "ICICI-CC-????"
+    date_str= m_date.group(1) if m_date else datetime.now().strftime("%d/%m/%Y")
+    desc    = m_at.group(1).strip() if m_at else body[:80]
+
+    return {
+        "gmail_id":        gmail_id,
+        "bank":            "ICICI",
+        "account":         card_no,
+        "account_type":    "credit_card",
+        "raw_description": desc,
+        "debit":           amount,
+        "credit":          0,
+        "date":            date_str,
+        "source":          "gmail_alert",
+    }
+
+
+def _parse_sbi_savings(body: str, gmail_id: str) -> Optional[dict]:
+    """SBI savings debit/credit alert."""
+    m_debit  = re.search(r"Rs\.?\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?debited", body, re.I)
+    m_credit = re.search(r"Rs\.?\s*([\d,]+(?:\.\d{2})?)\s+(?:has been )?credited", body, re.I)
+    m_acct   = re.search(r"account\s+(?:no\.?\s+)?(?:XX|x+)?(\d{3,4})", body, re.I)
+    m_date   = re.search(r"on\s+(\d{2}[-/]\d{2}[-/]\d{2,4})", body, re.I)
+    m_info   = re.search(r"Info[:\s]+([^\n\.]{5,60})", body, re.I)
+
+    if not (m_debit or m_credit):
+        return None
+
+    is_debit = bool(m_debit)
+    amount   = float((m_debit or m_credit).group(1).replace(",",""))
+    acct_no  = f"SBI-{m_acct.group(1)}" if m_acct else "SBI-????"
+    date_str = m_date.group(1) if m_date else datetime.now().strftime("%d/%m/%Y")
+    desc     = m_info.group(1).strip() if m_info else body[:80]
+
+    return {
+        "gmail_id":        gmail_id,
+        "bank":            "SBI",
+        "account":         acct_no,
+        "account_type":    "savings",
+        "raw_description": desc,
+        "debit":           amount if is_debit else 0,
+        "credit":          0 if is_debit else amount,
+        "date":            date_str,
+        "source":          "gmail_alert",
+    }
+
+
+def _parse_sbi_credit_card(body: str, gmail_id: str) -> Optional[dict]:
+    """SBI credit card spend alert."""
+    m_amt  = re.search(r"Rs\.?\s*([\d,]+(?:\.\d{2})?)\s+(?:spent|used|debited)", body, re.I)
+    m_card = re.search(r"(?:Card|SBI Card)\s+(?:ending\s+)?(?:XX|x+)?(\d{3,4})", body, re.I)
+    m_date = re.search(r"(?:on|dated)\s+(\d{2}[-/]\d{2}[-/]\d{2,4})", body, re.I)
+    m_at   = re.search(r"(?:at|for)\s+([A-Za-z0-9&\s\-\.]{3,50}?)(?:\.|on\s+\d|\n)", body, re.I)
+
+    if not m_amt:
+        return None
+
+    amount  = float(m_amt.group(1).replace(",",""))
+    card_no = f"SBI-CC-{m_card.group(1)}" if m_card else "SBI-CC-????"
+    date_str= m_date.group(1) if m_date else datetime.now().strftime("%d/%m/%Y")
+    desc    = m_at.group(1).strip() if m_at else body[:80]
+
+    return {
+        "gmail_id":        gmail_id,
+        "bank":            "SBI",
+        "account":         card_no,
+        "account_type":    "credit_card",
+        "raw_description": desc,
+        "debit":           amount,
+        "credit":          0,
+        "date":            date_str,
+        "source":          "gmail_alert",
+    }
+
+
+def _detect_and_parse(body: str, gmail_id: str) -> Optional[dict]:
+    """Detect bank/account type from email body and parse."""
+    b = body.lower()
+    is_icici = "icici bank" in b or "icicibank" in b
+    is_sbi   = "sbi" in b or "state bank" in b
+    is_cc    = "credit card" in b or "sbi card" in b
+
+    if is_icici and is_cc:
+        return _parse_icici_credit_card(body, gmail_id)
+    if is_icici:
+        return _parse_icici_savings(body, gmail_id)
+    if is_sbi and is_cc:
+        return _parse_sbi_credit_card(body, gmail_id)
+    if is_sbi:
+        return _parse_sbi_savings(body, gmail_id)
+    return None
+
+
+PROCESSED_IDS_PATH = os.path.join(DATA_DIR, "processed_gmail_ids.json")
+
+
+def _get_processed_ids() -> set:
+    if not os.path.exists(PROCESSED_IDS_PATH):
+        return set()
+    with open(PROCESSED_IDS_PATH) as f:
+        return set(json.load(f))
+
+
+def _mark_processed(msg_id: str):
+    ids = _get_processed_ids()
+    ids.add(msg_id)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(PROCESSED_IDS_PATH, "w") as f:
+        json.dump(list(ids), f)
+
+
+def sync_from_gmail(days_back: int = 90) -> dict:
+    """
+    Pull bank alert emails from Gmail (last N days).
+    Deduplicates by txn_id, classifies, saves to master_ledger.json.
+    Returns summary: {new, skipped, uncertain}.
+    """
+    try:
+        service = _get_gmail_service()
+    except Exception as e:
+        return {"error": str(e), "new": 0, "skipped": 0, "uncertain": 0}
+
+    processed_ids = _get_processed_ids()
+    existing      = _load_json(LEDGER_PATH)
+    existing_ids  = {t["txn_id"] for t in existing}
+
+    # Search bank alert emails (last N days)
+    cutoff = (datetime.now() - timedelta(days=days_back)).strftime("%Y/%m/%d")
+    query  = (
+        f"after:{cutoff} "
+        "(from:alerts@icicibank.com OR from:donotreply@icicibank.com "
+        "OR from:alerts@sbi.co.in OR from:sbialerts@sbi.co.in "
+        "OR from:sbicardservices@sbi.co.in OR from:info@sbicard.com "
+        "OR from:creditcards@icicibank.com OR from:notify@icicibank.com)"
+    )
+
+    new_txns = []
+    skipped  = 0
+
+    try:
+        result = service.users().messages().list(
+            userId="me", q=query, maxResults=500
+        ).execute()
+        messages = result.get("messages", [])
+    except Exception as e:
+        return {"error": str(e), "new": 0, "skipped": 0, "uncertain": 0}
+
+    for msg_ref in messages:
+        msg_id = msg_ref["id"]
+        if msg_id in processed_ids:
+            skipped += 1
+            continue
+
+        try:
+            msg  = service.users().messages().get(userId="me", id=msg_id, format="full").execute()
+            body = _decode_body(msg)
+            parsed = _detect_and_parse(body, msg_id)
+
+            if not parsed:
+                _mark_processed(msg_id)
+                continue
+
+            # Build full transaction record
+            date_str = parsed["date"]
+            dt = _parse_date(date_str)
+            if not dt:
+                dt = datetime.now()
+
+            fy = _fy_info(dt)
+            txn_id = _txn_id(
+                date_str, parsed["account"],
+                parsed["raw_description"], parsed["debit"] or parsed["credit"]
+            )
+
+            if txn_id in existing_ids:
+                skipped += 1
+                _mark_processed(msg_id)
+                continue
+
+            txn = {
+                "txn_id":          txn_id,
+                "date":            date_str,
+                "fy_month_no":     fy["fy_month_no"],
+                "fy_month_name":   fy["fy_month_name"],
+                "fy_year":         fy["fy_year"],
+                "account":         parsed["account"],
+                "account_type":    parsed["account_type"],
+                "bank":            parsed["bank"],
+                "raw_description": parsed["raw_description"],
+                "paid_to":         "",
+                "debit":           parsed["debit"],
+                "credit":          parsed["credit"],
+                "type":            "",
+                "heading":         None,
+                "remarks":         "",
+                "uncertain":       True,
+                "uncertain_fields": [],
+                "confidence":      "new",
+                "source":          "gmail_alert",
+                "gmail_id":        parsed["gmail_id"],
+                "ai_saving_tip":   None,
+                "saving_agreed":   None,
+                "reconciled_with": None,
+                "created_at":      datetime.now().isoformat(),
+            }
+
+            txn = classify_transaction(txn)
+            new_txns.append(txn)
+            existing_ids.add(txn_id)
+            _mark_processed(msg_id)
+
+        except Exception as e:
+            print(f"Error processing Gmail msg {msg_id}: {e}")
+
+    if new_txns:
+        # AI classify uncertain transactions
+        new_txns = ai_classify_batch(new_txns)
+        existing.extend(new_txns)
+        # Sort by date descending
+        existing.sort(key=lambda t: t.get("date",""), reverse=True)
+        _save_json(LEDGER_PATH, existing)
+
+    uncertain_count = sum(1 for t in existing if t.get("uncertain"))
+    return {"new": len(new_txns), "skipped": skipped, "uncertain": uncertain_count}
+
+
+# ── Reconcile with approval log ───────────────────────────────────────────────
+
+def reconcile_with_approvals(approval_log: list) -> int:
+    """
+    Match SBI debits in master ledger to Vincent's approved expenses.
+    Uses heading from approval log when matched. Returns count of new matches.
+    """
+    ledger = _load_json(LEDGER_PATH)
+    matched = 0
+
+    for txn in ledger:
+        if txn.get("reconciled_with") or txn.get("bank") != "SBI":
+            continue
+        if txn.get("account_type") == "credit_card":
+            continue
+
+        txn_date = _parse_date(txn["date"])
+        txn_amt  = txn["debit"]
+        if not txn_date or not txn_amt:
+            continue
+
+        for entry in approval_log:
+            if entry.get("action") not in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER"):
+                continue
+            if entry.get("reconciled_to"):
+                continue
+
+            log_amt = entry.get("approved_amount") or entry.get("amount", 0)
+            if abs(txn_amt - log_amt) > 100:
+                continue
+
+            try:
+                log_date = datetime.fromisoformat(entry["timestamp"])
+            except Exception:
+                continue
+
+            if abs((txn_date - log_date).days) > 7:
+                continue
+
+            # Match found — pull heading from approval log
+            from src.approval_engine import ApprovalEngine
+            APP_TO_HEADING = {
+                "groceries":"Groceries","staff":"Staff Salary","utilities":"Electricity & Gas",
+                "miscellaneous":"Misc","personal_care":"Wellness","clothing":"Clothes",
+                "gifts":"Gifts","medical":"Medical","education":"Children Education",
+                "dining":"Eating Out","entertainment":"Entertainment","transport":"Holiday",
+                "maintenance":"Maintenance Expense","home_repair":"One Time Charge",
+            }
+            cat = entry.get("category","miscellaneous")
+            heading = APP_TO_HEADING.get(cat, txn.get("heading","Misc"))
+
+            txn["heading"]         = heading
+            txn["reconciled_with"] = entry["request_id"]
+            txn["uncertain"]       = False
+            txn["uncertain_fields"]= []
+            txn["confidence"]      = "reconciled"
+            entry["reconciled_to"] = txn["txn_id"]
+            matched += 1
+            break
+
+    if matched:
+        _save_json(LEDGER_PATH, ledger)
+
+    return matched
+
+
+# ── Credit card balance tracking ──────────────────────────────────────────────
+
+def get_cc_balance() -> dict:
+    """Return unpaid credit card balance per card."""
+    ledger = _load_json(LEDGER_PATH)
+    balances: dict = {}
+
+    for txn in ledger:
+        if txn.get("account_type") != "credit_card":
+            continue
+        card = txn["account"]
+        if card not in balances:
+            balances[card] = {"card": card, "unpaid": 0, "total_spend": 0, "txns": []}
+        balances[card]["total_spend"] += txn.get("debit", 0)
+
+        # Credit = payment made, debit = spend
+        if txn.get("credit"):
+            balances[card]["unpaid"] -= txn["credit"]
+        else:
+            balances[card]["unpaid"] += txn.get("debit", 0)
+
+        balances[card]["txns"].append(txn["txn_id"])
+
+    return balances
+
+
+# ── Public API functions ──────────────────────────────────────────────────────
+
+def load_ledger() -> list:
+    return _load_json(LEDGER_PATH)
+
+
+def get_uncertain() -> list:
+    return [t for t in load_ledger() if t.get("uncertain")]
+
+
+def update_transaction(txn_id: str, updates: dict) -> bool:
+    """Update editable fields. Clears uncertain flag if type+heading provided."""
+    ledger = _load_json(LEDGER_PATH)
+    allowed = {"paid_to","type","heading","remarks","ai_saving_tip","saving_agreed"}
+    for txn in ledger:
+        if txn["txn_id"] == txn_id:
+            for k, v in updates.items():
+                if k in allowed:
+                    txn[k] = v
+            if "type" in updates or "heading" in updates:
+                txn["confidence"] = "manual"
+                txn["uncertain"]  = False
+                txn["uncertain_fields"] = []
+            _save_json(LEDGER_PATH, ledger)
+            return True
+    return False

@@ -1,854 +1,803 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Sitapati Household Expenses</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <style>
-    body { background: #f5f7fa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    .topbar { background: #1a1a2e; color: white; padding: 13px 24px; }
-    .topbar h5 { margin: 0; font-weight: 600; font-size: 1.05rem; }
-    .nav-tabs { border-bottom: 2px solid #e5e7eb; }
-    .nav-tabs .nav-link { color: #555; font-weight: 500; border: none; border-bottom: 3px solid transparent; border-radius: 0; padding: 10px 18px; margin-bottom: -2px; }
-    .nav-tabs .nav-link.active { color: #1a1a2e; font-weight: 700; border-bottom-color: #1a1a2e; background: transparent; }
-    .nav-tabs .nav-link:hover { color: #1a1a2e; border-bottom-color: #cbd5e1; }
-    .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.07); margin-bottom: 20px; }
-    .card-header { background: white; border-bottom: 1px solid #f0f0f0; border-radius: 12px 12px 0 0 !important; padding: 14px 20px; font-weight: 600; font-size: 0.95rem; }
-    .form-label { font-weight: 500; font-size: 0.9rem; color: #444; }
-    .form-control, .form-select { border-radius: 8px; border: 1px solid #dde; padding: 10px 14px; }
-    .form-control:focus, .form-select:focus { border-color: #1a1a2e; box-shadow: 0 0 0 3px rgba(26,26,46,0.1); }
-    .btn-primary-dark { background: #1a1a2e; border: none; border-radius: 8px; padding: 11px 28px; font-weight: 600; color: white; }
-    .btn-primary-dark:hover { background: #2d2d4e; color: white; }
-    .btn-chip { border-radius: 20px; padding: 8px 20px; font-size: 0.88rem; font-weight: 500; margin: 4px; border: 2px solid #1a1a2e; color: #1a1a2e; background: white; cursor: pointer; transition: all 0.15s; }
-    .btn-chip:hover, .btn-chip.selected { background: #1a1a2e; color: white; }
-    .result-box { border-radius: 10px; padding: 16px 20px; font-size: 0.93rem; font-weight: 500; display: none; }
-    .result-auto    { background: #dcfce7; border: 1px solid #86efac; color: #166534; }
-    .result-pending { background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; }
-    .result-question{ background: #fefce8; border: 1px solid #fde047; color: #713f12; }
-    .result-error   { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; }
-    .stat-pill { background: white; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); text-align: center; }
-    .stat-pill .val { font-size: 1.6rem; font-weight: 700; }
-    .stat-pill .lbl { font-size: 0.73rem; color: #888; margin-top: 2px; }
-    table { font-size: 0.86rem; }
-    th { font-size: 0.73rem; text-transform: uppercase; letter-spacing: 0.04em; color: #888; font-weight: 600; }
-    .badge-ok        { background: #dcfce7; color: #166534; }
-    .badge-high      { background: #fff7ed; color: #9a3412; }
-    .badge-very_high { background: #fee2e2; color: #991b1b; }
-    .badge-unknown   { background: #f3f4f6; color: #6b7280; }
-    .budget-bar  { height: 6px; border-radius: 3px; background: #e5e7eb; overflow: hidden; margin-top: 4px; }
-    .budget-fill { height: 100%; border-radius: 3px; }
-    .pct-green { color: #16a34a; font-weight: 600; }
-    .pct-orange{ color: #ea580c; font-weight: 600; }
-    .pct-red   { color: #dc2626; font-weight: 600; }
-    .btn-approve { background: #16a34a; color: white; border: none; border-radius: 6px; padding: 5px 14px; font-size: 0.82rem; font-weight: 600; }
-    .btn-reject  { background: #dc2626; color: white; border: none; border-radius: 6px; padding: 5px 14px; font-size: 0.82rem; font-weight: 600; }
-    .btn-approve:hover { background: #15803d; } .btn-reject:hover { background: #b91c1c; }
-    .btn-sm-grey { background: #6b7280; color: white; border: none; border-radius: 6px; padding: 5px 12px; font-size: 0.82rem; }
-    .empty-state { text-align: center; padding: 36px; color: #bbb; font-size: 0.88rem; }
-    .category-header td { background: #f8f9fb; font-weight: 700; font-size: 0.88rem; color: #1a1a2e; }
-    .subtotal-row td { background: #f0f4ff; font-weight: 700; border-top: 2px solid #e0e7ff; }
-    .grand-total td { background: #1a1a2e; color: white; font-weight: 700; }
-    #followup-section { display: none; }
-    .spinner-border-sm { width: 1rem; height: 1rem; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sitapati Expense Manager</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+  body { background:#f4f6fb; font-size:13px; }
+  .navbar { background:#1e3a5f !important; }
+  .navbar-brand { font-weight:700; font-size:1.1rem; color:#fff !important; }
+  .main-tabs .nav-link { color:#1e3a5f; font-weight:600; font-size:.95rem; padding:.6rem 1.4rem; border-radius:8px 8px 0 0; border:1px solid transparent; }
+  .main-tabs .nav-link.active { background:#1e3a5f; color:#fff; border-color:#1e3a5f; }
+  .sub-tabs .nav-link { color:#444; font-size:.8rem; padding:.3rem .9rem; border-radius:20px; }
+  .sub-tabs .nav-link.active { background:#1e3a5f; color:#fff; }
+  .card { border:none; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.07); }
+  .stat-card { background:#fff; border-radius:10px; padding:.8rem 1.2rem; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,.06); }
+  .stat-val { font-size:1.3rem; font-weight:700; color:#1e3a5f; }
+  .stat-lbl { font-size:.7rem; color:#888; margin-top:2px; }
+  table { font-size:12px; }
+  th { background:#f0f3f8; color:#1e3a5f; font-weight:600; white-space:nowrap; position:sticky; top:0; z-index:10; }
+  td { vertical-align:middle; }
+  .badge-expense    { background:#fee2e2; color:#b91c1c; font-weight:600; }
+  .badge-income     { background:#dcfce7; color:#15803d; font-weight:600; }
+  .badge-investment { background:#e0e7ff; color:#3730a3; font-weight:600; }
+  .badge-transfer   { background:#fef9c3; color:#854d0e; font-weight:600; }
+  .badge-official   { background:#f0fdf4; color:#166534; font-weight:600; }
+  .uncertain-row    { background:#fffbeb !important; }
+  .uncertain-icon   { color:#f59e0b; font-size:.8rem; }
+  .table-wrap { max-height:520px; overflow-y:auto; }
+  .editable-row { cursor:pointer; }
+  .editable-row:hover td { background:#eff6ff; }
+  .mis-super { background:#1e3a5f !important; color:#fff !important; font-weight:700; }
+  .mis-sub   { background:#e8edf5; font-weight:600; }
+  .mis-op    { background:#1a4f8a !important; color:#fff !important; font-weight:700; }
+  .mis-grand { background:#0f2942 !important; color:#fff !important; font-weight:700; }
+  .pct-bar  { height:6px; background:#e5e7eb; border-radius:3px; }
+  .pct-fill { height:6px; border-radius:3px; }
+  .insight-card { border-left:4px solid #1e3a5f; padding:.7rem 1rem; background:#fff; border-radius:6px; margin-bottom:.6rem; }
+  .saving-badge { background:#d1fae5; color:#065f46; font-size:.75rem; padding:.15rem .45rem; border-radius:10px; }
+  select.inline-sel, input.inline-inp { border:none; background:transparent; font-size:12px; width:100%; padding:0; }
+  select.inline-sel:focus, input.inline-inp:focus { outline:1px solid #93c5fd; background:#eff6ff; border-radius:3px; }
+  .btn-approve { background:#16a34a; color:#fff; border:none; padding:.2rem .55rem; border-radius:5px; font-size:.73rem; cursor:pointer; }
+  .btn-reject  { background:#dc2626; color:#fff; border:none; padding:.2rem .55rem; border-radius:5px; font-size:.73rem; cursor:pointer; }
+  .tracker-unpaid { color:#f59e0b; font-weight:600; }
+  .cc-card { background:#fff; border-radius:10px; padding:1rem 1.2rem; box-shadow:0 2px 6px rgba(0,0,0,.06); }
+  .main-tab-content { background:#fff; border-radius:0 12px 12px 12px; box-shadow:0 2px 8px rgba(0,0,0,.07); padding:1.2rem; min-height:300px; }
+</style>
 </head>
 <body>
 
-<div class="topbar d-flex justify-content-between align-items-center">
-  <h5>🏠 Sitapati Household Expenses</h5>
+<!-- Navbar -->
+<nav class="navbar navbar-dark px-3 py-2">
+  <span class="navbar-brand"><i class="bi bi-wallet2 me-2"></i>Sitapati Expense Manager</span>
   <div class="d-flex align-items-center gap-3">
-    <span class="text-white-50 small">{{ user | capitalize }}</span>
-    <span id="last-updated" class="text-white-50 small"></span>
-    <a href="/logout" class="btn btn-sm btn-outline-light">Sign out</a>
+    <span class="text-white-50 small">👤 {{ user | title }}</span>
+    <a href="/logout" class="btn btn-sm btn-outline-light">Logout</a>
+  </div>
+</nav>
+
+<div class="container-fluid px-3 pt-2">
+
+<!-- ═══ MAIN TABS ═══ -->
+<ul class="nav main-tabs mb-0" id="mainTabs">
+  <li class="nav-item"><a class="nav-link active" href="#" onclick="switchMain('submit',this)"><i class="bi bi-plus-circle me-1"></i>Submit Expense</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchMain('approvals',this)">
+    <i class="bi bi-check2-circle me-1"></i>Approvals
+    <span id="pendingBadge" class="badge bg-danger ms-1 d-none">0</span>
+  </a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchMain('reports',this)"><i class="bi bi-bar-chart-line me-1"></i>Reports</a></li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB 1 — SUBMIT EXPENSE
+═══════════════════════════════════════════════════════ -->
+<div id="tab-submit" class="main-tab-content">
+<div class="row g-3 justify-content-center">
+<div class="col-lg-6">
+  <h6 class="fw-bold mb-3 text-primary"><i class="bi bi-plus-circle me-2"></i>Submit Expense</h6>
+  <form id="expenseForm" onsubmit="submitExpense(event)">
+    <div class="mb-2">
+      <label class="form-label fw-semibold small">Submitter</label>
+      <select class="form-select form-select-sm" name="submitter" required>
+        <option value="vincent">Vincent</option>
+        <option value="sudhir">Sudhir</option>
+        <option value="ketki">Ketki</option>
+        <option value="santosh">Santosh</option>
+      </select>
+    </div>
+    <div class="mb-2">
+      <label class="form-label fw-semibold small">Vendor / Payee</label>
+      <input class="form-control form-control-sm" name="vendor" required placeholder="e.g. Big Basket">
+    </div>
+    <div class="row g-2 mb-2">
+      <div class="col">
+        <label class="form-label fw-semibold small">Amount (₹)</label>
+        <input class="form-control form-control-sm" name="amount" type="number" step="0.01" required>
+      </div>
+      <div class="col">
+        <label class="form-label fw-semibold small">Payment</label>
+        <select class="form-select form-select-sm" name="payment_method">
+          <option value="upi">UPI / Card</option>
+          <option value="cash">Cash</option>
+          <option value="bank">Bank Transfer</option>
+        </select>
+      </div>
+    </div>
+    <div class="mb-2">
+      <label class="form-label fw-semibold small">Category / Heading</label>
+      <select class="form-select form-select-sm" name="category" required>
+        <option value="groceries">Groceries</option>
+        <option value="staff">Staff Salary</option>
+        <option value="utilities">Electricity &amp; Gas</option>
+        <option value="medical">Medical</option>
+        <option value="dining">Eating Out</option>
+        <option value="entertainment">Entertainment</option>
+        <option value="clothing">Clothes</option>
+        <option value="education">Children Education</option>
+        <option value="maintenance">Maintenance</option>
+        <option value="home_repair">One Time Charge</option>
+        <option value="personal_care">Wellness</option>
+        <option value="transport">Holiday / Travel</option>
+        <option value="gifts">Gifts</option>
+        <option value="miscellaneous">Misc</option>
+      </select>
+    </div>
+    <div class="mb-2">
+      <label class="form-label fw-semibold small">Description</label>
+      <input class="form-control form-control-sm" name="description" required placeholder="Brief purpose">
+    </div>
+    <div class="mb-3">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="is_post_facto" id="postFacto">
+        <label class="form-check-label small" for="postFacto">Already paid (post-facto)</label>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm w-100 py-2">Submit</button>
+  </form>
+  <div id="submitResult" class="mt-3 d-none"></div>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB 2 — APPROVALS
+═══════════════════════════════════════════════════════ -->
+<div id="tab-approvals" class="main-tab-content d-none">
+<ul class="nav sub-tabs gap-1 mb-3" id="approvalTabs">
+  <li class="nav-item"><a class="nav-link active" href="#" onclick="switchApproval('pending',this)"><i class="bi bi-hourglass me-1"></i>Pending</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchApproval('month',this)"><i class="bi bi-calendar3 me-1"></i>This Month</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchApproval('unauthorized',this)"><i class="bi bi-exclamation-triangle me-1"></i>Unauthorised</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchApproval('tracker',this)"><i class="bi bi-check-all me-1"></i>Tracker</a></li>
+</ul>
+
+<!-- Pending -->
+<div id="ap-pending">
+  <div id="pendingList"><div class="text-muted small">Loading…</div></div>
+</div>
+
+<!-- This Month -->
+<div id="ap-month" class="d-none">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="mb-0 fw-bold text-primary">Approvals — This Month</h6>
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadApprovals()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+  </div>
+  <div class="table-wrap"><table class="table table-hover mb-0">
+    <thead><tr><th>Date</th><th>Submitter</th><th>Vendor</th><th>Category</th><th class="text-end">Amount</th><th>Status</th></tr></thead>
+    <tbody id="monthBody"></tbody>
+  </table></div>
+  <div class="mt-2 text-muted small fw-semibold" id="monthTotal"></div>
+</div>
+
+<!-- Unauthorised -->
+<div id="ap-unauthorized" class="d-none">
+  <h6 class="fw-bold text-danger mb-2">Unauthorised / Unmatched Debits</h6>
+  <div class="table-wrap"><table class="table table-hover mb-0">
+    <thead><tr><th>Date</th><th>Bank</th><th>Vendor</th><th class="text-end">Amount</th><th>Action</th></tr></thead>
+    <tbody id="unauthBody"></tbody>
+  </table></div>
+</div>
+
+<!-- Tracker -->
+<div id="ap-tracker" class="d-none">
+  <h6 class="fw-bold text-primary mb-2">Payment Tracker — Has approval actually been paid?</h6>
+  <div class="table-wrap"><table class="table table-hover mb-0">
+    <thead><tr><th>Date</th><th>Vendor</th><th class="text-end">Amount</th><th>Method</th><th>Status</th><th>Action</th></tr></thead>
+    <tbody id="trackerBody"></tbody>
+  </table></div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB 3 — REPORTS
+═══════════════════════════════════════════════════════ -->
+<div id="tab-reports" class="main-tab-content d-none">
+<ul class="nav sub-tabs gap-1 mb-3" id="reportTabs">
+  <li class="nav-item"><a class="nav-link active" href="#" onclick="switchReport('ledger',this)"><i class="bi bi-journal-text me-1"></i>Master Ledger</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('notsure',this)">
+    <i class="bi bi-question-circle me-1"></i>Not Sure
+    <span id="notSureBadge" class="badge bg-warning text-dark ms-1">0</span>
+  </a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('mis',this)"><i class="bi bi-bar-chart me-1"></i>Budget Tracker</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('insights',this)"><i class="bi bi-lightbulb me-1"></i>Insights</a></li>
+</ul>
+
+<!-- ── Master Ledger ── -->
+<div id="rp-ledger">
+  <div class="row g-2 mb-2 align-items-end">
+    <div class="col-sm-3">
+      <input class="form-control form-control-sm" id="ledgerSearch" placeholder="Search vendor / heading…" oninput="filterLedger()">
+    </div>
+    <div class="col-sm-2">
+      <select class="form-select form-select-sm" id="ledgerAccount" onchange="filterLedger()">
+        <option value="">All Accounts</option>
+      </select>
+    </div>
+    <div class="col-sm-2">
+      <select class="form-select form-select-sm" id="ledgerBank" onchange="filterLedger()">
+        <option value="">All Banks</option>
+        <option value="ICICI">ICICI</option>
+        <option value="SBI">SBI</option>
+      </select>
+    </div>
+    <div class="col-sm-2">
+      <input type="month" class="form-control form-control-sm" id="ledgerMonth" onchange="filterLedger()">
+    </div>
+    <div class="col-sm-3 d-flex gap-2 align-items-center">
+      <button class="btn btn-sm btn-primary" onclick="syncLedger()"><i class="bi bi-cloud-download me-1"></i>Sync Gmail</button>
+      <span id="syncStatus" class="text-muted small"></span>
+    </div>
+  </div>
+
+  <div class="row g-2 mb-3">
+    <div class="col-auto"><div class="stat-card"><div class="stat-val text-danger" id="lTotalDebit">—</div><div class="stat-lbl">Total Debit</div></div></div>
+    <div class="col-auto"><div class="stat-card"><div class="stat-val text-success" id="lTotalCredit">—</div><div class="stat-lbl">Total Credit</div></div></div>
+    <div class="col-auto"><div class="stat-card"><div class="stat-val text-warning" id="lUncertain">—</div><div class="stat-lbl">Need Review</div></div></div>
+    <div class="col-auto"><div class="stat-card"><div class="stat-val" id="lCount">—</div><div class="stat-lbl">Transactions</div></div></div>
+  </div>
+
+  <div class="table-wrap">
+  <table class="table table-hover mb-0">
+    <thead><tr>
+      <th>Date</th><th>Account</th><th>Description</th>
+      <th>Paid To</th><th class="text-end">Debit</th><th class="text-end">Credit</th>
+      <th>Type</th><th>Heading</th><th>Remarks</th><th>💡</th>
+    </tr></thead>
+    <tbody id="ledgerBody"></tbody>
+  </table>
+  </div>
+  <div class="text-muted small mt-2">Click any row to edit type / heading / remarks.</div>
+</div>
+
+<!-- ── Not Sure ── -->
+<div id="rp-notsure" class="d-none">
+  <p class="text-muted small mb-3">Transactions where type or heading could not be determined. Edit below and save — they will move to the main ledger.</p>
+  <div class="table-wrap">
+  <table class="table table-hover mb-0">
+    <thead><tr>
+      <th>Date</th><th>Account</th><th>Description</th><th>Paid To</th>
+      <th class="text-end">Amount</th><th>Type ⚠</th><th>Heading ⚠</th><th>Remarks</th><th></th>
+    </tr></thead>
+    <tbody id="notSureBody"></tbody>
+  </table>
   </div>
 </div>
 
-<div class="container-fluid py-3 px-3 px-md-4" style="max-width:1150px">
+<!-- ── Budget Tracker (MIS) ── -->
+<div id="rp-mis" class="d-none">
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <button class="btn btn-sm btn-outline-primary" id="misBtnMonth" onclick="loadMIS('month',this)">This Month</button>
+    <button class="btn btn-sm btn-outline-primary" id="misBtnQtr"   onclick="loadMIS('quarter',this)">This Quarter</button>
+    <button class="btn btn-sm btn-outline-primary active" id="misBtnYtd" onclick="loadMIS('ytd',this)">YTD</button>
+    <span class="text-muted small ms-2" id="misPeriodLabel"></span>
+  </div>
+  <div class="table-wrap">
+  <table class="table table-sm mb-0">
+    <thead><tr>
+      <th style="width:33%">Category</th>
+      <th class="text-end">FY26 Actual</th>
+      <th class="text-end">FY27 Budget</th>
+      <th class="text-end">FY27 Actual</th>
+      <th style="width:90px">Used %</th>
+    </tr></thead>
+    <tbody id="misBody"></tbody>
+  </table>
+  </div>
+</div>
 
-  <ul class="nav nav-tabs mb-3" id="mainTabs">
-    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-entry">📋 Submit Expense</a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-pending">⏳ Approvals <span class="badge bg-danger ms-1" id="pending-badge" style="display:none"></span></a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-mis">📊 MIS</a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-tracker">✅ Tracker</a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-unauth">🚨 Unauthorized</a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-report">📄 Report</a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-icici" onclick="loadICICI()">🏦 ICICI</a></li>
-  </ul>
+<!-- ── Insights ── -->
+<div id="rp-insights" class="d-none">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="mb-0 fw-bold text-primary"><i class="bi bi-lightbulb me-2"></i>AI Spending Insights</h6>
+    <button class="btn btn-sm btn-primary" onclick="loadInsights()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh Insights</button>
+  </div>
+  <div id="insightsList"><div class="text-muted small">Click Refresh Insights to generate.</div></div>
 
-  <div class="tab-content">
+  <h6 class="fw-bold text-primary mt-4 mb-2"><i class="bi bi-credit-card me-2"></i>Credit Card Balances (Accrued, Unpaid)</h6>
+  <div class="row g-2" id="ccBalanceRow"><div class="col text-muted small">Loading…</div></div>
+</div>
 
-    <!-- ═══════════════════════════════════════════════
-         TAB 1 — EXPENSE ENTRY
-    ════════════════════════════════════════════════ -->
-    <div class="tab-pane fade show active" id="tab-entry">
-      <div class="row justify-content-center">
-        <div class="col-12 col-md-8 col-lg-6">
-          <div class="card">
-            <div class="card-header">Submit an Expense — get approval before paying</div>
-            <div class="card-body p-4">
-              <form id="expense-form">
-                <div class="mb-3">
-                  <label class="form-label">Submitted by</label>
-                  <select class="form-select" id="submitter" required>
-                    <option value="">Select...</option>
-                    <option value="vincent" {% if user == 'vincent' %}selected{% endif %}>Vincent</option>
-                    <option value="sudhir" {% if user == 'sudhir' %}selected{% endif %}>Sudhir</option>
-                    <option value="ketki" {% if user == 'ketki' %}selected{% endif %}>Ketki</option>
-                    <option value="santosh" {% if user == 'santosh' %}selected{% endif %}>Santosh</option>
-                  </select>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Vendor / Payee</label>
-                  <input type="text" class="form-control" id="vendor" placeholder="e.g. Raj Electrician" required/>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Estimated Amount (Rs)</label>
-                  <input type="number" class="form-control" id="amount" placeholder="e.g. 4500" min="1" required/>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Category</label>
-                  <select class="form-select" id="category" required>
-                    <option value="">Select category...</option>
-                    <option value="groceries">Groceries</option>
-                    <option value="utilities">Utilities</option>
-                    <option value="maintenance">Maintenance</option>
-                    <option value="staff">Staff</option>
-                    <option value="dining">Dining</option>
-                    <option value="transport">Transport</option>
-                    <option value="medical">Medical</option>
-                    <option value="entertainment">Entertainment</option>
-                    <option value="clothing">Clothing</option>
-                    <option value="education">Education</option>
-                    <option value="home_repair">Home Repair</option>
-                    <option value="personal_care">Personal Care</option>
-                    <option value="gifts">Gifts</option>
-                    <option value="miscellaneous">Miscellaneous</option>
-                  </select>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Description / Purpose</label>
-                  <input type="text" class="form-control" id="description" placeholder="e.g. Rewiring kitchen light switches" required/>
-                  <div class="form-text">Be specific — used to check if price is reasonable.</div>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Payment Method</label>
-                  <div>
-                    <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="radio" name="payment" id="pay-upi" value="upi" checked/>
-                      <label class="form-check-label" for="pay-upi">Bank / UPI</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="radio" name="payment" id="pay-cash" value="cash"/>
-                      <label class="form-check-label" for="pay-cash">Cash</label>
-                    </div>
-                  </div>
-                </div>
-                <div class="mb-4">
-                  <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="post-facto" role="switch"/>
-                    <label class="form-check-label" for="post-facto">Already paid (post-facto)</label>
-                  </div>
-                </div>
-                <button type="submit" class="btn btn-primary-dark w-100" id="submit-btn">Submit for Approval</button>
-              </form>
-              <div class="result-box mt-3" id="result-box"></div>
-              <div id="followup-section" class="mt-3">
-                <div class="result-box result-question" style="display:block">
-                  <div class="fw-semibold mb-2">❓ <span id="followup-question"></span></div>
-                  <div id="followup-options" class="mt-2"></div>
-                </div>
-              </div>
-            </div>
-          </div>
+</div><!-- /tab-reports -->
+</div><!-- /container -->
+
+<!-- ═══ Edit Transaction Modal ═══ -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">Edit Transaction</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editTxnId">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Type</label>
+          <select class="form-select form-select-sm" id="editType">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+            <option value="investment">Investment</option>
+            <option value="transfer">Transfer</option>
+            <option value="official">Official</option>
+          </select>
         </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Heading</label>
+          <select class="form-select form-select-sm" id="editHeading">
+            <option value="">— None —</option>
+            <option>Groceries</option><option>Staff Salary</option>
+            <option>Electricity &amp; Gas</option><option>Misc</option>
+            <option>Cash</option><option>Alcohol</option><option>Wellness</option>
+            <option>Clothes</option><option>Gifts</option><option>Medical</option>
+            <option>Amma</option><option>Ketki</option>
+            <option>Children Education</option><option>Charity</option>
+            <option>Uspaar</option><option>Holiday</option>
+            <option>Eating Out</option><option>Entertainment</option>
+            <option>Malhar</option><option>Maintenance Expense</option>
+            <option>Home office</option><option>One Time Charge</option>
+            <option>Kalpataru Maintenance</option>
+            <option>Financial Expense / OD Interest</option>
+            <option>Insurance</option><option>Home Loan</option><option>Tax</option>
+            <option>Short Term Advance</option>
+            <option>Credit Card Loan</option><option>Investment</option>
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Paid To</label>
+          <input class="form-control form-control-sm" id="editPaidTo">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Remarks</label>
+          <input class="form-control form-control-sm" id="editRemarks" placeholder="Optional notes">
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-primary btn-sm" onclick="saveEdit()"><i class="bi bi-save me-1"></i>Save</button>
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
       </div>
     </div>
-
-    <!-- ═══════════════════════════════════════════════
-         TAB 2 — PENDING APPROVALS
-    ════════════════════════════════════════════════ -->
-    <div class="tab-pane fade" id="tab-pending">
-      <div class="card">
-        <div class="card-header d-flex justify-content-between">
-          <span>⏳ Pending Approvals</span>
-          <small class="text-muted">Approve here or reply Y/N on WhatsApp</small>
-        </div>
-        <div class="card-body p-0">
-          <table class="table table-hover mb-0">
-            <thead class="table-light"><tr>
-              <th class="ps-3">Date</th><th>From</th><th>Vendor</th><th>Category</th>
-              <th>Description</th><th>Amount</th><th>Market</th><th>Action</th>
-            </tr></thead>
-            <tbody id="pending-table"><tr><td colspan="8" class="empty-state">Loading...</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══════════════════════════════════════════════
-         TAB 3 — MIS
-    ════════════════════════════════════════════════ -->
-    <div class="tab-pane fade" id="tab-mis">
-      <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-        <div class="btn-group btn-group-sm" role="group" id="mis-period-btns">
-          <button class="btn btn-dark active" data-period="month" onclick="setMISPeriod(this)">This Month</button>
-          <button class="btn btn-outline-dark" data-period="quarter" onclick="setMISPeriod(this)">This Quarter</button>
-          <button class="btn btn-outline-dark" data-period="ytd" onclick="setMISPeriod(this)">YTD</button>
-        </div>
-        <span id="mis-period-label" class="text-muted small ms-2"></span>
-      </div>
-      <div class="row g-3 mb-3" id="mis-pills"></div>
-      <div class="card">
-        <div class="card-header fw-semibold">FY26 Actual vs FY27 Budget vs FY27 Actual</div>
-        <div class="card-body p-0">
-          <table class="table mb-0">
-            <thead class="table-light"><tr>
-              <th class="ps-3" style="min-width:180px">Category</th>
-              <th class="text-end">FY26 Actual</th>
-              <th class="text-end">FY27 Budget</th>
-              <th class="text-end">FY27 Actual</th>
-              <th class="text-end">vs Budget</th>
-              <th style="min-width:100px">Progress</th>
-            </tr></thead>
-            <tbody id="mis-table"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══════════════════════════════════════════════
-         TAB 4 — CONFIRMATION TRACKER
-    ════════════════════════════════════════════════ -->
-    <div class="tab-pane fade" id="tab-tracker">
-      <div class="row g-3 mb-3" id="tracker-pills"></div>
-      <div class="card">
-        <div class="card-header">Did each approved expense actually get paid?</div>
-        <div class="card-body p-0">
-          <table class="table table-hover mb-0">
-            <thead class="table-light"><tr>
-              <th class="ps-3">Date</th><th>From</th><th>Vendor</th>
-              <th>Amount</th><th>Payment</th><th>Confirmed</th><th></th>
-            </tr></thead>
-            <tbody id="tracker-table"><tr><td colspan="7" class="empty-state">Loading...</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══════════════════════════════════════════════
-         TAB 5 — UNAUTHORIZED SPENDS
-    ════════════════════════════════════════════════ -->
-    <div class="tab-pane fade" id="tab-unauth">
-      <div class="card">
-        <div class="card-header">🚨 Bank debits with no matching approval</div>
-        <div class="card-body p-0">
-          <table class="table table-hover mb-0">
-            <thead class="table-light"><tr>
-              <th class="ps-3">Date</th><th>Bank</th><th>Vendor</th><th>Amount</th><th>Status</th><th></th>
-            </tr></thead>
-            <tbody id="unauth-table"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══════════════════════════════════════════════
-         TAB 6 — MONTHLY REPORT
-    ════════════════════════════════════════════════ -->
-    <div class="tab-pane fade" id="tab-report">
-      <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-        <select class="form-select form-select-sm w-auto" id="sel-month" onchange="loadReport()"></select>
-        <button class="btn btn-primary-dark btn-sm" onclick="exportExcel()">⬇ Export ACC27 Excel</button>
-        <span id="export-status" class="text-muted small"></span>
-      </div>
-      <div class="row g-3 mb-3" id="report-pills"></div>
-      <div class="card mb-3">
-        <div class="card-header">3-Column Comparison</div>
-        <div class="card-body p-0">
-          <table class="table mb-0">
-            <thead class="table-light"><tr>
-              <th class="ps-3">Category</th><th>FY26 Actual</th><th>FY27 Budget</th><th>FY27 Actual</th><th>vs Budget</th>
-            </tr></thead>
-            <tbody id="report-comparison"></tbody>
-          </table>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header">All Transactions — <span id="report-month-label"></span></div>
-        <div class="card-body p-0">
-          <table class="table mb-0">
-            <thead class="table-light"><tr>
-              <th class="ps-3">Date</th><th>Vendor</th><th>Description</th><th>Payment</th><th>Amount</th><th>Confirmed</th>
-            </tr></thead>
-            <tbody id="report-txn-body"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══════════════════════════════════════════════
-         TAB 7 — ICICI TRANSACTIONS
-    ════════════════════════════════════════════════ -->
-    <div class="tab-pane fade" id="tab-icici">
-      <!-- toolbar -->
-      <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-        <span class="text-muted small text-uppercase fw-semibold me-2">ICICI Transactions</span>
-        <select class="form-select form-select-sm w-auto" id="icici-filter-month" onchange="renderICICI()">
-          <option value="">All Months</option>
-        </select>
-        <select class="form-select form-select-sm w-auto" id="icici-filter-account" onchange="renderICICI()">
-          <option value="">All Accounts</option>
-        </select>
-        <select class="form-select form-select-sm w-auto" id="icici-filter-type" onchange="renderICICI()">
-          <option value="">All Types</option>
-          <option value="Expense">Expense</option>
-          <option value="Investment">Investment</option>
-          <option value="Income">Income</option>
-          <option value="Transfer">Transfer</option>
-          <option value="Official">Official</option>
-        </select>
-        <label class="form-check-label small ms-1">
-          <input type="checkbox" id="icici-uncertain-only" class="form-check-input" onchange="renderICICI()">
-          Only uncertain
-        </label>
-        <button class="btn btn-sm btn-outline-dark ms-auto" id="sync-btn" onclick="syncICICI()">⬇ Sync Statements</button>
-      </div>
-      <!-- summary pills -->
-      <div class="row g-2 mb-3" id="icici-pills"></div>
-      <!-- table -->
-      <div class="card">
-        <div class="card-body p-0" style="overflow-x:auto">
-          <table class="table table-hover mb-0" id="icici-main-table" style="min-width:1100px;font-size:0.82rem">
-            <thead class="table-light">
-              <tr>
-                <th class="ps-2" style="width:30px">Mo#</th>
-                <th style="width:40px">Mo</th>
-                <th style="width:70px">Account</th>
-                <th style="width:78px">Date</th>
-                <th style="min-width:200px">Transaction Details</th>
-                <th style="width:130px">Paid To</th>
-                <th class="text-end" style="width:90px">Debit</th>
-                <th class="text-end" style="width:90px">Credit</th>
-                <th style="width:100px">Type</th>
-                <th style="width:130px">Heading</th>
-                <th style="width:130px">Remarks</th>
-                <th style="width:55px"></th>
-              </tr>
-            </thead>
-            <tbody id="icici-table">
-              <tr><td colspan="12" class="empty-state">Click "Sync Statements" to load, or click the ICICI tab.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div id="icici-save-status" class="text-success small mt-1" style="display:none">✅ Saved</div>
-    </div>
-
-  </div><!-- tab-content -->
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const INR = n => '₹' + Number(n||0).toLocaleString('en-IN');
-const L   = n => '₹' + (Number(n||0)/100000).toFixed(2) + 'L';
-const cap = s => (s||'').replace(/\b\w/g,c=>c.toUpperCase());
-const fmtDate = ts => (ts||'').slice(0,10) || '—';
+// ── State ──────────────────────────────────────────────────────────────────
+const editModal = new bootstrap.Modal(document.getElementById('editModal'));
 
-// ── ENTRY FORM ──────────────────────────────────────────────────────────────
-let followupRound = 0, currentRequestId = null;
+// ── Tab switching ──────────────────────────────────────────────────────────
+function switchMain(name, el) {
+  document.querySelectorAll('#mainTabs .nav-link').forEach(l => l.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.main-tab-content').forEach(p => p.classList.add('d-none'));
+  document.getElementById('tab-' + name).classList.remove('d-none');
+  if (name === 'approvals') loadApprovals();
+  if (name === 'reports')   { loadLedger(); }
+  return false;
+}
 
-function showResult(type, html) {
-  const b = document.getElementById('result-box');
-  b.className = 'result-box mt-3 result-' + type;
-  b.innerHTML = html; b.style.display = 'block';
-  b.scrollIntoView({behavior:'smooth',block:'nearest'});
+function switchApproval(name, el) {
+  document.querySelectorAll('#approvalTabs .nav-link').forEach(l => l.classList.remove('active'));
+  el.classList.add('active');
+  ['pending','month','unauthorized','tracker'].forEach(n =>
+    document.getElementById('ap-' + n).classList.toggle('d-none', n !== name));
+  return false;
 }
-function hideFollowup() {
-  document.getElementById('followup-section').style.display = 'none';
-  followupRound = 0;
+
+function switchReport(name, el) {
+  document.querySelectorAll('#reportTabs .nav-link').forEach(l => l.classList.remove('active'));
+  el.classList.add('active');
+  ['ledger','notsure','mis','insights'].forEach(n =>
+    document.getElementById('rp-' + n).classList.toggle('d-none', n !== name));
+  if (name === 'ledger' || name === 'notsure') loadLedger();
+  if (name === 'mis')      loadMIS('ytd', document.getElementById('misBtnYtd'));
+  if (name === 'insights') { loadInsights(); loadCCBalance(); }
+  return false;
 }
-function showFollowup(question, options, requestId) {
-  currentRequestId = requestId;
-  document.getElementById('followup-question').textContent = question;
-  const d = document.getElementById('followup-options');
-  d.innerHTML = '';
-  options.forEach(opt => {
-    const btn = document.createElement('button');
-    btn.className = 'btn-chip'; btn.textContent = opt;
-    btn.onclick = () => submitFollowup(opt);
-    d.appendChild(btn);
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const fmt = n => n ? '₹' + Math.abs(n).toLocaleString('en-IN', {maximumFractionDigits:0}) : '—';
+
+function typeBadge(t) {
+  const cls = {
+    expense:'badge-expense', income:'badge-income',
+    investment:'badge-investment', transfer:'badge-transfer', official:'badge-official'
+  }[t] || 'bg-secondary text-white';
+  return `<span class="badge ${cls}">${t||'—'}</span>`;
+}
+
+// ── SUBMIT ─────────────────────────────────────────────────────────────────
+async function submitExpense(e) {
+  e.preventDefault();
+  const fd   = new FormData(e.target);
+  const data = Object.fromEntries(fd.entries());
+  data.is_post_facto = fd.has('is_post_facto');
+  data.amount = parseFloat(data.amount);
+
+  const res = await fetch('/api/submit-expense', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
   });
-  document.getElementById('followup-section').style.display = 'block';
-}
-function handleDecision(data) {
-  hideFollowup();
-  if (data.action === 'AUTO_APPROVE') {
-    showResult('auto', `✅ <strong>Auto-Approved</strong> — you can pay ${INR(data.amount)} to ${data.vendor}.<br><small class="opacity-75">Ref: ${data.request_id}</small>${data.budget_alert?'<br><span class="badge bg-warning text-dark mt-1">⚠️ Category nearing budget</span>':''}`);
-  } else if (data.action === 'ESCALATE') {
-    showResult('pending', `⏳ <strong>Sent to Sudhir for approval.</strong> You'll be notified on WhatsApp.<br><small class="opacity-75">Ref: ${data.request_id}</small>${data.market_rate?`<br><small>Market: ${data.market_rate}</small>`:''}`);
-  } else if (data.action === 'PENDING_CLARIFICATION') {
-    if (followupRound >= 2) {
-      showResult('pending', `⏳ <strong>Sent to Sudhir</strong> with an unclear pricing flag.<br><small class="opacity-75">Ref: ${data.request_id}</small>`);
-    } else {
-      showFollowup(data.follow_up_question, data.follow_up_options, data.request_id);
-    }
+  const r = await res.json();
+  const div = document.getElementById('submitResult');
+  div.classList.remove('d-none');
+
+  if (r.action === 'AUTO_APPROVE') {
+    div.innerHTML = `<div class="alert alert-success py-2">✅ Auto-approved! Ref: ${r.request_id}</div>`;
+    e.target.reset();
+  } else if (r.action === 'ESCALATE') {
+    div.innerHTML = `<div class="alert alert-warning py-2">📤 Sent to Sudhir for approval. Ref: ${r.request_id}</div>`;
+    e.target.reset();
   } else {
-    showResult('error', '⚠️ Unexpected response. Please try again.');
+    div.innerHTML = `<div class="alert alert-info py-2 small">${JSON.stringify(r)}</div>`;
   }
 }
-async function submitFollowup(answer) {
-  followupRound++;
-  document.querySelectorAll('#followup-options .btn-chip').forEach(b => { b.classList.toggle('selected', b.textContent===answer); b.disabled=true; });
-  const btn = document.getElementById('submit-btn');
-  btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-2"></span>Checking...';
-  try {
-    const res = await fetch('/api/submit-expense', {method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({request_id:currentRequestId,followup_answer:answer,followup_round:followupRound})});
-    handleDecision(await res.json());
-  } catch(e) { showResult('error','⚠️ Something went wrong.'); }
-  finally { btn.disabled=false; btn.innerHTML='Submit for Approval'; }
-}
-document.getElementById('expense-form').addEventListener('submit', async function(e) {
-  e.preventDefault(); hideFollowup(); document.getElementById('result-box').style.display='none';
-  const btn = document.getElementById('submit-btn');
-  btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-2"></span>Checking...';
-  const payload = {
-    submitter: document.getElementById('submitter').value,
-    vendor: document.getElementById('vendor').value,
-    amount: parseFloat(document.getElementById('amount').value),
-    category: document.getElementById('category').value,
-    description: document.getElementById('description').value,
-    payment_method: document.querySelector('input[name="payment"]:checked').value,
-    is_post_facto: document.getElementById('post-facto').checked,
-  };
-  try {
-    const res = await fetch('/api/submit-expense',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const data = await res.json();
-    handleDecision(data);
-    if (data.action !== 'PENDING_CLARIFICATION') { this.reset(); followupRound=0; }
-  } catch(err) { showResult('error','⚠️ Could not reach server.'); }
-  finally { btn.disabled=false; btn.innerHTML='Submit for Approval'; }
-});
 
-// ── PENDING APPROVALS ───────────────────────────────────────────────────────
-async function loadPending() {
-  const res = await fetch('/api/expenses').then(r=>r.json()).catch(()=>[]);
-  const pending = res.filter(e=>e.action==='ESCALATE'&&!e.sudhir_response);
-  const badge = document.getElementById('pending-badge');
-  badge.style.display = pending.length ? '' : 'none';
-  if (pending.length) badge.textContent = pending.length;
-  const tbody = document.getElementById('pending-table');
-  if (!pending.length) { tbody.innerHTML='<tr><td colspan="8" class="empty-state">✅ No pending approvals</td></tr>'; return; }
-  tbody.innerHTML = pending.slice().reverse().map(e => {
-    const mkt = e.market_status||'unknown';
-    const mktLabel = {ok:'OK',high:'HIGH',very_high:'VERY HIGH',unknown:'UNKNOWN'}[mkt]||mkt.toUpperCase();
-    return `<tr>
-      <td class="ps-3">${fmtDate(e.timestamp)}</td><td>${cap(e.submitter)}</td>
-      <td><strong>${e.vendor}</strong></td><td><small>${e.category}</small></td>
-      <td><small>${e.description}</small>${e.market_rate?`<br><small class="text-muted">${e.market_rate}</small>`:''}</td>
-      <td class="fw-bold">${INR(e.amount)}</td>
-      <td><span class="badge badge-${mkt} px-2 py-1">${mktLabel}</span></td>
-      <td>
-        <button class="btn-approve me-1" onclick="decide('${e.request_id}','Y')">✓</button>
-        <button class="btn-reject" onclick="decide('${e.request_id}','N')">✗</button>
-      </td></tr>`;
+// ── APPROVALS ──────────────────────────────────────────────────────────────
+async function loadApprovals() {
+  const r = await fetch('/api/approvals-structured');
+  const d = await r.json();
+
+  // Pending badge
+  const pc = d.pending.length;
+  const pb = document.getElementById('pendingBadge');
+  pb.textContent = pc;
+  pb.classList.toggle('d-none', pc === 0);
+
+  // Pending list
+  const pl = document.getElementById('pendingList');
+  if (!d.pending.length) {
+    pl.innerHTML = '<div class="alert alert-success py-2">No pending approvals ✓</div>';
+  } else {
+    pl.innerHTML = d.pending.map(e => `
+      <div class="card mb-2 p-3">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <strong>${e.vendor}</strong>
+            <span class="ms-2 fw-bold text-danger">₹${Number(e.amount).toLocaleString('en-IN')}</span>
+            <span class="badge bg-secondary ms-2">${e.category}</span>
+            ${e.is_post_facto ? '<span class="badge bg-info ms-1">post-facto</span>' : ''}
+            <div class="text-muted small mt-1">${e.submitter} · ${e.description}</div>
+            <div class="text-muted small">Ref: ${e.request_id}</div>
+          </div>
+          <div class="d-flex gap-1 flex-column align-items-end">
+            <button class="btn-approve" onclick="decide('${e.request_id}','Y')">✓ Approve</button>
+            <button class="btn-reject"  onclick="decide('${e.request_id}','N')">✗ Reject</button>
+          </div>
+        </div>
+      </div>`).join('');
+  }
+
+  // This Month
+  const mb = document.getElementById('monthBody');
+  mb.innerHTML = d.this_month.length
+    ? d.this_month.map(e => `<tr>
+        <td>${(e.timestamp||'').slice(0,10)}</td>
+        <td>${e.submitter}</td><td>${e.vendor}</td><td>${e.category}</td>
+        <td class="text-end">₹${Number(e.approved_amount||e.amount).toLocaleString('en-IN')}</td>
+        <td><span class="badge ${e.action==='AUTO_APPROVE'?'bg-primary':e.action==='APPROVED'?'bg-success':'bg-warning text-dark'}">${e.action}</span></td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" class="text-center text-muted py-3">No approvals this month yet</td></tr>';
+
+  const mTotal = d.this_month.reduce((s,e) => s + (e.approved_amount||e.amount||0), 0);
+  document.getElementById('monthTotal').textContent = `Total approved this month: ₹${mTotal.toLocaleString('en-IN')}`;
+
+  // Unauthorised
+  const ub = document.getElementById('unauthBody');
+  ub.innerHTML = d.unauthorized.length
+    ? d.unauthorized.map(e => `<tr>
+        <td>${e.date}</td><td>${e.bank}</td><td>${e.vendor}</td>
+        <td class="text-end text-danger fw-semibold">₹${Number(e.amount).toLocaleString('en-IN')}</td>
+        <td><button class="btn btn-sm btn-outline-secondary" onclick="ignoreUnauth('${e.gmail_id}')">Ignore</button></td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="text-center text-muted py-3">No unauthorised debits</td></tr>';
+
+  // Tracker
+  const tb = document.getElementById('trackerBody');
+  tb.innerHTML = d.tracker.length
+    ? d.tracker.map(e => `<tr>
+        <td>${(e.timestamp||'').slice(0,10)}</td><td>${e.vendor}</td>
+        <td class="text-end">₹${Number(e.approved_amount||e.amount).toLocaleString('en-IN')}</td>
+        <td>${e.payment_method||'—'}</td>
+        <td class="tracker-unpaid">⏳ Pending</td>
+        <td><button class="btn btn-sm btn-success btn-sm" onclick="markPaid('${e.request_id}')">Mark Paid</button></td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" class="text-center text-muted py-3">All approved expenses confirmed paid ✓</td></tr>';
+}
+
+async function decide(reqId, resp) {
+  await fetch('/api/decide', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({request_id: reqId, response: resp})});
+  loadApprovals();
+}
+
+async function markPaid(reqId) {
+  await fetch('/api/mark-paid', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({request_id: reqId})});
+  loadApprovals();
+}
+
+async function ignoreUnauth(gmailId) {
+  await fetch('/api/ignore-unauth', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({gmail_id: gmailId})});
+  loadApprovals();
+}
+
+// ── MASTER LEDGER ──────────────────────────────────────────────────────────
+async function loadLedger() {
+  const params = new URLSearchParams();
+  const s  = document.getElementById('ledgerSearch')?.value;
+  const ac = document.getElementById('ledgerAccount')?.value;
+  const bk = document.getElementById('ledgerBank')?.value;
+  const mo = document.getElementById('ledgerMonth')?.value;
+  if (s)  params.set('q', s);
+  if (ac) params.set('account', ac);
+  if (bk) params.set('bank', bk);
+  if (mo) params.set('month', mo);
+  const qs = params.toString() ? '?' + params.toString() : '';
+
+  const r = await fetch('/api/master-ledger' + qs);
+  const d = await r.json();
+
+  document.getElementById('lTotalDebit').textContent  = fmt(d.total_debit);
+  document.getElementById('lTotalCredit').textContent = fmt(d.total_credit);
+  document.getElementById('lUncertain').textContent   = d.uncertain;
+  document.getElementById('lCount').textContent       = d.count;
+  document.getElementById('notSureBadge').textContent = d.uncertain;
+
+  // Populate account filter once
+  const acSel = document.getElementById('ledgerAccount');
+  if (acSel.options.length <= 1 && d.accounts?.length) {
+    d.accounts.forEach(ac => acSel.add(new Option(ac, ac)));
+  }
+
+  renderLedger(d.transactions);
+  renderNotSure(d.transactions.filter(t => t.uncertain));
+}
+
+function filterLedger() { loadLedger(); }
+
+function renderLedger(txns) {
+  const tbody = document.getElementById('ledgerBody');
+  if (!txns.length) {
+    tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">
+      No transactions. Click <strong>Sync Gmail</strong> to import bank alerts from the last 90 days.
+    </td></tr>`;
+    return;
+  }
+  tbody.innerHTML = txns.map(t => {
+    const unc  = t.uncertain ? 'uncertain-row editable-row' : 'editable-row';
+    const uf   = t.uncertain_fields || [];
+    const tw   = uf.includes('type')    ? ' <i class="bi bi-exclamation-triangle uncertain-icon"></i>' : '';
+    const hw   = uf.includes('heading') ? ' <i class="bi bi-exclamation-triangle uncertain-icon"></i>' : '';
+    const tip  = t.ai_saving_tip
+      ? `<span class="saving-badge" title="${t.ai_saving_tip}">💡 ${t.saving_agreed===true?'✅':t.saving_agreed===false?'❌':'?'}</span>`
+      : '';
+    const txnJ = encodeURIComponent(JSON.stringify(t));
+    return `<tr class="${unc}" onclick="openEdit('${t.txn_id}','${txnJ}')">
+      <td style="white-space:nowrap">${t.date}</td>
+      <td><span class="badge bg-light text-dark border">${t.account||'—'}</span></td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.raw_description||''}">${t.raw_description||'—'}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.paid_to||'—'}</td>
+      <td class="text-end text-danger fw-semibold">${t.debit ? fmt(t.debit) : ''}</td>
+      <td class="text-end text-success fw-semibold">${t.credit ? fmt(t.credit) : ''}</td>
+      <td>${typeBadge(t.type)}${tw}</td>
+      <td>${t.heading||'—'}${hw}</td>
+      <td class="text-muted">${t.remarks||''}</td>
+      <td>${tip}</td>
+    </tr>`;
   }).join('');
 }
-async function decide(id, r) {
-  await fetch('/api/decide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({request_id:id,response:r})});
-  loadPending();
-}
 
-// ── MIS ─────────────────────────────────────────────────────────────────────
-let _misPeriod = 'month';
+const TYPES    = ['expense','income','investment','transfer','official'];
+const HEADINGS = ['Groceries','Staff Salary','Electricity & Gas','Misc','Cash','Alcohol',
+  'Wellness','Clothes','Gifts','Medical','Amma','Ketki','Children Education','Charity',
+  'Uspaar','Holiday','Eating Out','Entertainment','Malhar','Maintenance Expense',
+  'Home office','One Time Charge','Kalpataru Maintenance',
+  'Financial Expense / OD Interest','Insurance','Home Loan','Tax',
+  'Short Term Advance','Credit Card Loan','Investment'];
 
-function setMISPeriod(btn) {
-  _misPeriod = btn.dataset.period;
-  document.querySelectorAll('#mis-period-btns .btn').forEach(b => {
-    b.className = b === btn ? 'btn btn-dark active' : 'btn btn-outline-dark';
-  });
-  loadMIS();
-}
-
-async function loadMIS() {
-  const data = await fetch(`/api/mis?period=${_misPeriod}`).then(r=>r.json()).catch(()=>({}));
-  const groups = data.groups || [], g = data.grand || {};
-  const months = data.period_months || [];
-
-  // Period label
-  const periodLabel = {month:'This Month', quarter:'This Quarter', ytd:'Year to Date'}[_misPeriod] || '';
-  const span = months.length > 1 ? ` (${months[0]} → ${months[months.length-1]})` : months[0] ? ` (${months[0]})` : '';
-  document.getElementById('mis-period-label').textContent = periodLabel + span;
-
-  // Summary pills
-  const pct = g.pct || 0;
-  document.getElementById('mis-pills').innerHTML = [
-    {val:INR(g.budget||0), lbl:`FY27 Budget`, cls:'text-primary'},
-    {val:INR(g.actual||0), lbl:`FY27 Actual`, cls:'text-dark'},
-    {val:INR(g.fy26||0),   lbl:'FY26 Actual', cls:'text-muted'},
-    {val:pct+'%', lbl:'Budget Used', cls:pct>100?'text-danger':pct>80?'pct-orange':'text-success'},
-  ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
-
-  const tbody = document.getElementById('mis-table');
-  if (!groups.length) { tbody.innerHTML='<tr><td colspan="6" class="empty-state">No data yet.</td></tr>'; return; }
-
-  function pctBar(pct) {
-    const fill = pct>100?'#dc2626':pct>80?'#ea580c':'#16a34a';
-    const cls  = pct>100?'pct-red':pct>80?'pct-orange':'pct-green';
-    const icon = pct>100?'🔴':pct>80?'⚠️':'✅';
-    return {fill, cls, icon};
+function renderNotSure(txns) {
+  const tbody = document.getElementById('notSureBody');
+  if (!txns.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No uncertain transactions 🎉</td></tr>';
+    return;
   }
-
-  // Update column headers based on period
-  const fy26Label = 'FY26 Full Year';
-  const budgetLabel = _misPeriod === 'ytd' ? 'FY27 Annual Budget' : 'FY27 Budget';
-  const actualLabel = _misPeriod === 'ytd' ? 'FY27 YTD Actual' : _misPeriod === 'quarter' ? 'FY27 Qtr Actual' : 'FY27 Month Actual';
-  document.querySelectorAll('#mis-table').forEach(()=>{});
-  const hdr = document.querySelector('#tab-mis thead tr');
-  if (hdr) {
-    const ths = hdr.querySelectorAll('th');
-    if (ths[1]) ths[1].textContent = fy26Label;
-    if (ths[2]) ths[2].textContent = budgetLabel;
-    if (ths[3]) ths[3].textContent = actualLabel;
-  }
-
-  const OPERATIONAL = ["Household","Personal","Family","Giving","Lifestyle","Property"];
-
-  let html = '';
-  let opTotal = {fy26:0, budget:0, actual:0};
-  let opInserted = false;
-
-  groups.forEach(group => {
-    const sc = group.super_category;
-    const sub = group.subtotal;
-    const {fill, cls, icon} = pctBar(sub.pct||0);
-
-    // Insert Operational Expenses subtotal before Financial
-    if (sc === 'Financial' && !opInserted) {
-      opInserted = true;
-      const opPct = opTotal.budget ? Math.round(opTotal.actual/opTotal.budget*100) : 0;
-      const {fill:of,cls:oc} = pctBar(opPct);
-      html += `<tr style="background:#1e3a5f;color:white;border-top:3px solid #60a5fa">
-        <td class="ps-3 fw-bold" style="font-size:0.82rem;letter-spacing:0.04em">OPERATIONAL EXPENSES</td>
-        <td class="text-end fw-bold">${L(opTotal.fy26)}</td>
-        <td class="text-end fw-bold">${L(opTotal.budget)}</td>
-        <td class="text-end fw-bold">${L(opTotal.actual)}</td>
-        <td class="text-end fw-bold">${opPct}%</td>
-        <td><div class="budget-bar" style="background:rgba(255,255,255,0.2)"><div class="budget-fill" style="width:${Math.min(opPct,100)}%;background:#60a5fa"></div></div></td>
-      </tr>`;
-    }
-
-    // Super-category header row
-    html += `<tr style="background:#eef2ff;border-top:2px solid #c7d2fe">
-      <td class="ps-3 fw-bold text-uppercase" style="font-size:0.78rem;letter-spacing:0.06em;color:#4338ca">${sc}</td>
-      <td class="text-end text-muted fw-semibold">${L(sub.fy26)}</td>
-      <td class="text-end fw-semibold">${L(sub.budget)}</td>
-      <td class="text-end fw-bold">${L(sub.actual)}</td>
-      <td class="text-end ${cls}">${sub.pct}% ${icon}</td>
-      <td><div class="budget-bar"><div class="budget-fill" style="width:${Math.min(sub.pct,100)}%;background:${fill}"></div></div></td>
+  tbody.innerHTML = txns.map(t => {
+    const amt     = t.debit || t.credit || 0;
+    const typeOpts = TYPES.map(v =>
+      `<option value="${v}" ${t.type===v?'selected':''}>${v}</option>`).join('');
+    const headOpts = ['<option value="">— none —</option>',
+      ...HEADINGS.map(h => `<option value="${h}" ${t.heading===h?'selected':''}>${h}</option>`)
+    ].join('');
+    return `<tr id="ns-${t.txn_id}" class="uncertain-row">
+      <td style="white-space:nowrap">${t.date}</td>
+      <td><span class="badge bg-light text-dark border">${t.account||'—'}</span></td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.raw_description||''}">${t.raw_description||'—'}</td>
+      <td><input class="inline-inp" value="${t.paid_to||''}" id="nsp-${t.txn_id}" onclick="event.stopPropagation()"></td>
+      <td class="text-end ${t.debit?'text-danger':'text-success'} fw-semibold">${fmt(amt)}</td>
+      <td><select class="inline-sel" id="nst-${t.txn_id}" onclick="event.stopPropagation()">${typeOpts}</select></td>
+      <td><select class="inline-sel" id="nsh-${t.txn_id}" onclick="event.stopPropagation()">${headOpts}</select></td>
+      <td><input class="inline-inp" placeholder="Notes…" id="nsr-${t.txn_id}" value="${t.remarks||''}" onclick="event.stopPropagation()"></td>
+      <td><button class="btn btn-sm btn-primary py-0" onclick="event.stopPropagation();saveNotSure('${t.txn_id}')">💾</button></td>
     </tr>`;
+  }).join('');
+}
 
-    // Individual category rows
-    group.rows.forEach(r => {
-      const {fill:rf, cls:rc, icon:ri} = pctBar(r.pct||0);
+async function saveNotSure(txnId) {
+  const updates = {
+    type:    document.getElementById('nst-'+txnId)?.value,
+    heading: document.getElementById('nsh-'+txnId)?.value || null,
+    paid_to: document.getElementById('nsp-'+txnId)?.value,
+    remarks: document.getElementById('nsr-'+txnId)?.value,
+  };
+  await fetch('/api/master-ledger/' + txnId, {
+    method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(updates)
+  });
+  const row = document.getElementById('ns-'+txnId);
+  if (row) row.remove();
+  const cnt = document.getElementById('notSureBadge');
+  cnt.textContent = Math.max(0, parseInt(cnt.textContent||'0') - 1);
+}
+
+function openEdit(txnId, txnEncoded) {
+  const t = JSON.parse(decodeURIComponent(txnEncoded));
+  document.getElementById('editTxnId').value    = txnId;
+  document.getElementById('editType').value     = t.type || 'expense';
+  document.getElementById('editHeading').value  = t.heading || '';
+  document.getElementById('editPaidTo').value   = t.paid_to || '';
+  document.getElementById('editRemarks').value  = t.remarks || '';
+  editModal.show();
+}
+
+async function saveEdit() {
+  const txnId = document.getElementById('editTxnId').value;
+  const updates = {
+    type:    document.getElementById('editType').value,
+    heading: document.getElementById('editHeading').value || null,
+    paid_to: document.getElementById('editPaidTo').value,
+    remarks: document.getElementById('editRemarks').value,
+  };
+  await fetch('/api/master-ledger/' + txnId, {
+    method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(updates)
+  });
+  editModal.hide();
+  loadLedger();
+}
+
+async function syncLedger() {
+  const btn = document.querySelector('[onclick="syncLedger()"]');
+  const st  = document.getElementById('syncStatus');
+  btn.disabled = true;
+  st.textContent = 'Syncing Gmail…';
+  try {
+    const r = await fetch('/api/master-ledger/sync', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({days:90})
+    });
+    const d = await r.json();
+    if (d.error) { st.textContent = 'Gmail not connected yet'; return; }
+    st.textContent = `✓ ${d.new} new · ${d.reconciled||0} matched · ${d.uncertain} to review`;
+    loadLedger();
+  } catch(err) {
+    st.textContent = 'Error: ' + err.message;
+  }
+  btn.disabled = false;
+}
+
+// ── MIS (Budget Tracker) ───────────────────────────────────────────────────
+async function loadMIS(period, btn) {
+  ['misBtnMonth','misBtnQtr','misBtnYtd'].forEach(id =>
+    document.getElementById(id)?.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  const r = await fetch(`/api/mis?period=${period}`);
+  const d = await r.json();
+  const lbl = period==='month'?'This Month':period==='quarter'?'This Quarter':'Year to Date';
+  document.getElementById('misPeriodLabel').textContent = `(${lbl}: ${(d.period_months||[]).join(', ')})`;
+
+  const tbody = document.getElementById('misBody');
+  let html = '';
+  let opTotal = {fy26:0,budget:0,actual:0};
+  const OP_SUPERS = ['Household','Personal','Family','Giving','Lifestyle','Property'];
+
+  (d.groups||[]).forEach(g => {
+    html += `<tr class="mis-super"><td colspan="5" class="ps-2">${g.super_category}</td></tr>`;
+    (g.rows||[]).forEach(row => {
+      const pct = row.pct||0;
+      const col = pct>100?'#ef4444':pct>80?'#f59e0b':'#16a34a';
       html += `<tr>
-        <td class="ps-4 text-muted" style="font-size:0.85rem">${cap(r.category)}</td>
-        <td class="text-end text-muted small">${L(r.fy26_actual)}</td>
-        <td class="text-end small">${L(r.fy27_budget)}</td>
-        <td class="text-end fw-semibold small">${L(r.fy27_actual)}</td>
-        <td class="text-end ${rc} small">${r.pct}%</td>
-        <td><div class="budget-bar"><div class="budget-fill" style="width:${Math.min(r.pct,100)}%;background:${rf}"></div></div></td>
+        <td class="ps-4">${row.category}</td>
+        <td class="text-end">${fmt(row.fy26_actual)}</td>
+        <td class="text-end">${fmt(row.fy27_budget)}</td>
+        <td class="text-end ${row.fy27_actual>row.fy27_budget?'text-danger':''}">${fmt(row.fy27_actual)}</td>
+        <td><div class="pct-bar"><div class="pct-fill" style="width:${Math.min(pct,100)}%;background:${col}"></div></div>
+          <span style="font-size:10px;color:#666">${pct}%</span></td>
       </tr>`;
     });
+    html += `<tr class="mis-sub">
+      <td class="ps-2">Sub-total ${g.super_category}</td>
+      <td class="text-end">${fmt(g.subtotal.fy26)}</td>
+      <td class="text-end">${fmt(g.subtotal.budget)}</td>
+      <td class="text-end">${fmt(g.subtotal.actual)}</td>
+      <td><span style="font-size:10px">${g.subtotal.pct||0}%</span></td>
+    </tr>`;
 
-    // Accumulate operational total for all non-Financial super-categories
-    if (OPERATIONAL.includes(sc)) {
-      opTotal.fy26   += sub.fy26;
-      opTotal.budget += sub.budget;
-      opTotal.actual += sub.actual;
+    if (OP_SUPERS.includes(g.super_category)) {
+      opTotal.fy26   += g.subtotal.fy26;
+      opTotal.budget += g.subtotal.budget;
+      opTotal.actual += g.subtotal.actual;
+      if (g.super_category === 'Property') {
+        html += `<tr class="mis-op"><td class="ps-2">OPERATIONAL EXPENSES TOTAL</td>
+          <td class="text-end">${fmt(opTotal.fy26)}</td>
+          <td class="text-end">${fmt(opTotal.budget)}</td>
+          <td class="text-end">${fmt(opTotal.actual)}</td><td></td></tr>`;
+      }
     }
   });
 
-  // Grand total
-  const {fill:gf, cls:gc, icon:gi} = pctBar(g.pct||0);
-  html += `<tr style="background:#1a1a2e;color:white">
-    <td class="ps-3 fw-bold">TOTAL</td>
-    <td class="text-end fw-semibold opacity-75">${L(g.fy26)}</td>
-    <td class="text-end fw-semibold">${L(g.budget)}</td>
-    <td class="text-end fw-bold">${L(g.actual)}</td>
-    <td class="text-end fw-bold">${g.pct}%</td>
-    <td><div class="budget-bar" style="background:rgba(255,255,255,0.2)"><div class="budget-fill" style="width:${Math.min(g.pct,100)}%;background:white"></div></div></td>
+  html += `<tr class="mis-grand">
+    <td class="ps-2">GRAND TOTAL</td>
+    <td class="text-end">${fmt(d.grand?.fy26)}</td>
+    <td class="text-end">${fmt(d.grand?.budget)}</td>
+    <td class="text-end">${fmt(d.grand?.actual)}</td>
+    <td><span style="font-size:10px">${d.grand?.pct||0}%</span></td>
   </tr>`;
 
   tbody.innerHTML = html;
 }
 
-// ── TRACKER ─────────────────────────────────────────────────────────────────
-async function loadTracker() {
-  const res = await fetch('/api/expenses').then(r=>r.json()).catch(()=>[]);
-  const approved = res.filter(e=>['AUTO_APPROVE','APPROVED','APPROVED_LOWER'].includes(e.action));
-  const total=approved.length, confirmed=approved.filter(e=>e.confirmed_paid===true).length;
-  const pct=total?Math.round(confirmed/total*100):0;
-  document.getElementById('tracker-pills').innerHTML = [
-    {val:total,lbl:'Approved',cls:'text-dark'},{val:confirmed,lbl:'Confirmed Paid',cls:'text-success'},
-    {val:total-confirmed,lbl:'Unconfirmed',cls:total-confirmed>0?'text-danger':'text-muted'},
-    {val:pct+'%',lbl:'Confirmation Rate',cls:pct===100?'text-success':pct>80?'pct-orange':'text-danger'},
-  ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
-  const tbody = document.getElementById('tracker-table');
-  if (!approved.length){tbody.innerHTML='<tr><td colspan="7" class="empty-state">No approved expenses yet.</td></tr>';return;}
-  tbody.innerHTML = approved.slice().reverse().map(e=>{
-    const cf=e.confirmed_paid;
-    const tag=cf===true?'<span class="text-success fw-bold">✅ Yes</span>':cf===false?'<span class="text-danger fw-bold">❌ No</span>':'<span class="text-muted">— Pending</span>';
-    const btn=cf!==true&&e.payment_method==='cash'?`<button class="btn-sm-grey" onclick="markPaid('${e.request_id}')">Mark Paid</button>`:'';
-    return `<tr><td class="ps-3">${fmtDate(e.timestamp)}</td><td>${cap(e.submitter)}</td><td>${e.vendor}</td><td class="fw-bold">${INR(e.approved_amount||e.amount)}</td><td><small>${e.payment_method}</small></td><td>${tag}</td><td>${btn}</td></tr>`;
-  }).join('');
-}
-async function markPaid(id) {
-  await fetch('/api/mark-paid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({request_id:id})});
-  loadTracker();
-}
-
-// ── UNAUTHORIZED ─────────────────────────────────────────────────────────────
-async function loadUnauth() {
-  const res = await fetch('/api/reconcile-log').then(r=>r.json()).catch(()=>[]);
-  const unmatched = res.filter(e=>!e.matched&&!e.ignored);
-  const tbody = document.getElementById('unauth-table');
-  if (!unmatched.length){tbody.innerHTML='<tr><td colspan="6" class="empty-state">✅ No unauthorized spends detected</td></tr>';return;}
-  tbody.innerHTML = unmatched.map(e=>`<tr>
-    <td class="ps-3 text-danger">${e.date||'—'}</td><td class="text-danger">${e.bank}</td>
-    <td class="text-danger fw-semibold">${e.vendor}</td><td class="fw-bold text-danger">${INR(e.amount)}</td>
-    <td><span class="badge bg-danger">Unauthorized</span></td>
-    <td><button class="btn-sm-grey" onclick="ignoreUnauth('${e.gmail_id}')">Mark Known</button></td></tr>`).join('');
-}
-async function ignoreUnauth(id) {
-  await fetch('/api/ignore-unauth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gmail_id:id})});
-  loadUnauth();
-}
-
-// ── REPORT ───────────────────────────────────────────────────────────────────
-function populateMonths() {
-  const sel = document.getElementById('sel-month');
-  const now = new Date();
-  for (let i=0;i<12;i++) {
-    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-    const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    const opt = document.createElement('option');
-    opt.value=val; opt.textContent=d.toLocaleString('default',{month:'long',year:'numeric'});
-    if (i===0) opt.selected=true;
-    sel.appendChild(opt);
-  }
-}
-async function loadReport() {
-  const month = document.getElementById('sel-month').value;
-  document.getElementById('report-month-label').textContent = document.getElementById('sel-month').selectedOptions[0]?.text||'';
-  const [expenses, mis] = await Promise.all([
-    fetch('/api/expenses').then(r=>r.json()).catch(()=>[]),
-    fetch('/api/mis').then(r=>r.json()).catch(()=>({})),
-  ]);
-  const approved = expenses.filter(e=>['AUTO_APPROVE','APPROVED','APPROVED_LOWER'].includes(e.action)&&(e.timestamp||'').startsWith(month));
-  const total=approved.reduce((s,e)=>s+(e.approved_amount||e.amount||0),0);
-  const confirmed=approved.filter(e=>e.confirmed_paid===true).length;
-  const cash=approved.filter(e=>e.payment_method==='cash').reduce((s,e)=>s+(e.approved_amount||e.amount||0),0);
-  document.getElementById('report-pills').innerHTML=[
-    {val:INR(total),lbl:'Total Spend',cls:'text-dark'},{val:INR(total-cash),lbl:'Bank/UPI',cls:'text-primary'},
-    {val:INR(cash),lbl:'Cash',cls:'pct-orange'},{val:`${confirmed}/${approved.length}`,lbl:'Confirmed Paid',cls:confirmed===approved.length?'text-success':'text-danger'},
-  ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
-
-  // Comparison table
-  const rows=mis.rows||[]; let ct={fy26:0,budget:0,actual:0};
-  document.getElementById('report-comparison').innerHTML=(!rows.length?'<tr><td colspan="5" class="text-center p-3 text-muted">No data.</td></tr>':
-    rows.map(r=>{ct.fy26+=r.fy26_actual||0;ct.budget+=r.fy27_budget||0;ct.actual+=r.fy27_actual||0;
-      const pct=r.pct||0,cls=pct>100?'pct-red':pct>80?'pct-orange':'pct-green',icon=pct>100?'🔴':pct>80?'⚠️':'✅';
-      return `<tr><td class="ps-3">${cap(r.category)}</td><td class="text-muted">${L(r.fy26_actual)}</td><td>${L(r.fy27_budget)}</td><td class="fw-bold">${L(r.fy27_actual)}</td><td class="${cls}">${pct}% ${icon}</td></tr>`;
-    }).join('')+`<tr style="background:#f0f4ff;font-weight:700"><td class="ps-3">TOTAL</td><td class="text-muted">${L(ct.fy26)}</td><td>${L(ct.budget)}</td><td>${L(ct.actual)}</td><td></td></tr>`);
-
-  // Transactions
-  const bycat={};
-  approved.forEach(e=>{const c=e.category||'miscellaneous';if(!bycat[c])bycat[c]=[];bycat[c].push(e);});
-  const tbody=document.getElementById('report-txn-body');
-  if (!approved.length){tbody.innerHTML='<tr><td colspan="6" class="text-center p-4 text-muted">No approved expenses.</td></tr>';return;}
-  let html='', grand=0;
-  Object.keys(bycat).sort().forEach(cat=>{
-    const items=bycat[cat], catTotal=items.reduce((s,e)=>s+(e.approved_amount||e.amount||0),0);
-    grand+=catTotal;
-    html+=`<tr class="category-header"><td colspan="6" class="ps-3">${cap(cat)}</td></tr>`;
-    items.forEach(e=>{
-      const cf=e.confirmed_paid, tag=cf===true?'<span class="text-success">✅</span>':cf===false?'<span class="text-danger">❌</span>':'<span class="text-muted">—</span>';
-      html+=`<tr><td class="ps-3 text-muted">${(e.timestamp||'').slice(0,10)}</td><td>${e.vendor}</td><td><small>${e.description||''}</small></td><td><small class="text-muted">${e.payment_method}</small></td><td class="fw-semibold">${INR(e.approved_amount||e.amount)}</td><td>${tag}</td></tr>`;
-    });
-    html+=`<tr class="subtotal-row"><td colspan="4" class="ps-3 text-end pe-3">Subtotal — ${cap(cat)}</td><td class="fw-bold">${INR(catTotal)}</td><td></td></tr>`;
-  });
-  html+=`<tr class="grand-total"><td colspan="4" class="ps-3 text-end pe-3">GRAND TOTAL</td><td>${INR(grand)}</td><td></td></tr>`;
-  tbody.innerHTML=html;
-}
-async function exportExcel() {
-  const month=document.getElementById('sel-month').value, s=document.getElementById('export-status');
-  s.textContent='Exporting...';
-  const res=await fetch(`/export?month=${month}`).then(r=>r.json()).catch(()=>({status:'error'}));
-  s.textContent=res.status==='exported'?`✅ Saved: ${res.file}`:'⚠️ Export failed';
-}
-
-// ── ICICI ────────────────────────────────────────────────────────────────────
-let _iciciData = [];
-
-const ACC_TYPES = ['Expense','Investment','Income','Transfer','Official','Error'];
-const HEADINGS = [
-  // HOUSEHOLD
-  'Groceries','Staff Salary','Electricity & Gas','Misc','Cash',
-  // PERSONAL
-  'Alcohol','Wellness',
-  // FAMILY
-  'Clothes','Gifts','Medical','Amma','Ketki','Children Education',
-  // GIVING
-  'Charity','Uspaar',
-  // LIFESTYLE
-  'Holiday','Eating Out','Entertainment',
-  // PROPERTY
-  'Malhar','Maintenance Expense','Home office','One Time Charge','Kalpataru Maintenance',
-  // FINANCIAL
-  'Financial Expense','Insurance','Home Loan','Tax',
-  // INVESTMENTS / TRANSFERS
-  'Art','Foreign Investment','GCPL Share Sale','Property Investment','Loan Repayment',
-  // OTHER
-  'Interbank','Salary','Refund','Unknown',
-];
-
-function _optionsHtml(values, selected) {
-  return values.map(v=>`<option value="${v}"${v===selected?' selected':''}>${v}</option>`).join('');
-}
-
-async function loadICICI() {
-  _iciciData = await fetch('/api/transactions').then(r=>r.json()).catch(()=>[]);
-  // Sort newest first
-  _iciciData.sort((a,b)=>{
-    const da=a.date||'', db=b.date||'';
-    // dates are DD/MM/YYYY or DD-MM-YYYY — compare as strings after normalising
-    const norm = s => s.replace(/\//g,'-').split('-').reverse().join('');
-    return norm(db).localeCompare(norm(da));
-  });
-  // Populate filter dropdowns
-  const months = [...new Set(_iciciData.map(t=>t.month_name).filter(Boolean))];
-  const accounts = [...new Set(_iciciData.map(t=>t.account).filter(Boolean))];
-  const mSel = document.getElementById('icici-filter-month');
-  const aSel = document.getElementById('icici-filter-account');
-  mSel.innerHTML = '<option value="">All Months</option>' + months.map(m=>`<option value="${m}">${m}</option>`).join('');
-  aSel.innerHTML = '<option value="">All Accounts</option>' + accounts.map(a=>`<option value="${a}">${a}</option>`).join('');
-  renderICICI();
-}
-
-function renderICICI() {
-  const filterMonth = document.getElementById('icici-filter-month').value;
-  const filterAccount = document.getElementById('icici-filter-account').value;
-  const filterType = document.getElementById('icici-filter-type').value;
-  const uncertainOnly = document.getElementById('icici-uncertain-only').checked;
-
-  let rows = _iciciData.filter(t => {
-    if (filterMonth && t.month_name !== filterMonth) return false;
-    if (filterAccount && t.account !== filterAccount) return false;
-    if (filterType && t.acc_type !== filterType) return false;
-    if (uncertainOnly && t.confidence !== 'low' && t.confidence !== 'ai') return false;
-    return true;
-  });
-
-  // Pills
-  const totalDebit = rows.reduce((s,t)=>s+(t.debit||0),0);
-  const totalCredit = rows.reduce((s,t)=>s+(t.credit||0),0);
-  const uncertain = rows.filter(t=>t.confidence==='ai'||t.confidence==='low').length;
-  document.getElementById('icici-pills').innerHTML = [
-    {val:rows.length,lbl:'Transactions',cls:'text-dark'},
-    {val:INR(totalDebit),lbl:'Total Debits',cls:'text-danger'},
-    {val:INR(totalCredit),lbl:'Total Credits',cls:'text-success'},
-    {val:uncertain,lbl:'Need Review',cls:uncertain>0?'pct-orange':'text-muted'},
-  ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}" style="font-size:1.25rem">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
-
-  const tbody = document.getElementById('icici-table');
-  if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="12" class="empty-state">${_iciciData.length?'No transactions match filter.':'Click "Sync Statements" to load.'}</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = rows.map(t => {
-    const uncertain = t.confidence === 'ai' || t.confidence === 'low';
-    const flag = uncertain ? '⚠️ ' : '';
-    const cellStyle = uncertain ? 'background:#fffbeb' : '';
-    const tid = t.txn_id || '';
-    const debitFmt = t.debit ? `<span class="text-danger fw-semibold">${INR(t.debit)}</span>` : '<span class="text-muted">—</span>';
-    const creditFmt = t.credit ? `<span class="text-success fw-semibold">${INR(t.credit)}</span>` : '<span class="text-muted">—</span>';
-    return `<tr data-txn-id="${tid}" ${uncertain?'style="background:#fffef5"':''}>
-      <td class="ps-2 text-muted">${t.month_no||'—'}</td>
-      <td class="text-muted">${t.month_name||'—'}</td>
-      <td><small class="text-muted">${t.account||'—'}</small></td>
-      <td><small>${t.date||'—'}</small></td>
-      <td><small>${t.transaction_details||'—'}</small></td>
-      <td><input type="text" class="form-control form-control-sm border-0 px-1" style="min-width:110px;background:transparent" value="${t.paid_to||''}" placeholder="Payee…" data-field="paid_to"/></td>
-      <td class="text-end">${debitFmt}</td>
-      <td class="text-end">${creditFmt}</td>
-      <td style="${cellStyle}">
-        <select class="form-select form-select-sm border-0 px-1" style="background:${uncertain?'#fffbeb':'transparent'}" data-field="acc_type">
-          <option value="">—</option>${_optionsHtml(ACC_TYPES, t.acc_type)}
-        </select>
-      </td>
-      <td style="${cellStyle}">
-        <select class="form-select form-select-sm border-0 px-1" style="background:${uncertain?'#fffbeb':'transparent'}" data-field="heading">
-          <option value="">—</option>${_optionsHtml(HEADINGS, t.heading)}
-        </select>
-      </td>
-      <td><input type="text" class="form-control form-control-sm border-0 px-1" style="min-width:110px;background:transparent" value="${t.remarks||''}" placeholder="Notes…" data-field="remarks"/></td>
-      <td>
-        <button class="btn btn-sm btn-outline-success py-0 px-2" onclick="saveICICIRow(this,'${tid}')" title="Save">💾</button>
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-async function saveICICIRow(btn, txnId) {
-  const row = btn.closest('tr');
-  const updates = {};
-  row.querySelectorAll('[data-field]').forEach(el => {
-    updates[el.dataset.field] = el.value;
-  });
-  btn.textContent = '⏳'; btn.disabled = true;
+// ── INSIGHTS ───────────────────────────────────────────────────────────────
+async function loadInsights() {
+  const div = document.getElementById('insightsList');
+  div.innerHTML = '<div class="text-muted small py-2">Generating AI insights from transaction data…</div>';
   try {
-    const res = await fetch(`/api/transactions/${txnId}`, {
-      method: 'PATCH',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(updates)
-    }).then(r=>r.json());
-    if (res.status === 'ok') {
-      // Update local data
-      const t = _iciciData.find(t=>t.txn_id===txnId);
-      if (t) { Object.assign(t, updates); t.confidence = 'manual'; }
-      btn.textContent = '✅'; btn.disabled = false;
-      row.style.background = '';
-      setTimeout(()=>{ btn.textContent='💾'; },1500);
-    } else {
-      btn.textContent = '❌'; btn.disabled = false;
+    const r = await fetch('/api/insights');
+    const d = await r.json();
+    if (!d.insights?.length) {
+      div.innerHTML = '<p class="text-muted small">Sync more transactions to get insights.</p>';
+      return;
     }
-  } catch(e) {
-    btn.textContent = '❌'; btn.disabled = false;
+    div.innerHTML = d.insights.map(ins => `
+      <div class="insight-card">
+        <div class="d-flex justify-content-between align-items-start">
+          <strong class="text-primary">${ins.title}</strong>
+          ${ins.potential_saving ? `<span class="saving-badge">${ins.potential_saving}</span>` : ''}
+        </div>
+        <div class="text-muted small mt-1">${ins.detail}</div>
+        ${ins.category ? `<div class="mt-1"><span class="badge bg-light text-dark border small">${ins.category}</span></div>` : ''}
+      </div>`).join('');
+  } catch {
+    div.innerHTML = '<p class="text-danger small">Could not load insights.</p>';
   }
 }
 
-async function syncICICI() {
-  const btn=document.getElementById('sync-btn');
-  btn.textContent='⏳ Syncing...'; btn.disabled=true;
-  const res=await fetch('/api/sync-statements',{method:'POST'}).then(r=>r.json()).catch(()=>({status:'error'}));
-  btn.textContent='⬇ Sync Statements'; btn.disabled=false;
-  if (res.status==='ok'){
-    const msg = `✅ ${res.statements} statement(s) processed, ${res.new} new transactions added.`;
-    alert(msg);
-    await loadICICI();
-  } else {
-    alert('Sync failed: '+(res.message||'unknown error'));
+async function loadCCBalance() {
+  const row = document.getElementById('ccBalanceRow');
+  try {
+    const r = await fetch('/api/cc-balance');
+    const d = await r.json();
+    const cards = Object.values(d);
+    if (!cards.length) {
+      row.innerHTML = '<div class="col text-muted small">No credit card transactions synced yet.</div>';
+      return;
+    }
+    row.innerHTML = cards.map(c => `
+      <div class="col-md-4 col-sm-6">
+        <div class="cc-card">
+          <div class="text-muted small fw-semibold">${c.card}</div>
+          <div class="text-danger fw-bold mt-1" style="font-size:1.4rem">${fmt(Math.max(0,c.unpaid))}</div>
+          <div class="text-muted small">Unpaid balance (accrued)</div>
+          <div class="text-muted small mt-1">Total spend: ${fmt(c.total_spend)}</div>
+        </div>
+      </div>`).join('');
+  } catch {
+    row.innerHTML = '<div class="col text-muted small">Error loading CC balance.</div>';
   }
 }
 
-// ── INIT ─────────────────────────────────────────────────────────────────────
-populateMonths();
-loadPending(); loadMIS(); loadTracker(); loadUnauth(); loadReport();
-document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
-setInterval(loadPending, 60000);
+// ── Init ───────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadApprovals();  // pre-load badge
+});
 </script>
 </body>
 </html>
