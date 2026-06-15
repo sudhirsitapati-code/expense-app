@@ -60,8 +60,8 @@ def _save_transactions(transactions: list):
     _db.save("icici_transactions", transactions)
 
 
-def _make_txn_id(date: str, description: str, amount: float) -> str:
-    raw = f"{date}|{description}|{amount:.2f}"
+def _make_txn_id(date: str, description: str, amount: float, direction: str = "") -> str:
+    raw = f"{date}|{description}|{amount:.2f}|{direction}"
     return hashlib.sha1(raw.encode()).hexdigest()[:12]
 
 
@@ -134,7 +134,7 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
         fy = _fy_fields(dt)
         debit = t["amount"] if t.get("txn_direction") == "debit" else 0
         credit = t["amount"] if t.get("txn_direction") == "credit" else 0
-        txn_id = _make_txn_id(t.get("date",""), t.get("description",""), t["amount"])
+        txn_id = _make_txn_id(t.get("date",""), t.get("description",""), t["amount"], t.get("txn_direction",""))
         enriched.append({
             "txn_id": txn_id,
             "month_no": fy["month_no"],
@@ -354,7 +354,11 @@ def fetch_and_parse_statements(force_reprocess: bool = False) -> dict:
     """
     service = _get_service()
     processed_ids = _get_processed_ids() if not force_reprocess else set()
-    existing = _load_transactions()
+    if force_reprocess:
+        # Drop all previously statement-imported transactions so re-parse replaces them cleanly
+        existing = [t for t in _load_transactions() if t.get("source") != "icici_statement"]
+    else:
+        existing = _load_transactions()
     existing_ids = {t.get("txn_id") for t in existing if t.get("txn_id")}
     new_count = 0
     statements_processed = 0
