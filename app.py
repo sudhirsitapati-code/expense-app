@@ -611,23 +611,36 @@ def api_approvals_structured():
     recon = _load_json(RECONCILE_LOG)
 
     now          = datetime.now()
-    month_prefix = now.strftime("%Y-%m")
+    # Allow caller to pass ?month=YYYY-MM; default to current month
+    month_prefix = request.args.get("month") or now.strftime("%Y-%m")
+
+    # All months that have at least one approved entry (for the month picker)
+    approved_actions = ("AUTO_APPROVE", "APPROVED", "APPROVED_LOWER")
+    months_with_data = sorted({
+        (e.get("timestamp",""))[:7]
+        for e in log
+        if (e.get("action") in approved_actions
+            or (e.get("action") == "ESCALATE" and "sudhir_response" in e))
+        and len((e.get("timestamp",""))[:7]) == 7
+    }, reverse=True)
 
     pending      = [e for e in log if e.get("action") == "ESCALATE" and "sudhir_response" not in e]
     this_month   = [e for e in log
                     if (e.get("timestamp",""))[:7] == month_prefix
-                    and (e.get("action") in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER")
+                    and (e.get("action") in approved_actions
                          or (e.get("action") == "ESCALATE" and "sudhir_response" in e))]
     unauthorized = [e for e in recon if not e.get("matched") and not e.get("is_recurring") and not e.get("ignored")]
     tracker      = [e for e in log
-                    if e.get("action") in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER")
+                    if e.get("action") in approved_actions
                     and not e.get("confirmed_paid")]
 
     return jsonify({
-        "pending":      pending,
-        "this_month":   this_month,
-        "unauthorized": unauthorized,
-        "tracker":      tracker,
+        "pending":           pending,
+        "this_month":        this_month,
+        "selected_month":    month_prefix,
+        "months_with_data":  months_with_data,
+        "unauthorized":      unauthorized,
+        "tracker":           tracker,
     })
 
 

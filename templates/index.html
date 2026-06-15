@@ -161,8 +161,13 @@
 <!-- This Month -->
 <div id="ap-month" class="d-none">
   <div class="d-flex justify-content-between align-items-center mb-2">
-    <h6 class="mb-0 fw-bold text-primary">Approvals — This Month</h6>
-    <button class="btn btn-sm btn-outline-secondary" onclick="loadApprovals()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+    <h6 class="mb-0 fw-bold text-primary">Approvals — <span id="selectedMonthLabel">This Month</span></h6>
+    <div class="d-flex gap-2 align-items-center">
+      <select id="monthPicker" class="form-select form-select-sm" style="width:auto" onchange="loadApprovals(this.value)">
+        <option value="">Loading months…</option>
+      </select>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadApprovals(document.getElementById('monthPicker').value)"><i class="bi bi-arrow-clockwise"></i></button>
+    </div>
   </div>
   <div class="table-wrap"><table class="table table-hover mb-0">
     <thead><tr><th>Date</th><th>Submitter</th><th>Vendor</th><th>Category</th><th class="text-end">Amount</th><th>Status</th></tr></thead>
@@ -433,9 +438,29 @@ async function submitExpense(e) {
 }
 
 // ── APPROVALS ──────────────────────────────────────────────────────────────
-async function loadApprovals() {
-  const r = await fetch('/api/approvals-structured');
+const MONTH_NAMES = ['','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+function monthLabel(ym) {
+  if (!ym) return '';
+  const [y, m] = ym.split('-').map(Number);
+  return `${MONTH_NAMES[m] || ym} ${y}`;
+}
+
+async function loadApprovals(selectedMonth) {
+  const qs = selectedMonth ? `?month=${selectedMonth}` : '';
+  const r = await fetch('/api/approvals-structured' + qs);
   const d = await r.json();
+
+  // Populate month picker with all months that have data
+  const picker = document.getElementById('monthPicker');
+  const currentVal = selectedMonth || d.selected_month;
+  if (d.months_with_data && d.months_with_data.length) {
+    picker.innerHTML = d.months_with_data.map(m =>
+      `<option value="${m}" ${m === currentVal ? 'selected' : ''}>${monthLabel(m)}</option>`
+    ).join('');
+  } else {
+    picker.innerHTML = `<option value="${currentVal}">${monthLabel(currentVal)}</option>`;
+  }
+  document.getElementById('selectedMonthLabel').textContent = monthLabel(currentVal);
 
   // Pending badge
   const pc = d.pending.length;
@@ -476,10 +501,10 @@ async function loadApprovals() {
         <td class="text-end">₹${Number(e.approved_amount||e.amount).toLocaleString('en-IN')}</td>
         <td><span class="badge ${e.action==='AUTO_APPROVE'?'bg-primary':e.action==='APPROVED'?'bg-success':'bg-warning text-dark'}">${e.action}</span></td>
       </tr>`).join('')
-    : '<tr><td colspan="6" class="text-center text-muted py-3">No approvals this month yet</td></tr>';
+    : '<tr><td colspan="6" class="text-center text-muted py-3">No approvals recorded for this month</td></tr>';
 
   const mTotal = d.this_month.reduce((s,e) => s + (e.approved_amount||e.amount||0), 0);
-  document.getElementById('monthTotal').textContent = `Total approved this month: ₹${mTotal.toLocaleString('en-IN')}`;
+  document.getElementById('monthTotal').textContent = `Total approved ${monthLabel(currentVal)}: ₹${mTotal.toLocaleString('en-IN')}`;
 
   // Unauthorised
   const ub = document.getElementById('unauthBody');
