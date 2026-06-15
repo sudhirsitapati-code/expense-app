@@ -13,16 +13,12 @@ from datetime import datetime
 from typing import Optional
 
 import pdfplumber
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from src.gmail_utils import get_credentials
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 CONFIG_DIR = os.path.join(BASE_DIR, "config")
-
-TOKEN_FILE = os.path.join(BASE_DIR, os.getenv("GMAIL_TOKEN_FILE", "config/gmail_token.json"))
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 ICICI_LABEL = os.getenv("ICICI_GMAIL_LABEL", "ICICI-Expenses")
 PDF_PASSWORD = os.getenv("ICICI_PDF_PASSWORD", "")
 
@@ -31,10 +27,7 @@ PROCESSED_STMT_IDS_PATH = os.path.join(DATA_DIR, "processed_statement_ids.json")
 
 
 def _get_service():
-    creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    return build("gmail", "v1", credentials=creds)
+    return build("gmail", "v1", credentials=get_credentials())
 
 
 def _get_processed_ids() -> set:

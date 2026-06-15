@@ -10,27 +10,18 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from src.gmail_utils import get_credentials
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_DIR = os.path.join(BASE_DIR, "config")
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
-TOKEN_FILE = os.getenv("GMAIL_TOKEN_FILE", "config/gmail_token.json")
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
-
 PROCESSED_IDS_PATH = os.path.join(DATA_DIR, "processed_gmail_ids.json")
 
 
 def _get_service():
-    creds = Credentials.from_authorized_user_file(
-        os.path.join(BASE_DIR, TOKEN_FILE), SCOPES
-    )
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    return build("gmail", "v1", credentials=creds)
+    return build("gmail", "v1", credentials=get_credentials())
 
 
 def _get_processed_ids() -> set:

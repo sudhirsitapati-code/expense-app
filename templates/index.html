@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sitapati Household Expenses</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    body { background: #f5f7fa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .topbar { background: #1a1a2e; color: white; padding: 13px 24px; }
+    .topbar h5 { margin: 0; font-weight: 600; font-size: 1.05rem; }
+    .nav-tabs { border-bottom: 2px solid #e5e7eb; }
+    .nav-tabs .nav-link { color: #555; font-weight: 500; border: none; border-bottom: 3px solid transparent; border-radius: 0; padding: 10px 18px; margin-bottom: -2px; }
+    .nav-tabs .nav-link.active { color: #1a1a2e; font-weight: 700; border-bottom-color: #1a1a2e; background: transparent; }
+    .nav-tabs .nav-link:hover { color: #1a1a2e; border-bottom-color: #cbd5e1; }
+    .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.07); margin-bottom: 20px; }
+    .card-header { background: white; border-bottom: 1px solid #f0f0f0; border-radius: 12px 12px 0 0 !important; padding: 14px 20px; font-weight: 600; font-size: 0.95rem; }
+    .form-label { font-weight: 500; font-size: 0.9rem; color: #444; }
+    .form-control, .form-select { border-radius: 8px; border: 1px solid #dde; padding: 10px 14px; }
+    .form-control:focus, .form-select:focus { border-color: #1a1a2e; box-shadow: 0 0 0 3px rgba(26,26,46,0.1); }
+    .btn-primary-dark { background: #1a1a2e; border: none; border-radius: 8px; padding: 11px 28px; font-weight: 600; color: white; }
+    .btn-primary-dark:hover { background: #2d2d4e; color: white; }
+    .btn-chip { border-radius: 20px; padding: 8px 20px; font-size: 0.88rem; font-weight: 500; margin: 4px; border: 2px solid #1a1a2e; color: #1a1a2e; background: white; cursor: pointer; transition: all 0.15s; }
+    .btn-chip:hover, .btn-chip.selected { background: #1a1a2e; color: white; }
+    .result-box { border-radius: 10px; padding: 16px 20px; font-size: 0.93rem; font-weight: 500; display: none; }
+    .result-auto    { background: #dcfce7; border: 1px solid #86efac; color: #166534; }
+    .result-pending { background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; }
+    .result-question{ background: #fefce8; border: 1px solid #fde047; color: #713f12; }
+    .result-error   { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; }
+    .stat-pill { background: white; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); text-align: center; }
+    .stat-pill .val { font-size: 1.6rem; font-weight: 700; }
+    .stat-pill .lbl { font-size: 0.73rem; color: #888; margin-top: 2px; }
+    table { font-size: 0.86rem; }
+    th { font-size: 0.73rem; text-transform: uppercase; letter-spacing: 0.04em; color: #888; font-weight: 600; }
+    .badge-ok        { background: #dcfce7; color: #166534; }
+    .badge-high      { background: #fff7ed; color: #9a3412; }
+    .badge-very_high { background: #fee2e2; color: #991b1b; }
+    .badge-unknown   { background: #f3f4f6; color: #6b7280; }
+    .budget-bar  { height: 6px; border-radius: 3px; background: #e5e7eb; overflow: hidden; margin-top: 4px; }
+    .budget-fill { height: 100%; border-radius: 3px; }
+    .pct-green { color: #16a34a; font-weight: 600; }
+    .pct-orange{ color: #ea580c; font-weight: 600; }
+    .pct-red   { color: #dc2626; font-weight: 600; }
+    .btn-approve { background: #16a34a; color: white; border: none; border-radius: 6px; padding: 5px 14px; font-size: 0.82rem; font-weight: 600; }
+    .btn-reject  { background: #dc2626; color: white; border: none; border-radius: 6px; padding: 5px 14px; font-size: 0.82rem; font-weight: 600; }
+    .btn-approve:hover { background: #15803d; } .btn-reject:hover { background: #b91c1c; }
+    .btn-sm-grey { background: #6b7280; color: white; border: none; border-radius: 6px; padding: 5px 12px; font-size: 0.82rem; }
+    .empty-state { text-align: center; padding: 36px; color: #bbb; font-size: 0.88rem; }
+    .category-header td { background: #f8f9fb; font-weight: 700; font-size: 0.88rem; color: #1a1a2e; }
+    .subtotal-row td { background: #f0f4ff; font-weight: 700; border-top: 2px solid #e0e7ff; }
+    .grand-total td { background: #1a1a2e; color: white; font-weight: 700; }
+    #followup-section { display: none; }
+    .spinner-border-sm { width: 1rem; height: 1rem; }
+  </style>
+</head>
+<body>
+
+<div class="topbar d-flex justify-content-between align-items-center">
+  <h5>🏠 Sitapati Household Expenses</h5>
+  <div class="d-flex align-items-center gap-3">
+    <span class="text-white-50 small">{{ user | capitalize }}</span>
+    <span id="last-updated" class="text-white-50 small"></span>
+    <a href="/logout" class="btn btn-sm btn-outline-light">Sign out</a>
+  </div>
+</div>
+
+<div class="container-fluid py-3 px-3 px-md-4" style="max-width:1150px">
+
+  <ul class="nav nav-tabs mb-3" id="mainTabs">
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-entry">📋 Submit Expense</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-pending">⏳ Approvals <span class="badge bg-danger ms-1" id="pending-badge" style="display:none"></span></a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-mis">📊 MIS</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-tracker">✅ Tracker</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-unauth">🚨 Unauthorized</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-report">📄 Report</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-icici" onclick="loadICICI()">🏦 ICICI</a></li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 1 — EXPENSE ENTRY
+    ════════════════════════════════════════════════ -->
+    <div class="tab-pane fade show active" id="tab-entry">
+      <div class="row justify-content-center">
+        <div class="col-12 col-md-8 col-lg-6">
+          <div class="card">
+            <div class="card-header">Submit an Expense — get approval before paying</div>
+            <div class="card-body p-4">
+              <form id="expense-form">
+                <div class="mb-3">
+                  <label class="form-label">Submitted by</label>
+                  <select class="form-select" id="submitter" required>
+                    <option value="">Select...</option>
+                    <option value="vincent" {% if user == 'vincent' %}selected{% endif %}>Vincent</option>
+                    <option value="sudhir" {% if user == 'sudhir' %}selected{% endif %}>Sudhir</option>
+                    <option value="ketki" {% if user == 'ketki' %}selected{% endif %}>Ketki</option>
+                    <option value="santosh" {% if user == 'santosh' %}selected{% endif %}>Santosh</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Vendor / Payee</label>
+                  <input type="text" class="form-control" id="vendor" placeholder="e.g. Raj Electrician" required/>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Estimated Amount (Rs)</label>
+                  <input type="number" class="form-control" id="amount" placeholder="e.g. 4500" min="1" required/>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Category</label>
+                  <select class="form-select" id="category" required>
+                    <option value="">Select category...</option>
+                    <option value="groceries">Groceries</option>
+                    <option value="utilities">Utilities</option>
+                    <option value="maintenance">Maintenance</option>
+                    <option value="staff">Staff</option>
+                    <option value="dining">Dining</option>
+                    <option value="transport">Transport</option>
+                    <option value="medical">Medical</option>
+                    <option value="entertainment">Entertainment</option>
+                    <option value="clothing">Clothing</option>
+                    <option value="education">Education</option>
+                    <option value="home_repair">Home Repair</option>
+                    <option value="personal_care">Personal Care</option>
+                    <option value="gifts">Gifts</option>
+                    <option value="miscellaneous">Miscellaneous</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Description / Purpose</label>
+                  <input type="text" class="form-control" id="description" placeholder="e.g. Rewiring kitchen light switches" required/>
+                  <div class="form-text">Be specific — used to check if price is reasonable.</div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Payment Method</label>
+                  <div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="payment" id="pay-upi" value="upi" checked/>
+                      <label class="form-check-label" for="pay-upi">Bank / UPI</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="payment" id="pay-cash" value="cash"/>
+                      <label class="form-check-label" for="pay-cash">Cash</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="mb-4">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="post-facto" role="switch"/>
+                    <label class="form-check-label" for="post-facto">Already paid (post-facto)</label>
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary-dark w-100" id="submit-btn">Submit for Approval</button>
+              </form>
+              <div class="result-box mt-3" id="result-box"></div>
+              <div id="followup-section" class="mt-3">
+                <div class="result-box result-question" style="display:block">
+                  <div class="fw-semibold mb-2">❓ <span id="followup-question"></span></div>
+                  <div id="followup-options" class="mt-2"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 2 — PENDING APPROVALS
+    ════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-pending">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between">
+          <span>⏳ Pending Approvals</span>
+          <small class="text-muted">Approve here or reply Y/N on WhatsApp</small>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Date</th><th>From</th><th>Vendor</th><th>Category</th>
+              <th>Description</th><th>Amount</th><th>Market</th><th>Action</th>
+            </tr></thead>
+            <tbody id="pending-table"><tr><td colspan="8" class="empty-state">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 3 — MIS
+    ════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-mis">
+      <div class="row g-3 mb-3" id="mis-pills"></div>
+      <div class="card">
+        <div class="card-header">Spend vs FY26 Actual vs FY27 Budget</div>
+        <div class="card-body p-0">
+          <table class="table mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Category</th><th>FY26 Actual</th><th>FY27 Budget</th>
+              <th>FY27 Actual</th><th>vs Budget</th><th style="min-width:120px">Progress</th>
+            </tr></thead>
+            <tbody id="mis-table"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 4 — CONFIRMATION TRACKER
+    ════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-tracker">
+      <div class="row g-3 mb-3" id="tracker-pills"></div>
+      <div class="card">
+        <div class="card-header">Did each approved expense actually get paid?</div>
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Date</th><th>From</th><th>Vendor</th>
+              <th>Amount</th><th>Payment</th><th>Confirmed</th><th></th>
+            </tr></thead>
+            <tbody id="tracker-table"><tr><td colspan="7" class="empty-state">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 5 — UNAUTHORIZED SPENDS
+    ════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-unauth">
+      <div class="card">
+        <div class="card-header">🚨 Bank debits with no matching approval</div>
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Date</th><th>Bank</th><th>Vendor</th><th>Amount</th><th>Status</th><th></th>
+            </tr></thead>
+            <tbody id="unauth-table"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 6 — MONTHLY REPORT
+    ════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-report">
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <select class="form-select form-select-sm w-auto" id="sel-month" onchange="loadReport()"></select>
+        <button class="btn btn-primary-dark btn-sm" onclick="exportExcel()">⬇ Export ACC27 Excel</button>
+        <span id="export-status" class="text-muted small"></span>
+      </div>
+      <div class="row g-3 mb-3" id="report-pills"></div>
+      <div class="card mb-3">
+        <div class="card-header">3-Column Comparison</div>
+        <div class="card-body p-0">
+          <table class="table mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Category</th><th>FY26 Actual</th><th>FY27 Budget</th><th>FY27 Actual</th><th>vs Budget</th>
+            </tr></thead>
+            <tbody id="report-comparison"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">All Transactions — <span id="report-month-label"></span></div>
+        <div class="card-body p-0">
+          <table class="table mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Date</th><th>Vendor</th><th>Description</th><th>Payment</th><th>Amount</th><th>Confirmed</th>
+            </tr></thead>
+            <tbody id="report-txn-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         TAB 7 — ICICI TRANSACTIONS
+    ════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-icici">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="text-muted small text-uppercase fw-semibold">ICICI Bank Transactions</span>
+        <button class="btn btn-sm btn-outline-dark" id="sync-btn" onclick="syncICICI()">⬇ Sync Statements</button>
+      </div>
+      <div class="card">
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Date</th><th>Description</th><th>Amount</th><th>Type</th>
+            </tr></thead>
+            <tbody id="icici-table"><tr><td colspan="4" class="empty-state">Click "Sync Statements" to load.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- tab-content -->
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const INR = n => '₹' + Number(n||0).toLocaleString('en-IN');
+const L   = n => '₹' + (Number(n||0)/100000).toFixed(2) + 'L';
+const cap = s => (s||'').replace(/\b\w/g,c=>c.toUpperCase());
+const fmtDate = ts => (ts||'').slice(0,10) || '—';
+
+// ── ENTRY FORM ──────────────────────────────────────────────────────────────
+let followupRound = 0, currentRequestId = null;
+
+function showResult(type, html) {
+  const b = document.getElementById('result-box');
+  b.className = 'result-box mt-3 result-' + type;
+  b.innerHTML = html; b.style.display = 'block';
+  b.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function hideFollowup() {
+  document.getElementById('followup-section').style.display = 'none';
+  followupRound = 0;
+}
+function showFollowup(question, options, requestId) {
+  currentRequestId = requestId;
+  document.getElementById('followup-question').textContent = question;
+  const d = document.getElementById('followup-options');
+  d.innerHTML = '';
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'btn-chip'; btn.textContent = opt;
+    btn.onclick = () => submitFollowup(opt);
+    d.appendChild(btn);
+  });
+  document.getElementById('followup-section').style.display = 'block';
+}
+function handleDecision(data) {
+  hideFollowup();
+  if (data.action === 'AUTO_APPROVE') {
+    showResult('auto', `✅ <strong>Auto-Approved</strong> — you can pay ${INR(data.amount)} to ${data.vendor}.<br><small class="opacity-75">Ref: ${data.request_id}</small>${data.budget_alert?'<br><span class="badge bg-warning text-dark mt-1">⚠️ Category nearing budget</span>':''}`);
+  } else if (data.action === 'ESCALATE') {
+    showResult('pending', `⏳ <strong>Sent to Sudhir for approval.</strong> You'll be notified on WhatsApp.<br><small class="opacity-75">Ref: ${data.request_id}</small>${data.market_rate?`<br><small>Market: ${data.market_rate}</small>`:''}`);
+  } else if (data.action === 'PENDING_CLARIFICATION') {
+    if (followupRound >= 2) {
+      showResult('pending', `⏳ <strong>Sent to Sudhir</strong> with an unclear pricing flag.<br><small class="opacity-75">Ref: ${data.request_id}</small>`);
+    } else {
+      showFollowup(data.follow_up_question, data.follow_up_options, data.request_id);
+    }
+  } else {
+    showResult('error', '⚠️ Unexpected response. Please try again.');
+  }
+}
+async function submitFollowup(answer) {
+  followupRound++;
+  document.querySelectorAll('#followup-options .btn-chip').forEach(b => { b.classList.toggle('selected', b.textContent===answer); b.disabled=true; });
+  const btn = document.getElementById('submit-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-2"></span>Checking...';
+  try {
+    const res = await fetch('/api/submit-expense', {method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({request_id:currentRequestId,followup_answer:answer,followup_round:followupRound})});
+    handleDecision(await res.json());
+  } catch(e) { showResult('error','⚠️ Something went wrong.'); }
+  finally { btn.disabled=false; btn.innerHTML='Submit for Approval'; }
+}
+document.getElementById('expense-form').addEventListener('submit', async function(e) {
+  e.preventDefault(); hideFollowup(); document.getElementById('result-box').style.display='none';
+  const btn = document.getElementById('submit-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-2"></span>Checking...';
+  const payload = {
+    submitter: document.getElementById('submitter').value,
+    vendor: document.getElementById('vendor').value,
+    amount: parseFloat(document.getElementById('amount').value),
+    category: document.getElementById('category').value,
+    description: document.getElementById('description').value,
+    payment_method: document.querySelector('input[name="payment"]:checked').value,
+    is_post_facto: document.getElementById('post-facto').checked,
+  };
+  try {
+    const res = await fetch('/api/submit-expense',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data = await res.json();
+    handleDecision(data);
+    if (data.action !== 'PENDING_CLARIFICATION') { this.reset(); followupRound=0; }
+  } catch(err) { showResult('error','⚠️ Could not reach server.'); }
+  finally { btn.disabled=false; btn.innerHTML='Submit for Approval'; }
+});
+
+// ── PENDING APPROVALS ───────────────────────────────────────────────────────
+async function loadPending() {
+  const res = await fetch('/api/expenses').then(r=>r.json()).catch(()=>[]);
+  const pending = res.filter(e=>e.action==='ESCALATE'&&!e.sudhir_response);
+  const badge = document.getElementById('pending-badge');
+  badge.style.display = pending.length ? '' : 'none';
+  if (pending.length) badge.textContent = pending.length;
+  const tbody = document.getElementById('pending-table');
+  if (!pending.length) { tbody.innerHTML='<tr><td colspan="8" class="empty-state">✅ No pending approvals</td></tr>'; return; }
+  tbody.innerHTML = pending.slice().reverse().map(e => {
+    const mkt = e.market_status||'unknown';
+    const mktLabel = {ok:'OK',high:'HIGH',very_high:'VERY HIGH',unknown:'UNKNOWN'}[mkt]||mkt.toUpperCase();
+    return `<tr>
+      <td class="ps-3">${fmtDate(e.timestamp)}</td><td>${cap(e.submitter)}</td>
+      <td><strong>${e.vendor}</strong></td><td><small>${e.category}</small></td>
+      <td><small>${e.description}</small>${e.market_rate?`<br><small class="text-muted">${e.market_rate}</small>`:''}</td>
+      <td class="fw-bold">${INR(e.amount)}</td>
+      <td><span class="badge badge-${mkt} px-2 py-1">${mktLabel}</span></td>
+      <td>
+        <button class="btn-approve me-1" onclick="decide('${e.request_id}','Y')">✓</button>
+        <button class="btn-reject" onclick="decide('${e.request_id}','N')">✗</button>
+      </td></tr>`;
+  }).join('');
+}
+async function decide(id, r) {
+  await fetch('/api/decide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({request_id:id,response:r})});
+  loadPending();
+}
+
+// ── MIS ─────────────────────────────────────────────────────────────────────
+async function loadMIS() {
+  const data = await fetch('/api/mis').then(r=>r.json()).catch(()=>({}));
+  const rows = data.rows||[], s = data.summary||{};
+  document.getElementById('mis-pills').innerHTML = [
+    {val:INR(s.total_budget||0),lbl:'FY27 Budget (Monthly)',cls:'text-primary'},
+    {val:INR(s.total_actual||0),lbl:'FY27 Actual (This Month)',cls:'text-dark'},
+    {val:INR(s.total_fy26||0),lbl:'FY26 Monthly Avg',cls:'text-muted'},
+    {val:(s.overall_pct||0)+'%',lbl:'Budget Used',cls:s.overall_pct>100?'text-danger':s.overall_pct>80?'pct-orange':'text-success'},
+  ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
+  const tbody = document.getElementById('mis-table');
+  if (!rows.length){tbody.innerHTML='<tr><td colspan="6" class="empty-state">No data yet.</td></tr>';return;}
+  tbody.innerHTML = rows.map(r=>{
+    const pct=r.pct||0, cls=pct>100?'pct-red':pct>80?'pct-orange':'pct-green', fill=pct>100?'#dc2626':pct>80?'#ea580c':'#16a34a', icon=pct>100?'🔴':pct>80?'⚠️':'✅';
+    return `<tr>
+      <td class="ps-3">${cap(r.category)}</td><td class="text-muted">${L(r.fy26_actual)}</td>
+      <td>${L(r.fy27_budget)}</td><td class="fw-bold">${L(r.fy27_actual)}</td>
+      <td class="${cls}">${pct}% ${icon}</td>
+      <td><div class="budget-bar"><div class="budget-fill" style="width:${Math.min(pct,100)}%;background:${fill}"></div></div></td></tr>`;
+  }).join('');
+}
+
+// ── TRACKER ─────────────────────────────────────────────────────────────────
+async function loadTracker() {
+  const res = await fetch('/api/expenses').then(r=>r.json()).catch(()=>[]);
+  const approved = res.filter(e=>['AUTO_APPROVE','APPROVED','APPROVED_LOWER'].includes(e.action));
+  const total=approved.length, confirmed=approved.filter(e=>e.confirmed_paid===true).length;
+  const pct=total?Math.round(confirmed/total*100):0;
+  document.getElementById('tracker-pills').innerHTML = [
+    {val:total,lbl:'Approved',cls:'text-dark'},{val:confirmed,lbl:'Confirmed Paid',cls:'text-success'},
+    {val:total-confirmed,lbl:'Unconfirmed',cls:total-confirmed>0?'text-danger':'text-muted'},
+    {val:pct+'%',lbl:'Confirmation Rate',cls:pct===100?'text-success':pct>80?'pct-orange':'text-danger'},
+  ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
+  const tbody = document.getElementById('tracker-table');
+  if (!approved.length){tbody.innerHTML='<tr><td colspan="7" class="empty-state">No approved expenses yet.</td></tr>';return;}
+  tbody.innerHTML = approved.slice().reverse().map(e=>{
+    const cf=e.confirmed_paid;
+    const tag=cf===true?'<span class="text-success fw-bold">✅ Yes</span>':cf===false?'<span class="text-danger fw-bold">❌ No</span>':'<span class="text-muted">— Pending</span>';
+    const btn=cf!==true&&e.payment_method==='cash'?`<button class="btn-sm-grey" onclick="markPaid('${e.request_id}')">Mark Paid</button>`:'';
+    return `<tr><td class="ps-3">${fmtDate(e.timestamp)}</td><td>${cap(e.submitter)}</td><td>${e.vendor}</td><td class="fw-bold">${INR(e.approved_amount||e.amount)}</td><td><small>${e.payment_method}</small></td><td>${tag}</td><td>${btn}</td></tr>`;
+  }).join('');
+}
+async function markPaid(id) {
+  await fetch('/api/mark-paid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({request_id:id})});
+  loadTracker();
+}
+
+// ── UNAUTHORIZED ─────────────────────────────────────────────────────────────
+async function loadUnauth() {
+  const res = await fetch('/api/reconcile-log').then(r=>r.json()).catch(()=>[]);
+  const unmatched = res.filter(e=>!e.matched&&!e.ignored);
+  const tbody = document.getElementById('unauth-table');
+  if (!unmatched.length){tbody.innerHTML='<tr><td colspan="6" class="empty-state">✅ No unauthorized spends detected</td></tr>';return;}
+  tbody.innerHTML = unmatched.map(e=>`<tr>
+    <td class="ps-3 text-danger">${e.date||'—'}</td><td class="text-danger">${e.bank}</td>
+    <td class="text-danger fw-semibold">${e.vendor}</td><td class="fw-bold text-danger">${INR(e.amount)}</td>
+    <td><span class="badge bg-danger">Unauthorized</span></td>
+    <td><button class="btn-sm-grey" onclick="ignoreUnauth('${e.gmail_id}')">Mark Known</button></td></tr>`).join('');
+}
+async function ignoreUnauth(id) {
+  await fetch('/api/ignore-unauth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gmail_id:id})});
+  loadUnauth();
+}
+
+// ── REPORT ───────────────────────────────────────────────────────────────────
+function populateMonths() {
+  const sel = document.getElementById('sel-month');
+  const now = new Date();
+  for (let i=0;i<12;i++) {
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const opt = document.createElement('option');
+    opt.value=val; opt.textContent=d.toLocaleString('default',{month:'long',year:'numeric'});
+    if (i===0) opt.selected=true;
+    sel.appendChild(opt);
+  }
+}
+async function loadReport() {
+  const month = document.getElementById('sel-month').value;
+  document.getElementById('report-month-label').textContent = document.getElementById('sel-month').selectedOptions[0]?.text||'';
+  const [expenses, mis] = await Promise.all([
+    fetch('/api/expenses').then(r=>r.json()).catch(()=>[]),
+    fetch('/api/mis').then(r=>r.json()).catch(()=>({})),
+  ]);
+  const approved = expenses.filter(e=>['AUTO_APPROVE','APPROVED','APPROVED_LOWER'].includes(e.action)&&(e.timestamp||'').startsWith(month));
+  const total=approved.reduce((s,e)=>s+(e.approved_amount||e.amount||0),0);
+  const confirmed=approved.filter(e=>e.confirmed_paid===true).length;
+  const cash=approved.filter(e=>e.payment_method==='cash').reduce((s,e)=>s+(e.approved_amount||e.amount||0),0);
+  document.getElementById('report-pills').innerHTML=[
+    {val:INR(total),lbl:'Total Spend',cls:'text-dark'},{val:INR(total-cash),lbl:'Bank/UPI',cls:'text-primary'},
+    {val:INR(cash),lbl:'Cash',cls:'pct-orange'},{val:`${confirmed}/${approved.length}`,lbl:'Confirmed Paid',cls:confirmed===approved.length?'text-success':'text-danger'},
+  ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
+
+  // Comparison table
+  const rows=mis.rows||[]; let ct={fy26:0,budget:0,actual:0};
+  document.getElementById('report-comparison').innerHTML=(!rows.length?'<tr><td colspan="5" class="text-center p-3 text-muted">No data.</td></tr>':
+    rows.map(r=>{ct.fy26+=r.fy26_actual||0;ct.budget+=r.fy27_budget||0;ct.actual+=r.fy27_actual||0;
+      const pct=r.pct||0,cls=pct>100?'pct-red':pct>80?'pct-orange':'pct-green',icon=pct>100?'🔴':pct>80?'⚠️':'✅';
+      return `<tr><td class="ps-3">${cap(r.category)}</td><td class="text-muted">${L(r.fy26_actual)}</td><td>${L(r.fy27_budget)}</td><td class="fw-bold">${L(r.fy27_actual)}</td><td class="${cls}">${pct}% ${icon}</td></tr>`;
+    }).join('')+`<tr style="background:#f0f4ff;font-weight:700"><td class="ps-3">TOTAL</td><td class="text-muted">${L(ct.fy26)}</td><td>${L(ct.budget)}</td><td>${L(ct.actual)}</td><td></td></tr>`);
+
+  // Transactions
+  const bycat={};
+  approved.forEach(e=>{const c=e.category||'miscellaneous';if(!bycat[c])bycat[c]=[];bycat[c].push(e);});
+  const tbody=document.getElementById('report-txn-body');
+  if (!approved.length){tbody.innerHTML='<tr><td colspan="6" class="text-center p-4 text-muted">No approved expenses.</td></tr>';return;}
+  let html='', grand=0;
+  Object.keys(bycat).sort().forEach(cat=>{
+    const items=bycat[cat], catTotal=items.reduce((s,e)=>s+(e.approved_amount||e.amount||0),0);
+    grand+=catTotal;
+    html+=`<tr class="category-header"><td colspan="6" class="ps-3">${cap(cat)}</td></tr>`;
+    items.forEach(e=>{
+      const cf=e.confirmed_paid, tag=cf===true?'<span class="text-success">✅</span>':cf===false?'<span class="text-danger">❌</span>':'<span class="text-muted">—</span>';
+      html+=`<tr><td class="ps-3 text-muted">${(e.timestamp||'').slice(0,10)}</td><td>${e.vendor}</td><td><small>${e.description||''}</small></td><td><small class="text-muted">${e.payment_method}</small></td><td class="fw-semibold">${INR(e.approved_amount||e.amount)}</td><td>${tag}</td></tr>`;
+    });
+    html+=`<tr class="subtotal-row"><td colspan="4" class="ps-3 text-end pe-3">Subtotal — ${cap(cat)}</td><td class="fw-bold">${INR(catTotal)}</td><td></td></tr>`;
+  });
+  html+=`<tr class="grand-total"><td colspan="4" class="ps-3 text-end pe-3">GRAND TOTAL</td><td>${INR(grand)}</td><td></td></tr>`;
+  tbody.innerHTML=html;
+}
+async function exportExcel() {
+  const month=document.getElementById('sel-month').value, s=document.getElementById('export-status');
+  s.textContent='Exporting...';
+  const res=await fetch(`/export?month=${month}`).then(r=>r.json()).catch(()=>({status:'error'}));
+  s.textContent=res.status==='exported'?`✅ Saved: ${res.file}`:'⚠️ Export failed';
+}
+
+// ── ICICI ────────────────────────────────────────────────────────────────────
+async function loadICICI() {
+  const data=await fetch('/api/transactions').then(r=>r.json()).catch(()=>[]);
+  const tbody=document.getElementById('icici-table');
+  if (!data.length){tbody.innerHTML='<tr><td colspan="4" class="empty-state">Click "Sync Statements" to load.</td></tr>';return;}
+  tbody.innerHTML=data.slice().reverse().map(t=>`<tr>
+    <td class="ps-3">${t.date||'—'}</td><td>${t.description||'—'}</td>
+    <td class="fw-bold" style="color:${t.type==='credit'?'#16a34a':'#dc2626'}">${t.type==='credit'?'+':'-'}${INR(t.amount)}</td>
+    <td><span class="badge ${t.type==='credit'?'bg-success':'bg-secondary'}">${t.type}</span></td></tr>`).join('');
+}
+async function syncICICI() {
+  const btn=document.getElementById('sync-btn');
+  btn.textContent='⏳ Syncing...'; btn.disabled=true;
+  const res=await fetch('/api/sync-statements',{method:'POST'}).then(r=>r.json()).catch(()=>({status:'error'}));
+  btn.textContent='⬇ Sync Statements'; btn.disabled=false;
+  if (res.status==='ok'){alert(`✅ ${res.statements} statement(s), ${res.new} new transactions.`);loadICICI();}
+  else alert('Sync failed: '+(res.message||'unknown error'));
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+populateMonths();
+loadPending(); loadMIS(); loadTracker(); loadUnauth(); loadReport();
+document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+setInterval(loadPending, 60000);
+</script>
+</body>
+</html>

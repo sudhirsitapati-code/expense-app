@@ -9,7 +9,7 @@ from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, render_template, jsonify, session, redirect, url_for
 
 from src.approval_engine import ApprovalEngine, ExpenseRequest
 from src.reconcile import run_reconciliation
@@ -41,6 +41,24 @@ PENDING_CLARIFICATION: dict = {}
 NUMBER_TO_NAME = {v: k for k, v in HOUSEHOLD_MEMBERS.items() if v}
 
 
+PASSWORDS = {
+    "vincent": os.getenv("VINCENT_PASSWORD", "vincent123"),
+    "sudhir":  os.getenv("SUDHIR_PASSWORD",  "sudhir123"),
+    "ketki":   os.getenv("KETKI_PASSWORD",   "ketki123"),
+    "santosh": os.getenv("SANTOSH_PASSWORD", "santosh123"),
+}
+
+
+def login_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user" not in session:
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _load_json(path):
@@ -68,27 +86,46 @@ def _update_log_entry(request_id: str, updates: dict):
     _save_json(APPROVAL_LOG, log)
 
 
+# ── AUTH ─────────────────────────────────────────────────────────────────────
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        user = request.form.get("user", "").lower()
+        password = request.form.get("password", "")
+        if PASSWORDS.get(user) == password:
+            session["user"] = user
+            return redirect(url_for("index"))
+        return render_template("login.html", error="Incorrect name or password.")
+    return render_template("login.html", error=None)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 # ── HTML SCREENS ─────────────────────────────────────────────────────────────
 
-@app.route("/", methods=["GET"])
-@app.route("/entry", methods=["GET"])
-def entry():
-    return render_template("entry.html")
+@app.route("/")
+@login_required
+def index():
+    return render_template("index.html", user=session["user"])
 
 
-@app.route("/dashboard", methods=["GET"])
-def dashboard():
-    return render_template("dashboard.html")
-
-
-@app.route("/report", methods=["GET"])
-def report():
-    return render_template("report.html")
+# Keep old routes redirecting to /
+@app.route("/entry")
+@app.route("/dashboard")
+@app.route("/report")
+def redirect_old():
+    return redirect(url_for("index"))
 
 
 # ── JSON APIs ─────────────────────────────────────────────────────────────────
 
 @app.route("/api/expenses", methods=["GET"])
+@login_required
 def api_expenses():
     return jsonify(_load_json(APPROVAL_LOG))
 
