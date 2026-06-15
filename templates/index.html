@@ -224,16 +224,24 @@
       </select>
     </div>
     <div class="col-sm-2">
-      <select class="form-select form-select-sm" id="ledgerBank" onchange="filterLedger()">
-        <option value="">All Banks</option>
-        <option value="ICICI">ICICI</option>
-        <option value="SBI">SBI</option>
+      <select class="form-select form-select-sm" id="ledgerType" onchange="filterLedger()">
+        <option value="">All Types</option>
+        <option value="expense">Expense</option>
+        <option value="transfer">Transfer</option>
+        <option value="income">Income</option>
+        <option value="investment">Investment</option>
+        <option value="official">Official</option>
+      </select>
+    </div>
+    <div class="col-sm-2">
+      <select class="form-select form-select-sm" id="ledgerHeading" onchange="filterLedger()">
+        <option value="">All Headings</option>
       </select>
     </div>
     <div class="col-sm-2">
       <input type="month" class="form-control form-control-sm" id="ledgerMonth" onchange="filterLedger()">
     </div>
-    <div class="col-sm-3 d-flex gap-2 align-items-center">
+    <div class="col-sm-2 d-flex gap-2 align-items-center">
       <button class="btn btn-sm btn-primary" onclick="syncLedger()"><i class="bi bi-cloud-download me-1"></i>Sync Gmail</button>
       <span id="syncStatus" class="text-muted small"></span>
     </div>
@@ -567,11 +575,13 @@ async function loadLedger() {
   const params = new URLSearchParams();
   const s  = document.getElementById('ledgerSearch')?.value;
   const ac = document.getElementById('ledgerAccount')?.value;
-  const bk = document.getElementById('ledgerBank')?.value;
+  const ty = document.getElementById('ledgerType')?.value;
+  const he = document.getElementById('ledgerHeading')?.value;
   const mo = document.getElementById('ledgerMonth')?.value;
   if (s)  params.set('q', s);
   if (ac) params.set('account', ac);
-  if (bk) params.set('bank', bk);
+  if (ty) params.set('type', ty);
+  if (he) params.set('heading', he);
   if (mo) params.set('month', mo);
   const qs = params.toString() ? '?' + params.toString() : '';
 
@@ -587,7 +597,13 @@ async function loadLedger() {
   // Populate account filter once
   const acSel = document.getElementById('ledgerAccount');
   if (acSel.options.length <= 1 && d.accounts?.length) {
-    d.accounts.forEach(ac => acSel.add(new Option(ac, ac)));
+    d.accounts.forEach(a => acSel.add(new Option(a, a)));
+  }
+
+  // Populate heading filter once
+  const heSel = document.getElementById('ledgerHeading');
+  if (heSel.options.length <= 1) {
+    HEADINGS.forEach(h => heSel.add(new Option(h, h)));
   }
 
   renderLedger(d.transactions);

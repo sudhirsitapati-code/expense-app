@@ -647,13 +647,15 @@ def api_update_transaction(txn_id):
 @app.route("/api/master-ledger", methods=["GET"])
 @login_required
 def api_master_ledger():
-    """Return master ledger entries. Filters: uncertain, account, bank, month."""
+    """Return master ledger entries. Filters: uncertain, account, bank, type, heading, month, q."""
     txns = load_ledger()
 
     # Optional filters
     only_uncertain = request.args.get("uncertain") == "1"
     account_filter = request.args.get("account")
     bank_filter    = request.args.get("bank")
+    type_filter    = request.args.get("type")
+    heading_filter = request.args.get("heading")
     month_filter   = request.args.get("month")   # YYYY-MM
     search         = request.args.get("q","").lower()
 
@@ -663,6 +665,10 @@ def api_master_ledger():
         txns = [t for t in txns if t.get("account") == account_filter]
     if bank_filter:
         txns = [t for t in txns if t.get("bank") == bank_filter]
+    if type_filter:
+        txns = [t for t in txns if (t.get("type") or "").lower() == type_filter.lower()]
+    if heading_filter:
+        txns = [t for t in txns if (t.get("heading") or "") == heading_filter]
     if month_filter:
         txns = [t for t in txns if (t.get("date",""))[:7] == month_filter
                 or t.get("date","").endswith(month_filter[-2:] + "/" + month_filter[:4])]

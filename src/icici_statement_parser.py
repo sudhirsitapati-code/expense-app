@@ -95,6 +95,9 @@ def _open_pdf(pdf_bytes: bytes):
     raise ValueError("No password variant worked for this PDF")
 
 
+FY27_START = datetime(2026, 4, 1)
+
+
 def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
     """Extract and classify transactions from ICICI statement PDF."""
     transactions = []
@@ -119,14 +122,24 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             # Try to get account from header
             account = _extract_account_from_text(full_text)
 
-            # Always also try text parsing — ICICI e-statements embed
-            # transactions in raw text even when table extraction fails
-            text_txns = _parse_from_text(full_text)
-            if text_txns and len(text_txns) > len(transactions):
-                transactions = text_txns
+            # Detect savings vs OD format and use the right text parser
+            savings_txns = _parse_savings_statement_text(full_text)
+            od_txns = _parse_from_text(full_text)
+            best_text = savings_txns if len(savings_txns) >= len(od_txns) else od_txns
+            if best_text and len(best_text) > len(transactions):
+                transactions = best_text
 
     except Exception as e:
         print(f"PDF parse error: {e}")
+
+    # Filter to FY27 only (April 1, 2026 onwards)
+    fy27_transactions = []
+    for t in transactions:
+        dt = _parse_date(t.get("date", ""))
+        if dt and dt < FY27_START:
+            continue
+        fy27_transactions.append(t)
+    transactions = fy27_transactions
 
     # Enrich with ACC26 fields
     enriched = []
@@ -143,7 +156,8 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             "account": account,
             "date": t.get("date", ""),
             "transaction_details": t.get("description", ""),
-            "paid_to": None,
+            # paid_to_hint from savings parser = short bold name; used as fallback if classifier can't identify payee
+            "paid_to": t.get("paid_to_hint") or None,
             "debit": debit,
             "credit": credit,
             "acc_type": None,
@@ -151,7 +165,6 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             "remarks": "",
             "confidence": None,
             "source": "icici_statement",
-            # legacy field kept for reconciliation
             "amount": t["amount"],
             "type": t.get("txn_direction", "debit"),
         })
@@ -163,6 +176,10 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
         classify_transactions(enriched)
         for t in enriched:
             t.pop("description", None)
+            # Keep paid_to from classifier if set; fall back to hint
+            if not t.get("paid_to") and t.get("paid_to_hint"):
+                t["paid_to"] = t["paid_to_hint"]
+            t.pop("paid_to_hint", None)
 
     return enriched
 
@@ -213,11 +230,89 @@ def _extract_account_from_text(text: str) -> str:
         m = re.search(pat, text[:2000])
         if m:
             return f"icic{m.group(1)}"
-    # Fallback: full numeric account number (12+ digits)
-    m = re.search(r"\b\d{8,}(\d{4})\b", text[:1000])
+    # Fallback: full numeric account number (10+ digits like 003801011331)
+    m = re.search(r"\b\d{6,}(\d{4})\b", text[:3000])
     if m:
         return f"icic{m.group(1)}"
     return "icici"
+
+
+def _parse_savings_statement_text(text: str) -> list:
+    """
+    Parse ICICI savings account statement (e.g. account 1331) which has format:
+      PAID_TO_SHORT_NAME           ← bold first line (payee)
+      S_NO DD.MM.YYYY AMOUNT BAL   ← sequence, dot-date, single amount, balance
+      FULL/REFERENCE/DETAILS...    ← UPI/NEFT/BIL reference (may be multi-line)
+
+    Uses balance delta to determine debit vs credit.
+    """
+    lines = text.split("\n")
+
+    # Row line: sequence_number  DD.MM.YYYY  amount  balance
+    row_pat = re.compile(
+        r"^(\d{1,4})\s+(\d{2}\.\d{2}\.\d{4})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s*$"
+    )
+
+    row_indices = [i for i, ln in enumerate(lines) if row_pat.match(ln.strip())]
+    if not row_indices:
+        return []
+
+    transactions = []
+    prev_balance = None
+    seen = set()
+
+    for idx, row_i in enumerate(row_indices):
+        m = row_pat.match(lines[row_i].strip())
+        _, date_dot, amount_str, balance_str = m.groups()
+
+        # Convert DD.MM.YYYY → DD-MM-YYYY
+        d, mo, yr = date_dot.split(".")
+        date_str = f"{d}-{mo}-{yr}"
+
+        # paid_to: closest non-empty, non-header line above the row line
+        paid_to = ""
+        for j in range(row_i - 1, max(row_i - 4, -1), -1):
+            candidate = lines[j].strip()
+            if candidate and not row_pat.match(candidate):
+                # Skip column header words
+                if candidate.lower() not in ("date", "balance", "amount (inr)", "withdrawal amount (inr)", "deposit amount (inr)"):
+                    paid_to = candidate
+                    break
+
+        # description: lines between this row and next paid_to
+        next_row_i = row_indices[idx + 1] if idx + 1 < len(row_indices) else len(lines)
+        # The line at next_row_i - 1 is the paid_to of the next txn — exclude it
+        desc_end = next_row_i - 1 if idx + 1 < len(row_indices) else len(lines)
+        desc_lines = [lines[j].strip() for j in range(row_i + 1, desc_end) if lines[j].strip()]
+        full_desc = " ".join(desc_lines)
+
+        amount = float(amount_str.replace(",", ""))
+        balance = float(balance_str.replace(",", ""))
+
+        if amount < 1:
+            prev_balance = balance
+            continue
+
+        direction = "credit" if (prev_balance is not None and balance > prev_balance) else "debit"
+        prev_balance = balance
+
+        # Use full_desc as description; paid_to as short payee
+        description = full_desc or paid_to
+
+        key = f"{date_str}|{description[:40]}|{amount}|{balance_str}"
+        if key in seen:
+            continue
+        seen.add(key)
+
+        transactions.append({
+            "date": date_str,
+            "description": description,
+            "paid_to_hint": paid_to,   # passed through for enrichment
+            "amount": amount,
+            "txn_direction": direction,
+        })
+
+    return transactions
 
 
 def _parse_from_text(text: str) -> list:
