@@ -190,14 +190,26 @@
          TAB 3 — MIS
     ════════════════════════════════════════════════ -->
     <div class="tab-pane fade" id="tab-mis">
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <div class="btn-group btn-group-sm" role="group" id="mis-period-btns">
+          <button class="btn btn-dark active" data-period="month" onclick="setMISPeriod(this)">This Month</button>
+          <button class="btn btn-outline-dark" data-period="quarter" onclick="setMISPeriod(this)">This Quarter</button>
+          <button class="btn btn-outline-dark" data-period="ytd" onclick="setMISPeriod(this)">YTD</button>
+        </div>
+        <span id="mis-period-label" class="text-muted small ms-2"></span>
+      </div>
       <div class="row g-3 mb-3" id="mis-pills"></div>
       <div class="card">
-        <div class="card-header">Spend vs FY26 Actual vs FY27 Budget</div>
+        <div class="card-header fw-semibold">FY26 Actual vs FY27 Budget vs FY27 Actual</div>
         <div class="card-body p-0">
           <table class="table mb-0">
             <thead class="table-light"><tr>
-              <th class="ps-3">Category</th><th>FY26 Actual</th><th>FY27 Budget</th>
-              <th>FY27 Actual</th><th>vs Budget</th><th style="min-width:120px">Progress</th>
+              <th class="ps-3" style="min-width:180px">Category</th>
+              <th class="text-end">FY26 Actual</th>
+              <th class="text-end">FY27 Budget</th>
+              <th class="text-end">FY27 Actual</th>
+              <th class="text-end">vs Budget</th>
+              <th style="min-width:100px">Progress</th>
             </tr></thead>
             <tbody id="mis-table"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
           </table>
@@ -279,20 +291,58 @@
          TAB 7 — ICICI TRANSACTIONS
     ════════════════════════════════════════════════ -->
     <div class="tab-pane fade" id="tab-icici">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <span class="text-muted small text-uppercase fw-semibold">ICICI Bank Transactions</span>
-        <button class="btn btn-sm btn-outline-dark" id="sync-btn" onclick="syncICICI()">⬇ Sync Statements</button>
+      <!-- toolbar -->
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <span class="text-muted small text-uppercase fw-semibold me-2">ICICI Transactions</span>
+        <select class="form-select form-select-sm w-auto" id="icici-filter-month" onchange="renderICICI()">
+          <option value="">All Months</option>
+        </select>
+        <select class="form-select form-select-sm w-auto" id="icici-filter-account" onchange="renderICICI()">
+          <option value="">All Accounts</option>
+        </select>
+        <select class="form-select form-select-sm w-auto" id="icici-filter-type" onchange="renderICICI()">
+          <option value="">All Types</option>
+          <option value="Expense">Expense</option>
+          <option value="Investment">Investment</option>
+          <option value="Income">Income</option>
+          <option value="Transfer">Transfer</option>
+          <option value="Official">Official</option>
+        </select>
+        <label class="form-check-label small ms-1">
+          <input type="checkbox" id="icici-uncertain-only" class="form-check-input" onchange="renderICICI()">
+          Only uncertain
+        </label>
+        <button class="btn btn-sm btn-outline-dark ms-auto" id="sync-btn" onclick="syncICICI()">⬇ Sync Statements</button>
       </div>
+      <!-- summary pills -->
+      <div class="row g-2 mb-3" id="icici-pills"></div>
+      <!-- table -->
       <div class="card">
-        <div class="card-body p-0">
-          <table class="table table-hover mb-0">
-            <thead class="table-light"><tr>
-              <th class="ps-3">Date</th><th>Description</th><th>Amount</th><th>Type</th>
-            </tr></thead>
-            <tbody id="icici-table"><tr><td colspan="4" class="empty-state">Click "Sync Statements" to load.</td></tr></tbody>
+        <div class="card-body p-0" style="overflow-x:auto">
+          <table class="table table-hover mb-0" id="icici-main-table" style="min-width:1100px;font-size:0.82rem">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-2" style="width:30px">Mo#</th>
+                <th style="width:40px">Mo</th>
+                <th style="width:70px">Account</th>
+                <th style="width:78px">Date</th>
+                <th style="min-width:200px">Transaction Details</th>
+                <th style="width:130px">Paid To</th>
+                <th class="text-end" style="width:90px">Debit</th>
+                <th class="text-end" style="width:90px">Credit</th>
+                <th style="width:100px">Type</th>
+                <th style="width:130px">Heading</th>
+                <th style="width:130px">Remarks</th>
+                <th style="width:55px"></th>
+              </tr>
+            </thead>
+            <tbody id="icici-table">
+              <tr><td colspan="12" class="empty-state">Click "Sync Statements" to load, or click the ICICI tab.</td></tr>
+            </tbody>
           </table>
         </div>
       </div>
+      <div id="icici-save-status" class="text-success small mt-1" style="display:none">✅ Saved</div>
     </div>
 
   </div><!-- tab-content -->
@@ -411,25 +461,87 @@ async function decide(id, r) {
 }
 
 // ── MIS ─────────────────────────────────────────────────────────────────────
+let _misPeriod = 'month';
+
+function setMISPeriod(btn) {
+  _misPeriod = btn.dataset.period;
+  document.querySelectorAll('#mis-period-btns .btn').forEach(b => {
+    b.className = b === btn ? 'btn btn-dark active' : 'btn btn-outline-dark';
+  });
+  loadMIS();
+}
+
 async function loadMIS() {
-  const data = await fetch('/api/mis').then(r=>r.json()).catch(()=>({}));
-  const rows = data.rows||[], s = data.summary||{};
+  const data = await fetch(`/api/mis?period=${_misPeriod}`).then(r=>r.json()).catch(()=>({}));
+  const groups = data.groups || [], g = data.grand || {};
+  const months = data.period_months || [];
+
+  // Period label
+  const periodLabel = {month:'This Month', quarter:'This Quarter', ytd:'Year to Date'}[_misPeriod] || '';
+  const span = months.length > 1 ? ` (${months[0]} → ${months[months.length-1]})` : months[0] ? ` (${months[0]})` : '';
+  document.getElementById('mis-period-label').textContent = periodLabel + span;
+
+  // Summary pills
+  const pct = g.pct || 0;
   document.getElementById('mis-pills').innerHTML = [
-    {val:INR(s.total_budget||0),lbl:'FY27 Budget (Monthly)',cls:'text-primary'},
-    {val:INR(s.total_actual||0),lbl:'FY27 Actual (This Month)',cls:'text-dark'},
-    {val:INR(s.total_fy26||0),lbl:'FY26 Monthly Avg',cls:'text-muted'},
-    {val:(s.overall_pct||0)+'%',lbl:'Budget Used',cls:s.overall_pct>100?'text-danger':s.overall_pct>80?'pct-orange':'text-success'},
+    {val:INR(g.budget||0), lbl:`FY27 Budget`, cls:'text-primary'},
+    {val:INR(g.actual||0), lbl:`FY27 Actual`, cls:'text-dark'},
+    {val:INR(g.fy26||0),   lbl:'FY26 Actual', cls:'text-muted'},
+    {val:pct+'%', lbl:'Budget Used', cls:pct>100?'text-danger':pct>80?'pct-orange':'text-success'},
   ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
+
   const tbody = document.getElementById('mis-table');
-  if (!rows.length){tbody.innerHTML='<tr><td colspan="6" class="empty-state">No data yet.</td></tr>';return;}
-  tbody.innerHTML = rows.map(r=>{
-    const pct=r.pct||0, cls=pct>100?'pct-red':pct>80?'pct-orange':'pct-green', fill=pct>100?'#dc2626':pct>80?'#ea580c':'#16a34a', icon=pct>100?'🔴':pct>80?'⚠️':'✅';
-    return `<tr>
-      <td class="ps-3">${cap(r.category)}</td><td class="text-muted">${L(r.fy26_actual)}</td>
-      <td>${L(r.fy27_budget)}</td><td class="fw-bold">${L(r.fy27_actual)}</td>
-      <td class="${cls}">${pct}% ${icon}</td>
-      <td><div class="budget-bar"><div class="budget-fill" style="width:${Math.min(pct,100)}%;background:${fill}"></div></div></td></tr>`;
-  }).join('');
+  if (!groups.length) { tbody.innerHTML='<tr><td colspan="6" class="empty-state">No data yet.</td></tr>'; return; }
+
+  function pctBar(pct) {
+    const fill = pct>100?'#dc2626':pct>80?'#ea580c':'#16a34a';
+    const cls  = pct>100?'pct-red':pct>80?'pct-orange':'pct-green';
+    const icon = pct>100?'🔴':pct>80?'⚠️':'✅';
+    return {fill, cls, icon};
+  }
+
+  let html = '';
+  groups.forEach(group => {
+    const sc = group.super_category;
+    const sub = group.subtotal;
+    const {fill, cls, icon} = pctBar(sub.pct||0);
+
+    // Super-category header row
+    html += `<tr style="background:#eef2ff;border-top:2px solid #c7d2fe">
+      <td class="ps-3 fw-bold text-uppercase" style="font-size:0.78rem;letter-spacing:0.06em;color:#4338ca">${sc}</td>
+      <td class="text-end text-muted fw-semibold">${L(sub.fy26)}</td>
+      <td class="text-end fw-semibold">${L(sub.budget)}</td>
+      <td class="text-end fw-bold">${L(sub.actual)}</td>
+      <td class="text-end ${cls}">${sub.pct}% ${icon}</td>
+      <td><div class="budget-bar"><div class="budget-fill" style="width:${Math.min(sub.pct,100)}%;background:${fill}"></div></div></td>
+    </tr>`;
+
+    // Individual category rows
+    group.rows.forEach(r => {
+      const {fill:rf, cls:rc, icon:ri} = pctBar(r.pct||0);
+      html += `<tr>
+        <td class="ps-4 text-muted" style="font-size:0.85rem">${cap(r.category)}</td>
+        <td class="text-end text-muted small">${L(r.fy26_actual)}</td>
+        <td class="text-end small">${L(r.fy27_budget)}</td>
+        <td class="text-end fw-semibold small">${L(r.fy27_actual)}</td>
+        <td class="text-end ${rc} small">${r.pct}%</td>
+        <td><div class="budget-bar"><div class="budget-fill" style="width:${Math.min(r.pct,100)}%;background:${rf}"></div></div></td>
+      </tr>`;
+    });
+  });
+
+  // Grand total
+  const {fill:gf, cls:gc, icon:gi} = pctBar(g.pct||0);
+  html += `<tr style="background:#1a1a2e;color:white">
+    <td class="ps-3 fw-bold">TOTAL</td>
+    <td class="text-end fw-semibold opacity-75">${L(g.fy26)}</td>
+    <td class="text-end fw-semibold">${L(g.budget)}</td>
+    <td class="text-end fw-bold">${L(g.actual)}</td>
+    <td class="text-end fw-bold">${g.pct}%</td>
+    <td><div class="budget-bar" style="background:rgba(255,255,255,0.2)"><div class="budget-fill" style="width:${Math.min(g.pct,100)}%;background:white"></div></div></td>
+  </tr>`;
+
+  tbody.innerHTML = html;
 }
 
 // ── TRACKER ─────────────────────────────────────────────────────────────────
@@ -538,22 +650,158 @@ async function exportExcel() {
 }
 
 // ── ICICI ────────────────────────────────────────────────────────────────────
-async function loadICICI() {
-  const data=await fetch('/api/transactions').then(r=>r.json()).catch(()=>[]);
-  const tbody=document.getElementById('icici-table');
-  if (!data.length){tbody.innerHTML='<tr><td colspan="4" class="empty-state">Click "Sync Statements" to load.</td></tr>';return;}
-  tbody.innerHTML=data.slice().reverse().map(t=>`<tr>
-    <td class="ps-3">${t.date||'—'}</td><td>${t.description||'—'}</td>
-    <td class="fw-bold" style="color:${t.type==='credit'?'#16a34a':'#dc2626'}">${t.type==='credit'?'+':'-'}${INR(t.amount)}</td>
-    <td><span class="badge ${t.type==='credit'?'bg-success':'bg-secondary'}">${t.type}</span></td></tr>`).join('');
+let _iciciData = [];
+
+const ACC_TYPES = ['Expense','Investment','Income','Transfer','Official','Error'];
+const HEADINGS = [
+  // HOUSEHOLD
+  'Groceries','Staff Salary','Electricity & Gas','Misc','Cash',
+  // PERSONAL
+  'Alcohol','Wellness',
+  // FAMILY
+  'Clothes','Gifts','Medical','Amma','Ketki','Children Education',
+  // GIVING
+  'Charity','Uspaar',
+  // LIFESTYLE
+  'Holiday','Eating Out','Entertainment',
+  // PROPERTY
+  'Malhar','Maintenance Expense','Home office','One Time Charge','Kalpataru Maintenance',
+  // FINANCIAL
+  'Financial Expense','Insurance','Home Loan','Tax',
+  // INVESTMENTS / TRANSFERS
+  'Art','Foreign Investment','GCPL Share Sale','Property Investment','Loan Repayment',
+  // OTHER
+  'Interbank','Salary','Refund','Unknown',
+];
+
+function _optionsHtml(values, selected) {
+  return values.map(v=>`<option value="${v}"${v===selected?' selected':''}>${v}</option>`).join('');
 }
+
+async function loadICICI() {
+  _iciciData = await fetch('/api/transactions').then(r=>r.json()).catch(()=>[]);
+  // Sort newest first
+  _iciciData.sort((a,b)=>{
+    const da=a.date||'', db=b.date||'';
+    // dates are DD/MM/YYYY or DD-MM-YYYY — compare as strings after normalising
+    const norm = s => s.replace(/\//g,'-').split('-').reverse().join('');
+    return norm(db).localeCompare(norm(da));
+  });
+  // Populate filter dropdowns
+  const months = [...new Set(_iciciData.map(t=>t.month_name).filter(Boolean))];
+  const accounts = [...new Set(_iciciData.map(t=>t.account).filter(Boolean))];
+  const mSel = document.getElementById('icici-filter-month');
+  const aSel = document.getElementById('icici-filter-account');
+  mSel.innerHTML = '<option value="">All Months</option>' + months.map(m=>`<option value="${m}">${m}</option>`).join('');
+  aSel.innerHTML = '<option value="">All Accounts</option>' + accounts.map(a=>`<option value="${a}">${a}</option>`).join('');
+  renderICICI();
+}
+
+function renderICICI() {
+  const filterMonth = document.getElementById('icici-filter-month').value;
+  const filterAccount = document.getElementById('icici-filter-account').value;
+  const filterType = document.getElementById('icici-filter-type').value;
+  const uncertainOnly = document.getElementById('icici-uncertain-only').checked;
+
+  let rows = _iciciData.filter(t => {
+    if (filterMonth && t.month_name !== filterMonth) return false;
+    if (filterAccount && t.account !== filterAccount) return false;
+    if (filterType && t.acc_type !== filterType) return false;
+    if (uncertainOnly && t.confidence !== 'low' && t.confidence !== 'ai') return false;
+    return true;
+  });
+
+  // Pills
+  const totalDebit = rows.reduce((s,t)=>s+(t.debit||0),0);
+  const totalCredit = rows.reduce((s,t)=>s+(t.credit||0),0);
+  const uncertain = rows.filter(t=>t.confidence==='ai'||t.confidence==='low').length;
+  document.getElementById('icici-pills').innerHTML = [
+    {val:rows.length,lbl:'Transactions',cls:'text-dark'},
+    {val:INR(totalDebit),lbl:'Total Debits',cls:'text-danger'},
+    {val:INR(totalCredit),lbl:'Total Credits',cls:'text-success'},
+    {val:uncertain,lbl:'Need Review',cls:uncertain>0?'pct-orange':'text-muted'},
+  ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}" style="font-size:1.25rem">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
+
+  const tbody = document.getElementById('icici-table');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="12" class="empty-state">${_iciciData.length?'No transactions match filter.':'Click "Sync Statements" to load.'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(t => {
+    const uncertain = t.confidence === 'ai' || t.confidence === 'low';
+    const flag = uncertain ? '⚠️ ' : '';
+    const cellStyle = uncertain ? 'background:#fffbeb' : '';
+    const tid = t.txn_id || '';
+    const debitFmt = t.debit ? `<span class="text-danger fw-semibold">${INR(t.debit)}</span>` : '<span class="text-muted">—</span>';
+    const creditFmt = t.credit ? `<span class="text-success fw-semibold">${INR(t.credit)}</span>` : '<span class="text-muted">—</span>';
+    return `<tr data-txn-id="${tid}" ${uncertain?'style="background:#fffef5"':''}>
+      <td class="ps-2 text-muted">${t.month_no||'—'}</td>
+      <td class="text-muted">${t.month_name||'—'}</td>
+      <td><small class="text-muted">${t.account||'—'}</small></td>
+      <td><small>${t.date||'—'}</small></td>
+      <td><small>${t.transaction_details||'—'}</small></td>
+      <td><input type="text" class="form-control form-control-sm border-0 px-1" style="min-width:110px;background:transparent" value="${t.paid_to||''}" placeholder="Payee…" data-field="paid_to"/></td>
+      <td class="text-end">${debitFmt}</td>
+      <td class="text-end">${creditFmt}</td>
+      <td style="${cellStyle}">
+        <select class="form-select form-select-sm border-0 px-1" style="background:${uncertain?'#fffbeb':'transparent'}" data-field="acc_type">
+          <option value="">—</option>${_optionsHtml(ACC_TYPES, t.acc_type)}
+        </select>
+      </td>
+      <td style="${cellStyle}">
+        <select class="form-select form-select-sm border-0 px-1" style="background:${uncertain?'#fffbeb':'transparent'}" data-field="heading">
+          <option value="">—</option>${_optionsHtml(HEADINGS, t.heading)}
+        </select>
+      </td>
+      <td><input type="text" class="form-control form-control-sm border-0 px-1" style="min-width:110px;background:transparent" value="${t.remarks||''}" placeholder="Notes…" data-field="remarks"/></td>
+      <td>
+        <button class="btn btn-sm btn-outline-success py-0 px-2" onclick="saveICICIRow(this,'${tid}')" title="Save">💾</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function saveICICIRow(btn, txnId) {
+  const row = btn.closest('tr');
+  const updates = {};
+  row.querySelectorAll('[data-field]').forEach(el => {
+    updates[el.dataset.field] = el.value;
+  });
+  btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const res = await fetch(`/api/transactions/${txnId}`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(updates)
+    }).then(r=>r.json());
+    if (res.status === 'ok') {
+      // Update local data
+      const t = _iciciData.find(t=>t.txn_id===txnId);
+      if (t) { Object.assign(t, updates); t.confidence = 'manual'; }
+      btn.textContent = '✅'; btn.disabled = false;
+      row.style.background = '';
+      setTimeout(()=>{ btn.textContent='💾'; },1500);
+    } else {
+      btn.textContent = '❌'; btn.disabled = false;
+    }
+  } catch(e) {
+    btn.textContent = '❌'; btn.disabled = false;
+  }
+}
+
 async function syncICICI() {
   const btn=document.getElementById('sync-btn');
   btn.textContent='⏳ Syncing...'; btn.disabled=true;
   const res=await fetch('/api/sync-statements',{method:'POST'}).then(r=>r.json()).catch(()=>({status:'error'}));
   btn.textContent='⬇ Sync Statements'; btn.disabled=false;
-  if (res.status==='ok'){alert(`✅ ${res.statements} statement(s), ${res.new} new transactions.`);loadICICI();}
-  else alert('Sync failed: '+(res.message||'unknown error'));
+  if (res.status==='ok'){
+    const msg = `✅ ${res.statements} statement(s) processed, ${res.new} new transactions added.`;
+    alert(msg);
+    await loadICICI();
+  } else {
+    alert('Sync failed: '+(res.message||'unknown error'));
+  }
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────────────

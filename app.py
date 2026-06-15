@@ -142,61 +142,140 @@ def api_reconcile_log():
 
 @app.route("/api/mis", methods=["GET"])
 def api_mis():
-    """Return MIS data: FY26 actual vs FY27 budget vs FY27 actual."""
-    # Load sources
+    """Return MIS data grouped by super-category.
+    Query param: period = month | quarter | ytd  (default: month)
+    """
+    period = request.args.get("period", "month")
+
     with open(os.path.join(CONFIG_DIR, "budget_fy27.json")) as f:
         budget_monthly = json.load(f)["monthly"]
 
     acc26 = _load_json(os.path.join(DATA_DIR, "acc26_history.json"))
     log = _load_json(APPROVAL_LOG)
 
-    # FY26 monthly averages per category
-    fy26_totals: dict = {}
+    # ── Period date range ─────────────────────────────────────────────────────
+    now = datetime.now()
+    cal_month = now.month  # 1-12
+
+    def _fy_months_for_period(period):
+        """Return list of 'YYYY-MM' strings covered by the requested period."""
+        # FY starts April. FY month 1 = Apr, 3 = Jun, 6 = Sep, 9 = Dec, 12 = Mar
+        fy_start_year = now.year if cal_month >= 4 else now.year - 1  # Apr of FY start
+        if period == "month":
+            return [now.strftime("%Y-%m")]
+        elif period == "quarter":
+            # Which FY quarter is current month in?
+            fy_month = (cal_month - 4) % 12 + 1  # Apr=1 … Mar=12
+            q_start_fy = ((fy_month - 1) // 3) * 3 + 1  # 1,4,7,10
+            months = []
+            for offset in range(3):
+                cm = (q_start_fy - 1 + offset) % 12  # 0-indexed calendar offset from Apr
+                cal = (cm + 4 - 1) % 12 + 1  # back to calendar month
+                yr = fy_start_year if cal >= 4 else fy_start_year + 1
+                months.append(f"{yr}-{cal:02d}")
+            return months
+        else:  # ytd — Apr of FY to current month
+            months = []
+            cm = 4  # start April
+            yr = fy_start_year
+            while True:
+                months.append(f"{yr}-{cm:02d}")
+                if yr == now.year and cm == cal_month:
+                    break
+                cm += 1
+                if cm == 13:
+                    cm = 1
+                    yr += 1
+            return months
+
+    period_months = _fy_months_for_period(period)
+    n_months = len(period_months)
+
+    # ── Super-category mapping (app category → ACC26 super-category) ──────────
+    # Based on ExpenseSummary from ACC26ver5_MASTER.xlsx
+    SUPER_CAT = {
+        "groceries":     "Household",
+        "staff":         "Household",
+        "utilities":     "Household",
+        "miscellaneous": "Household",
+        "personal_care": "Personal",
+        "clothing":      "Family",
+        "gifts":         "Family",
+        "medical":       "Family",
+        "education":     "Family",
+        "dining":        "Lifestyle",
+        "entertainment": "Lifestyle",
+        "transport":     "Lifestyle",
+        "maintenance":   "Property",
+        "home_repair":   "Property",
+    }
+    SUPER_ORDER = ["Household", "Personal", "Family", "Giving", "Lifestyle", "Property", "Financial"]
+
+    # ── FY26 annual totals per category → scale to period ────────────────────
+    fy26_annual: dict = {}
     for e in acc26:
         cat = e.get("category", "miscellaneous")
-        fy26_totals[cat] = fy26_totals.get(cat, 0) + e.get("amount", 0)
-    fy26_monthly = {k: v / 12 for k, v in fy26_totals.items()}
+        fy26_annual[cat] = fy26_annual.get(cat, 0) + e.get("amount", 0)
+    # Scale: monthly avg × n_months
+    fy26_period = {k: round(v / 12 * n_months) for k, v in fy26_annual.items()}
 
-    # FY27 actual this month
-    month_prefix = datetime.now().strftime("%Y-%m")
+    # ── FY27 budget scaled to period ─────────────────────────────────────────
+    budget_period = {k: v * n_months for k, v in budget_monthly.items()}
+
+    # ── FY27 actual for period ────────────────────────────────────────────────
     fy27_actual: dict = {}
     for e in log:
         if e.get("action") not in ("AUTO_APPROVE", "APPROVED", "APPROVED_LOWER"):
             continue
-        if not (e.get("timestamp") or "").startswith(month_prefix):
+        ts = (e.get("timestamp") or "")[:7]
+        if ts not in period_months:
             continue
         cat = e.get("category", "miscellaneous")
         amt = e.get("approved_amount") or e.get("amount", 0)
         fy27_actual[cat] = fy27_actual.get(cat, 0) + amt
 
-    rows = []
+    # ── Build grouped rows ────────────────────────────────────────────────────
     all_cats = set(list(budget_monthly.keys()) + list(fy27_actual.keys()))
+    by_super: dict = {s: [] for s in SUPER_ORDER}
+
     for cat in sorted(all_cats):
-        budget = budget_monthly.get(cat, 0)
-        actual = fy27_actual.get(cat, 0)
-        fy26 = fy26_monthly.get(cat, 0)
+        super_cat = SUPER_CAT.get(cat, "Household")
+        budget = budget_period.get(cat, 0)
+        actual = round(fy27_actual.get(cat, 0))
+        fy26 = fy26_period.get(cat, 0)
         pct = round(actual / budget * 100) if budget else 0
-        rows.append({
+        by_super.setdefault(super_cat, []).append({
             "category": cat,
-            "fy26_actual": round(fy26),
+            "fy26_actual": fy26,
             "fy27_budget": budget,
-            "fy27_actual": round(actual),
+            "fy27_actual": actual,
             "pct": pct,
         })
 
-    total_budget = sum(budget_monthly.values())
-    total_actual = sum(fy27_actual.values())
-    total_fy26 = sum(fy26_monthly.values())
-    overall_pct = round(total_actual / total_budget * 100) if total_budget else 0
+    groups = []
+    grand = {"fy26": 0, "budget": 0, "actual": 0}
+    for super_cat in SUPER_ORDER:
+        rows = by_super.get(super_cat, [])
+        if not rows:
+            continue
+        sub = {
+            "fy26": sum(r["fy26_actual"] for r in rows),
+            "budget": sum(r["fy27_budget"] for r in rows),
+            "actual": sum(r["fy27_actual"] for r in rows),
+        }
+        sub["pct"] = round(sub["actual"] / sub["budget"] * 100) if sub["budget"] else 0
+        grand["fy26"] += sub["fy26"]
+        grand["budget"] += sub["budget"]
+        grand["actual"] += sub["actual"]
+        groups.append({"super_category": super_cat, "rows": rows, "subtotal": sub})
+
+    grand["pct"] = round(grand["actual"] / grand["budget"] * 100) if grand["budget"] else 0
 
     return jsonify({
-        "rows": rows,
-        "summary": {
-            "total_budget": round(total_budget),
-            "total_actual": round(total_actual),
-            "total_fy26": round(total_fy26),
-            "overall_pct": overall_pct,
-        }
+        "period": period,
+        "period_months": period_months,
+        "groups": groups,
+        "grand": grand,
     })
 
 
@@ -359,12 +438,34 @@ def api_ignore_unauth():
 
 
 @app.route("/api/sync-statements", methods=["POST"])
+@login_required
 def api_sync_statements():
     try:
         result = fetch_and_parse_statements()
         return jsonify({"status": "ok", **result})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/transactions/<txn_id>", methods=["PATCH"])
+@login_required
+def api_update_transaction(txn_id):
+    """Update editable fields of an ICICI transaction (paid_to, acc_type, heading, remarks)."""
+    data = request.get_json()
+    allowed = {"paid_to", "acc_type", "heading", "remarks"}
+    updates = {k: v for k, v in data.items() if k in allowed}
+    if not updates:
+        return jsonify({"error": "no valid fields"}), 400
+    transactions = _load_json(TRANSACTIONS_PATH)
+    for t in transactions:
+        if t.get("txn_id") == txn_id:
+            t.update(updates)
+            # Mark as manually verified once user edits classification
+            if "acc_type" in updates or "heading" in updates:
+                t["confidence"] = "manual"
+            _save_json(TRANSACTIONS_PATH, transactions)
+            return jsonify({"status": "ok"})
+    return jsonify({"error": "not found"}), 404
 
 
 @app.route("/export", methods=["GET"])
