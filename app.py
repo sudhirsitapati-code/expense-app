@@ -477,13 +477,109 @@ def api_decide():
     return jsonify({"status": "ok"})
 
 
+def _approval_to_ledger_entry(e: dict) -> dict:
+    """Convert an approval log entry into a master ledger transaction."""
+    import hashlib
+    from src.master_ledger import _fy_info, _parse_date, classify_transaction
+    paid_at = e.get("confirmed_at") or e.get("response_timestamp") or e.get("timestamp","")
+    date_str = paid_at[:10]
+    dt = _parse_date(date_str) or datetime.now()
+    fy = _fy_info(dt)
+    amount = float(e.get("approved_amount") or e.get("amount") or 0)
+    raw = f"{date_str}|approval|{e.get('vendor','')}|{amount:.2f}"
+    txn_id = hashlib.sha1(raw.encode()).hexdigest()[:16]
+
+    APP_TO_HEADING = {
+        "groceries":"Groceries","staff":"Staff Salary","utilities":"Electricity & Gas",
+        "miscellaneous":"Misc","personal_care":"Wellness","clothing":"Clothes",
+        "gifts":"Gifts","medical":"Medical","education":"Children Education",
+        "dining":"Eating Out","entertainment":"Entertainment","transport":"Holiday",
+        "maintenance":"Maintenance Expense","home_repair":"One Time Charge",
+    }
+    heading = APP_TO_HEADING.get(e.get("category",""), "Misc")
+
+    txn = {
+        "txn_id":          txn_id,
+        "date":            date_str,
+        "fy_month_no":     fy["fy_month_no"],
+        "fy_month_name":   fy["fy_month_name"],
+        "fy_year":         fy["fy_year"],
+        "account":         "cash/upi",
+        "account_type":    e.get("payment_method","cash"),
+        "bank":            "approval",
+        "raw_description": e.get("description",""),
+        "paid_to":         e.get("vendor",""),
+        "debit":           amount,
+        "credit":          0,
+        "type":            "expense",
+        "heading":         heading,
+        "remarks":         f"Approved by Sudhir. Ref: {e.get('request_id','')}",
+        "uncertain":       False,
+        "uncertain_fields":[],
+        "confidence":      "approval",
+        "source":          "approval_log",
+        "gmail_id":        None,
+        "ai_saving_tip":   None,
+        "saving_agreed":   None,
+        "reconciled_with": e.get("request_id"),
+        "created_at":      datetime.now().isoformat(),
+    }
+    return txn
+
+
+def _sync_approvals_to_ledger():
+    """Add all confirmed-paid approval entries to master ledger (idempotent)."""
+    from src.master_ledger import load_ledger
+    log    = db.load("approval_log")
+    ledger = db.load("master_ledger")
+    existing_ids = {t["txn_id"] for t in ledger}
+
+    added = 0
+    for e in log:
+        if not e.get("confirmed_paid"):
+            continue
+        if e.get("action") not in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER"):
+            continue
+        txn = _approval_to_ledger_entry(e)
+        if txn["txn_id"] in existing_ids:
+            continue
+        ledger.append(txn)
+        existing_ids.add(txn["txn_id"])
+        added += 1
+
+    if added:
+        ledger.sort(key=lambda t: t.get("date",""), reverse=True)
+        db.save("master_ledger", ledger)
+    return added
+
+
 @app.route("/api/mark-paid", methods=["POST"])
 def api_mark_paid():
-    """Manually mark a cash expense as confirmed paid."""
+    """Mark a cash expense as confirmed paid and push it into the master ledger."""
     data = request.get_json()
     request_id = data.get("request_id")
-    _update_log_entry(request_id, {"confirmed_paid": True, "confirmed_at": datetime.now().isoformat()})
+    now_iso = datetime.now().isoformat()
+    _update_log_entry(request_id, {"confirmed_paid": True, "confirmed_at": now_iso})
+
+    # Push this entry straight into the ledger
+    log   = db.load("approval_log")
+    entry = next((e for e in log if e.get("request_id") == request_id), None)
+    if entry:
+        ledger = db.load("master_ledger")
+        txn = _approval_to_ledger_entry(entry)
+        if not any(t["txn_id"] == txn["txn_id"] for t in ledger):
+            ledger.insert(0, txn)
+            db.save("master_ledger", ledger)
+
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/sync-approvals-to-ledger", methods=["POST"])
+@login_required
+def api_sync_approvals_to_ledger():
+    """Backfill all confirmed-paid approvals into the master ledger."""
+    added = _sync_approvals_to_ledger()
+    return jsonify({"status": "ok", "added": added})
 
 
 @app.route("/api/ignore-unauth", methods=["POST"])
