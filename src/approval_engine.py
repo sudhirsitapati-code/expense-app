@@ -54,6 +54,7 @@ class ApprovalDecision:
     escalation_message: Optional[str] = None
     follow_up_question: Optional[str] = None
     follow_up_options: list = field(default_factory=list)
+    confirmed_paid: bool = False  # True for post-facto items already paid
 
 
 class ApprovalEngine:
@@ -138,7 +139,7 @@ Reply ONLY with JSON."""
     def evaluate(self, req: ExpenseRequest) -> ApprovalDecision:
         decision = ApprovalDecision(request_id=req.request_id, action="", reason="")
 
-        # Rule 1: Recurring
+        # Rule 1: Recurring — always auto-approve
         matched = self._match_recurring(req)
         if matched:
             decision.action = "AUTO_APPROVE"
@@ -147,54 +148,44 @@ Reply ONLY with JSON."""
             self._save_to_log(req, decision)
             return decision
 
-        # Rule 2: Post-facto large
-        if req.is_post_facto and req.amount >= 10000:
-            decision.action = "ESCALATE"
-            decision.reason = "Post-facto submission >= Rs 10,000"
-            decision.escalation_message = self._build_escalation_message(req, "⚠️ POST-FACTO — already paid")
-            decision.budget_alert = self._budget_alert(req.category, req.amount)
-            self._save_to_log(req, decision)
-            return decision
-
-        # Rule 3: Small amount
-        if req.amount < 5000 and not self._budget_alert(req.category, req.amount):
+        # Rule 2: Post-facto (already paid) — log immediately as confirmed expense.
+        # No point asking for approval on money already spent.
+        if req.is_post_facto:
             decision.action = "AUTO_APPROVE"
-            decision.reason = "Amount < Rs 5,000 and within budget"
+            decision.reason = "Post-facto — already paid, logged as confirmed expense"
+            decision.budget_alert = self._budget_alert(req.category, req.amount)
+            decision.confirmed_paid = True
             self._save_to_log(req, decision)
             return decision
 
-        # Rule 4: Clarification needed?
-        clarification = self._needs_clarification(req)
-        if clarification:
-            decision.action = "PENDING_CLARIFICATION"
-            decision.reason = "Description unclear"
-            decision.follow_up_question = clarification["question"]
-            decision.follow_up_options = clarification["options"]
+        # Rule 3: Under Rs 10,000 and not blowing the budget — auto-approve
+        if req.amount < 10000 and not self._budget_alert(req.category, req.amount):
+            decision.action = "AUTO_APPROVE"
+            decision.reason = "Amount under Rs 10,000 and within budget"
+            self._save_to_log(req, decision)
             return decision
 
-        # Rule 5: Market check
+        # Rule 4: Market check (only for Rs 10,000+)
         market_result = self.market_checker.check(
             description=req.description, vendor=req.vendor,
             amount=req.amount, category=req.category
         )
         decision.market_status = market_result.get("status", "unknown")
         decision.market_rate = market_result.get("rate_range")
-        budget_alert = self._budget_alert(req.category, req.amount)
-        decision.budget_alert = budget_alert
+        decision.budget_alert = self._budget_alert(req.category, req.amount)
 
-        # Rule 6: Thresholds
-        if req.amount > 30000:
+        # Rule 5: Escalate only for large amounts or clearly overpriced quotes
+        # Rs 10k–75k: auto-approve unless price is very_high
+        # > Rs 75k: always ask
+        if req.amount > 75000:
             decision.action = "ESCALATE"
-            decision.reason = "Amount > Rs 30,000"
+            decision.reason = f"Amount Rs {req.amount:,.0f} — above Rs 75,000 threshold"
         elif decision.market_status == "very_high":
             decision.action = "ESCALATE"
-            decision.reason = f"Quote >30% above market rate ({decision.market_rate})"
-        elif req.amount >= 5000:
-            decision.action = "ESCALATE"
-            decision.reason = "Amount Rs 5,000–30,000: requires approval"
+            decision.reason = f"Quote significantly above market rate ({decision.market_rate})"
         else:
             decision.action = "AUTO_APPROVE"
-            decision.reason = "Within threshold, market rate OK"
+            decision.reason = "Within threshold, price looks reasonable"
 
         if decision.action == "ESCALATE":
             market_note = ""
@@ -204,7 +195,7 @@ Reply ONLY with JSON."""
                 market_note = f"\n⚠️ Slightly above market ({decision.market_rate})"
             elif decision.market_rate:
                 market_note = f"\nMarket rate: {decision.market_rate}"
-            budget_note = "\n📊 Category near monthly budget limit" if budget_alert else ""
+            budget_note = "\n📊 Category near monthly budget limit" if decision.budget_alert else ""
             decision.escalation_message = self._build_escalation_message(req, market_note + budget_note)
 
         self._save_to_log(req, decision)
@@ -249,6 +240,9 @@ Reply ONLY with JSON."""
             "market_status": decision.market_status,
             "market_rate": decision.market_rate,
             "budget_alert": decision.budget_alert,
+            "confirmed_paid": decision.confirmed_paid,
+            "confirmed_at": datetime.now().isoformat() if decision.confirmed_paid else None,
+            "confirmed_by": "post_facto" if decision.confirmed_paid else None,
         }
         log.append(entry)
         with open(APPROVAL_LOG_PATH, "w") as f:

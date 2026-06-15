@@ -69,12 +69,27 @@ def _is_recurring(vendor: str, amount: float, recurring: list) -> bool:
     return False
 
 
+def _vendor_match(bank_vendor: str, log_vendor: str) -> bool:
+    """Fuzzy vendor match — any word overlap counts, or one contains the other."""
+    b, l = bank_vendor.lower(), log_vendor.lower()
+    if l in b or b in l:
+        return True
+    # word overlap (ignore very short words)
+    b_words = {w for w in b.split() if len(w) > 2}
+    l_words = {w for w in l.split() if len(w) > 2}
+    return bool(b_words & l_words)
+
+
 def _find_matching_approval(bank_expense: dict, approval_log: list) -> Optional[dict]:
-    """Match a bank debit to an approved expense (amount ±Rs50, date ±3 days)."""
+    """Match a bank debit to an approved expense.
+    Primary: amount ±Rs50 within ±7 days. Vendor match is best-effort — bank
+    descriptions are often truncated/encoded so we rely mostly on amount+date.
+    """
     bank_amount = bank_expense["amount"]
-    bank_vendor = bank_expense["vendor"].lower()
+    bank_vendor = bank_expense.get("vendor", "")
     bank_date = _parse_date(bank_expense.get("date", ""))
 
+    candidates = []
     for entry in approval_log:
         if entry.get("action") not in ("AUTO_APPROVE", "APPROVED", "APPROVED_LOWER"):
             continue
@@ -82,7 +97,9 @@ def _find_matching_approval(bank_expense: dict, approval_log: list) -> Optional[
             continue
 
         log_amount = entry.get("approved_amount") or entry.get("amount", 0)
-        log_vendor = entry.get("vendor", "").lower()
+        if abs(bank_amount - log_amount) > AMOUNT_TOLERANCE:
+            continue
+
         log_date = None
         if entry.get("timestamp"):
             try:
@@ -90,24 +107,19 @@ def _find_matching_approval(bank_expense: dict, approval_log: list) -> Optional[
             except ValueError:
                 pass
 
-        # Amount match within ±Rs50
-        if abs(bank_amount - log_amount) > AMOUNT_TOLERANCE:
-            continue
-
-        # Vendor word overlap
-        bank_words = set(bank_vendor.split())
-        log_words = set(log_vendor.split())
-        if not (bank_words & log_words) and bank_vendor not in log_vendor and log_vendor not in bank_vendor:
-            continue
-
-        # Date match within ±3 days (if both available)
         if bank_date and log_date:
-            if abs((bank_date - log_date).days) > DATE_TOLERANCE_DAYS:
+            if abs((bank_date - log_date).days) > 7:
                 continue
 
-        return entry
+        vendor_ok = _vendor_match(bank_vendor, entry.get("vendor", ""))
+        candidates.append((entry, vendor_ok))
 
-    return None
+    if not candidates:
+        return None
+    # Prefer vendor-matched candidates; otherwise take closest amount match
+    vendor_matched = [c for c, v in candidates if v]
+    pool = vendor_matched if vendor_matched else [c for c, _ in candidates]
+    return min(pool, key=lambda e: abs(bank_amount - (e.get("approved_amount") or e.get("amount", 0))))
 
 
 def run_reconciliation(notify_sudhir: bool = True) -> list:
