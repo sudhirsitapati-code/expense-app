@@ -603,6 +603,14 @@ def api_cc_balance():
     return jsonify(get_cc_balance())
 
 
+@app.route("/api/approval-log-raw", methods=["GET"])
+@login_required
+def api_approval_log_raw():
+    """Debug: return last 30 raw entries from approval log."""
+    log = _load_json(APPROVAL_LOG)
+    return jsonify({"total": len(log), "last_30": log[-30:]})
+
+
 @app.route("/api/approvals-structured", methods=["GET"])
 @login_required
 def api_approvals_structured():
