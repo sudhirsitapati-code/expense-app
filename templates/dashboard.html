@@ -1,278 +1,436 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Expense Dashboard</title>
+  <title>Sudhir's Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f0f2f5; color: #1a1a2e; }
-
-    header { background: #1a1a2e; color: white; padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; }
-    header h1 { font-size: 1.4rem; font-weight: 600; }
-    header span { font-size: 0.85rem; opacity: 0.6; }
-
-    .container { max-width: 1100px; margin: 0 auto; padding: 28px 20px; }
-
-    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
-    .stat-card { background: white; border-radius: 12px; padding: 20px 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
-    .stat-card .label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-bottom: 8px; }
-    .stat-card .value { font-size: 1.9rem; font-weight: 700; }
-    .stat-card.green .value { color: #16a34a; }
-    .stat-card.orange .value { color: #ea580c; }
-    .stat-card.blue .value { color: #2563eb; }
-    .stat-card.red .value { color: #dc2626; }
-
-    .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 14px; color: #333; }
-
-    .table-wrap { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); overflow: hidden; margin-bottom: 28px; }
-    table { width: 100%; border-collapse: collapse; }
-    th { background: #f8f9fb; text-align: left; padding: 12px 16px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: #888; border-bottom: 1px solid #eee; }
-    td { padding: 13px 16px; font-size: 0.88rem; border-bottom: 1px solid #f3f3f3; vertical-align: middle; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #fafafa; }
-
-    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
-    .badge.auto { background: #dcfce7; color: #16a34a; }
-    .badge.approved { background: #dbeafe; color: #2563eb; }
-    .badge.escalate { background: #fff7ed; color: #ea580c; }
-    .badge.rejected { background: #fee2e2; color: #dc2626; }
-    .badge.pending { background: #f3f4f6; color: #6b7280; }
-
-    .amount { font-weight: 600; }
-    .meta { color: #999; font-size: 0.8rem; }
-
-    .filters { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-    .filter-btn { padding: 6px 16px; border-radius: 20px; border: 1px solid #ddd; background: white; font-size: 0.83rem; cursor: pointer; transition: all 0.15s; }
-    .filter-btn.active, .filter-btn:hover { background: #1a1a2e; color: white; border-color: #1a1a2e; }
-
-    .empty { text-align: center; padding: 48px; color: #bbb; font-size: 0.9rem; }
-
-    .refresh { background: #1a1a2e; color: white; border: none; padding: 8px 18px; border-radius: 8px; font-size: 0.85rem; cursor: pointer; }
-    .refresh:hover { background: #2d2d4e; }
+    body { background: #f5f7fa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .topbar { background: #1a1a2e; color: white; padding: 14px 24px; }
+    .topbar h5 { margin: 0; font-weight: 600; font-size: 1.1rem; }
+    .nav-tabs .nav-link { color: #555; font-weight: 500; border-radius: 8px 8px 0 0; }
+    .nav-tabs .nav-link.active { color: #1a1a2e; font-weight: 600; border-bottom-color: white; }
+    .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.07); margin-bottom: 20px; }
+    .card-header { background: white; border-bottom: 1px solid #f0f0f0; border-radius: 12px 12px 0 0 !important; padding: 16px 20px; font-weight: 600; font-size: 0.95rem; }
+    .section-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #888; font-weight: 600; }
+    .stat-pill { background: white; border-radius: 10px; padding: 14px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); text-align: center; }
+    .stat-pill .val { font-size: 1.7rem; font-weight: 700; }
+    .stat-pill .lbl { font-size: 0.75rem; color: #888; margin-top: 2px; }
+    .badge-market-ok { background: #dcfce7; color: #166534; }
+    .badge-market-high { background: #fff7ed; color: #9a3412; }
+    .badge-market-very_high { background: #fee2e2; color: #991b1b; }
+    .badge-market-unknown { background: #f3f4f6; color: #6b7280; }
+    table { font-size: 0.87rem; }
+    th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #888; font-weight: 600; }
+    .budget-bar { height: 6px; border-radius: 3px; background: #e5e7eb; overflow: hidden; margin-top: 4px; }
+    .budget-fill { height: 100%; border-radius: 3px; }
+    .pct-green { color: #16a34a; }
+    .pct-orange { color: #ea580c; }
+    .pct-red { color: #dc2626; }
+    .unauth-row td { color: #dc2626; font-weight: 500; }
+    .btn-approve { background: #16a34a; color: white; border: none; border-radius: 6px; padding: 5px 14px; font-size: 0.82rem; font-weight: 600; }
+    .btn-reject { background: #dc2626; color: white; border: none; border-radius: 6px; padding: 5px 14px; font-size: 0.82rem; font-weight: 600; }
+    .btn-approve:hover { background: #15803d; }
+    .btn-reject:hover { background: #b91c1c; }
+    .btn-ignore { background: #6b7280; color: white; border: none; border-radius: 6px; padding: 5px 14px; font-size: 0.82rem; }
+    .empty-state { text-align: center; padding: 40px; color: #bbb; font-size: 0.9rem; }
+    .confirm-tag-yes { color: #16a34a; font-weight: 600; }
+    .confirm-tag-no { color: #dc2626; font-weight: 600; }
+    .confirm-tag-null { color: #9ca3af; }
   </style>
 </head>
 <body>
 
-<header>
-  <h1>🏠 Household Expense Dashboard</h1>
-  <div style="display:flex;gap:10px">
-    <button class="refresh" id="sync-btn" onclick="syncStatements()">⬇ Sync ICICI Statements</button>
-    <button class="refresh" onclick="location.reload()">↻ Refresh</button>
+<div class="topbar d-flex justify-content-between align-items-center">
+  <h5>🏠 Sitapati Household</h5>
+  <div class="d-flex gap-2 align-items-center">
+    <span style="font-size:0.8rem;opacity:0.6" id="last-updated"></span>
+    <a href="/entry" class="btn btn-sm btn-light">+ New Expense</a>
+    <button class="btn btn-sm btn-outline-light" onclick="loadAll()">↻</button>
   </div>
-</header>
-
-<div class="container">
-
-  <!-- Stats -->
-  <div class="stats">
-    <div class="stat-card green">
-      <div class="label">Auto Approved</div>
-      <div class="value" id="count-auto">—</div>
-    </div>
-    <div class="stat-card blue">
-      <div class="label">Approved by Sudhir</div>
-      <div class="value" id="count-approved">—</div>
-    </div>
-    <div class="stat-card orange">
-      <div class="label">Pending Approval</div>
-      <div class="value" id="count-pending">—</div>
-    </div>
-    <div class="stat-card red">
-      <div class="label">Rejected</div>
-      <div class="value" id="count-rejected">—</div>
-    </div>
-    <div class="stat-card blue">
-      <div class="label">Total Spend (Month)</div>
-      <div class="value" id="total-spend">—</div>
-    </div>
-  </div>
-
-  <!-- Tabs -->
-  <div class="filters" style="margin-bottom:20px">
-    <button class="filter-btn active tab-btn" id="tab-expenses" onclick="switchTab('expenses')">📋 Expense Approvals</button>
-    <button class="filter-btn tab-btn" id="tab-transactions" onclick="switchTab('transactions')">🏦 ICICI Transactions</button>
-  </div>
-
-  <!-- Filters -->
-  <div class="filters">
-    <button class="filter-btn active" onclick="filterTable('ALL', this)">All</button>
-    <button class="filter-btn" onclick="filterTable('AUTO_APPROVE', this)">Auto Approved</button>
-    <button class="filter-btn" onclick="filterTable('ESCALATE', this)">Pending</button>
-    <button class="filter-btn" onclick="filterTable('APPROVED', this)">Approved</button>
-    <button class="filter-btn" onclick="filterTable('REJECTED', this)">Rejected</button>
-  </div>
-
-  <!-- Table -->
-  <div class="section-title">All Expenses</div>
-  <div class="table-wrap">
-    <table id="expense-table">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Submitter</th>
-          <th>Vendor</th>
-          <th>Category</th>
-          <th>Amount</th>
-          <th>Payment</th>
-          <th>Status</th>
-          <th>Notes</th>
-        </tr>
-      </thead>
-      <tbody id="table-body">
-        <tr><td colspan="8" class="empty">Loading...</td></tr>
-      </tbody>
-    </table>
-  </div>
-
 </div>
 
+<div class="container-fluid py-3 px-3 px-md-4" style="max-width:1200px">
+
+  <!-- Tab nav -->
+  <ul class="nav nav-tabs mb-3" id="mainTabs">
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-approvals">⏳ Pending Approvals <span class="badge bg-danger ms-1" id="pending-count" style="display:none"></span></a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-mis">📊 MIS</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-tracker">✅ Confirmation</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-unauth">🚨 Unauthorized</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-cash">💵 Cash Recon</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-icici">🏦 ICICI</a></li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION A — PENDING APPROVALS
+    ═══════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade show active" id="tab-approvals">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>⏳ Pending Approvals</span>
+          <small class="text-muted">Reply Y / N / L[amount] on WhatsApp, or use buttons below</small>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Date</th><th>Submitter</th><th>Vendor</th><th>Category</th>
+              <th>Description</th><th>Amount</th><th>Market</th><th>Action</th>
+            </tr></thead>
+            <tbody id="pending-table"><tr><td colspan="8" class="empty-state">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION B — MIS: FY26 vs Budget vs FY27 Actual
+    ═══════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-mis">
+
+      <!-- Summary pills -->
+      <div class="row g-3 mb-3" id="mis-pills"></div>
+
+      <!-- Month selector -->
+      <div class="d-flex gap-2 align-items-center mb-3">
+        <select class="form-select form-select-sm w-auto" id="mis-month" onchange="loadMIS()">
+          <option value="ytd">Year to Date (FY27)</option>
+          <option value="month">This Month</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="card-header">Spend vs FY26 Actual vs FY27 Budget</div>
+        <div class="card-body p-0">
+          <table class="table mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Category</th>
+              <th>FY26 Actual</th>
+              <th>FY27 Budget</th>
+              <th>FY27 Actual</th>
+              <th>vs Budget</th>
+              <th>Progress</th>
+            </tr></thead>
+            <tbody id="mis-table"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION C — EXPENSE CONFIRMATION TRACKER
+    ═══════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-tracker">
+
+      <div class="row g-3 mb-3" id="tracker-pills"></div>
+
+      <div class="card">
+        <div class="card-header">Expense Confirmation — Did it actually get paid?</div>
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Date</th><th>Submitter</th><th>Vendor</th>
+              <th>Amount</th><th>Payment</th><th>Confirmed Paid</th><th>Action</th>
+            </tr></thead>
+            <tbody id="tracker-table"><tr><td colspan="7" class="empty-state">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION D — UNAUTHORIZED SPENDS
+    ═══════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-unauth">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between">
+          <span>🚨 Unauthorized Spends</span>
+          <small class="text-muted">Bank debits with no matching approval</small>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Date</th><th>Bank</th><th>Vendor</th>
+              <th>Amount</th><th>Status</th><th>Action</th>
+            </tr></thead>
+            <tbody id="unauth-table"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION E — CASH RECONCILIATION
+    ═══════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-cash">
+      <div class="row g-3 mb-3" id="cash-pills"></div>
+      <div class="card">
+        <div class="card-header">Cash Reconciliation — ATM vs Cash Payments</div>
+        <div class="card-body p-0">
+          <table class="table mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Month</th><th>ATM Withdrawals</th>
+              <th>Cash-Authorised Payments</th><th>Gap</th><th>Status</th>
+            </tr></thead>
+            <tbody id="cash-table"><tr><td colspan="5" class="empty-state">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         ICICI TRANSACTIONS TAB
+    ═══════════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-icici">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="section-label">ICICI Bank Transactions</span>
+        <button class="btn btn-sm btn-outline-dark" id="sync-btn" onclick="syncICICI()">⬇ Sync Statements</button>
+      </div>
+      <div class="card">
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-3">Date</th><th>Description</th><th>Amount</th><th>Type</th>
+            </tr></thead>
+            <tbody id="icici-table"><tr><td colspan="4" class="empty-state">Click "Sync Statements" to load.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- tab-content -->
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  let allData = [];
+const INR = n => '₹' + Number(n||0).toLocaleString('en-IN');
+const L   = n => '₹' + (Number(n||0)/100000).toFixed(2) + 'L';
+const fmtDate = ts => ts ? ts.slice(0,10) : '—';
+const cap = s => (s||'').replace(/\b\w/g, c=>c.toUpperCase());
 
-  function badgeHtml(action) {
-    const map = {
-      AUTO_APPROVE: ['auto', 'Auto Approved'],
-      APPROVED: ['approved', 'Approved'],
-      APPROVED_LOWER: ['approved', 'Approved (Lower)'],
-      ESCALATE: ['escalate', 'Pending'],
-      REJECTED: ['rejected', 'Rejected'],
-      PENDING_CLARIFICATION: ['pending', 'Clarification'],
-    };
-    const [cls, label] = map[action] || ['pending', action];
-    return `<span class="badge ${cls}">${label}</span>`;
-  }
+// ─── SECTION A: PENDING APPROVALS ─────────────────────────────────────────────
+async function loadPending() {
+  const res = await fetch('/api/expenses').then(r=>r.json()).catch(()=>[]);
+  const pending = res.filter(e => e.action === 'ESCALATE' && !e.sudhir_response);
+  const badge = document.getElementById('pending-count');
+  if (pending.length > 0) { badge.textContent = pending.length; badge.style.display = ''; }
+  else badge.style.display = 'none';
 
-  function formatDate(ts) {
-    if (!ts) return '—';
-    return ts.slice(0, 10);
-  }
+  const tbody = document.getElementById('pending-table');
+  if (!pending.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-state">✅ No pending approvals</td></tr>'; return; }
 
-  function formatAmount(n) {
-    return '₹' + Number(n).toLocaleString('en-IN');
-  }
+  tbody.innerHTML = pending.reverse().map(e => {
+    const mkt = e.market_status || 'unknown';
+    const mktLabel = {'ok':'OK','high':'HIGH','very_high':'VERY HIGH','unknown':'UNKNOWN'}[mkt] || mkt.toUpperCase();
+    return `<tr>
+      <td class="ps-3">${fmtDate(e.timestamp)}</td>
+      <td>${cap(e.submitter)}</td>
+      <td><strong>${e.vendor}</strong></td>
+      <td><small>${e.category}</small></td>
+      <td><small>${e.description}</small>${e.market_rate?`<br><small class="text-muted">${e.market_rate}</small>`:''}</td>
+      <td class="fw-bold">${INR(e.amount)}</td>
+      <td><span class="badge badge-market-${mkt}">${mktLabel}</span></td>
+      <td>
+        <button class="btn-approve me-1" onclick="decide('${e.request_id}','Y')">✓ Approve</button>
+        <button class="btn-reject" onclick="decide('${e.request_id}','N')">✗ Reject</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
 
-  function renderTable(data) {
-    const tbody = document.getElementById('table-body');
-    if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty">No expenses found.</td></tr>';
-      return;
-    }
-    tbody.innerHTML = data.slice().reverse().map(e => `
-      <tr data-action="${e.action}">
-        <td class="meta">${formatDate(e.timestamp)}</td>
-        <td>${(e.submitter || '').replace(/\b\w/g, c => c.toUpperCase())}</td>
-        <td><strong>${e.vendor || '—'}</strong><br><span class="meta">${e.description || ''}</span></td>
-        <td class="meta">${e.category || '—'}</td>
-        <td class="amount">${formatAmount(e.approved_amount || e.amount)}</td>
-        <td class="meta">${e.payment_method || '—'}</td>
-        <td>${badgeHtml(e.action)}</td>
-        <td class="meta">${e.market_rate ? '📊 ' + e.market_rate : ''}${e.budget_alert ? ' ⚠️ Budget' : ''}</td>
-      </tr>
-    `).join('');
-  }
+async function decide(requestId, response) {
+  await fetch('/api/decide', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({request_id: requestId, response})
+  });
+  loadPending();
+}
 
-  function filterTable(action, btn) {
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    if (action === 'ALL') {
-      renderTable(allData);
-    } else {
-      renderTable(allData.filter(e => e.action === action || (action === 'APPROVED' && e.action === 'APPROVED_LOWER')));
-    }
-  }
+// ─── SECTION B: MIS ─────────────────────────────────────────────────────────
+async function loadMIS() {
+  const data = await fetch('/api/mis').then(r=>r.json()).catch(()=>({}));
+  const rows = data.rows || [];
+  const summary = data.summary || {};
 
-  function updateStats(data) {
-    const now = new Date();
-    const monthPrefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  // Pills
+  document.getElementById('mis-pills').innerHTML = [
+    {val: INR(summary.total_budget||0), lbl:'FY27 Budget (Monthly)', cls:'text-primary'},
+    {val: INR(summary.total_actual||0), lbl:'FY27 Actual (This Month)', cls:'text-dark'},
+    {val: INR(summary.total_fy26||0), lbl:'FY26 Actual (Monthly Avg)', cls:'text-muted'},
+    {val: (summary.overall_pct||0)+'%', lbl:'Budget Used', cls: summary.overall_pct>100?'text-danger':summary.overall_pct>80?'text-warning':'text-success'},
+  ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
 
-    document.getElementById('count-auto').textContent = data.filter(e => e.action === 'AUTO_APPROVE').length;
-    document.getElementById('count-approved').textContent = data.filter(e => e.action === 'APPROVED' || e.action === 'APPROVED_LOWER').length;
-    document.getElementById('count-pending').textContent = data.filter(e => e.action === 'ESCALATE').length;
-    document.getElementById('count-rejected').textContent = data.filter(e => e.action === 'REJECTED').length;
+  const tbody = document.getElementById('mis-table');
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No data yet.</td></tr>'; return; }
 
-    const monthSpend = data
-      .filter(e => (e.action === 'AUTO_APPROVE' || e.action === 'APPROVED' || e.action === 'APPROVED_LOWER') && (e.timestamp || '').startsWith(monthPrefix))
-      .reduce((sum, e) => sum + (e.approved_amount || e.amount || 0), 0);
-    document.getElementById('total-spend').textContent = formatAmount(monthSpend);
-  }
+  tbody.innerHTML = rows.map(r => {
+    const pct = r.pct || 0;
+    const pctCls = pct > 100 ? 'pct-red' : pct > 80 ? 'pct-orange' : 'pct-green';
+    const fillColor = pct > 100 ? '#dc2626' : pct > 80 ? '#ea580c' : '#16a34a';
+    const icon = pct > 100 ? '🔴' : pct > 80 ? '⚠️' : '✅';
+    return `<tr>
+      <td class="ps-3 fw-500">${cap(r.category)}</td>
+      <td class="text-muted">${L(r.fy26_actual)}</td>
+      <td>${L(r.fy27_budget)}</td>
+      <td class="fw-bold">${L(r.fy27_actual)}</td>
+      <td class="${pctCls} fw-semibold">${pct}% ${icon}</td>
+      <td style="min-width:120px">
+        <div class="budget-bar"><div class="budget-fill" style="width:${Math.min(pct,100)}%;background:${fillColor}"></div></div>
+      </td>
+    </tr>`;
+  }).join('');
+}
 
-  // Tab state
-  let activeTab = 'expenses';
+// ─── SECTION C: CONFIRMATION TRACKER ────────────────────────────────────────
+async function loadTracker() {
+  const res = await fetch('/api/expenses').then(r=>r.json()).catch(()=>[]);
+  const approved = res.filter(e => ['AUTO_APPROVE','APPROVED','APPROVED_LOWER'].includes(e.action));
 
-  function switchTab(tab) {
-    activeTab = tab;
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('tab-' + tab).classList.add('active');
-    if (tab === 'expenses') loadExpenses();
-    else loadTransactions();
-  }
+  const total = approved.length;
+  const confirmed = approved.filter(e => e.confirmed_paid === true).length;
+  const unconfirmed = total - confirmed;
+  const pct = total ? Math.round(confirmed/total*100) : 0;
 
-  function loadExpenses() {
-    fetch('/api/expenses')
-      .then(r => r.json())
-      .then(data => {
-        allData = data;
-        renderTable(data);
-        updateStats(data);
-      })
-      .catch(() => {
-        document.getElementById('table-body').innerHTML = '<tr><td colspan="8" class="empty">No expense data yet. Submit an expense via WhatsApp to get started!</td></tr>';
-        ['count-auto','count-approved','count-pending','count-rejected','total-spend'].forEach(id => {
-          document.getElementById(id).textContent = '0';
-        });
-      });
-  }
+  document.getElementById('tracker-pills').innerHTML = [
+    {val: total, lbl:'Approved This Month', cls:'text-dark'},
+    {val: confirmed, lbl:'Confirmed Paid', cls:'text-success'},
+    {val: unconfirmed, lbl:'Unconfirmed', cls: unconfirmed>0?'text-danger':'text-muted'},
+    {val: pct+'%', lbl:'Confirmation Rate', cls: pct===100?'text-success':pct>80?'text-warning':'text-danger'},
+  ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
 
-  function loadTransactions() {
-    fetch('/api/transactions')
-      .then(r => r.json())
-      .then(data => {
-        const tbody = document.getElementById('table-body');
-        if (!data.length) {
-          tbody.innerHTML = '<tr><td colspan="8" class="empty">No ICICI transactions yet. Click "Sync ICICI Statements" to load.</td></tr>';
-          return;
-        }
-        tbody.innerHTML = data.slice().reverse().map(t => `
-          <tr>
-            <td class="meta">${t.date || '—'}</td>
-            <td colspan="2"><strong>${t.description || '—'}</strong></td>
-            <td class="meta">—</td>
-            <td class="amount" style="color:${t.type === 'credit' ? '#16a34a' : '#dc2626'}">
-              ${t.type === 'credit' ? '+' : '-'}₹${Number(t.amount).toLocaleString('en-IN')}
-            </td>
-            <td class="meta">${t.type}</td>
-            <td><span class="badge ${t.type === 'credit' ? 'approved' : 'escalate'}">${t.type === 'credit' ? 'Credit' : 'Debit'}</span></td>
-            <td class="meta">ICICI</td>
-          </tr>
-        `).join('');
-      });
-  }
+  const tbody = document.getElementById('tracker-table');
+  if (!approved.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No approved expenses yet.</td></tr>'; return; }
 
-  function syncStatements() {
-    const btn = document.getElementById('sync-btn');
-    btn.textContent = '⏳ Syncing...';
-    btn.disabled = true;
-    fetch('/api/sync-statements', { method: 'POST' })
-      .then(r => r.json())
-      .then(result => {
-        btn.textContent = `⬇ Sync ICICI Statements`;
-        btn.disabled = false;
-        if (result.status === 'ok') {
-          alert(`✅ Synced ${result.statements} statement(s), ${result.new} new transaction(s) imported.`);
-          if (activeTab === 'transactions') loadTransactions();
-        } else {
-          alert('Error: ' + result.message);
-        }
-      })
-      .catch(() => {
-        btn.textContent = '⬇ Sync ICICI Statements';
-        btn.disabled = false;
-        alert('Sync failed. Check your connection.');
-      });
-  }
+  tbody.innerHTML = approved.slice().reverse().map(e => {
+    const cf = e.confirmed_paid;
+    const cfTag = cf === true ? '<span class="confirm-tag-yes">✅ Yes</span>'
+                : cf === false ? '<span class="confirm-tag-no">❌ No</span>'
+                : '<span class="confirm-tag-null">— Pending</span>';
+    const actionBtn = cf !== true && e.payment_method === 'cash'
+      ? `<button class="btn-approve" onclick="markPaid('${e.request_id}')">Mark Paid</button>`
+      : '';
+    return `<tr>
+      <td class="ps-3">${fmtDate(e.timestamp)}</td>
+      <td>${cap(e.submitter)}</td>
+      <td>${e.vendor}</td>
+      <td class="fw-bold">${INR(e.approved_amount||e.amount)}</td>
+      <td><small>${e.payment_method}</small></td>
+      <td>${cfTag}</td>
+      <td>${actionBtn}</td>
+    </tr>`;
+  }).join('');
+}
 
-  loadExpenses();
+async function markPaid(requestId) {
+  await fetch('/api/mark-paid', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({request_id: requestId})
+  });
+  loadTracker();
+}
+
+// ─── SECTION D: UNAUTHORIZED SPENDS ─────────────────────────────────────────
+async function loadUnauth() {
+  const res = await fetch('/api/reconcile-log').then(r=>r.json()).catch(()=>[]);
+  const unmatched = res.filter(e => !e.matched && !e.ignored);
+
+  const tbody = document.getElementById('unauth-table');
+  if (!unmatched.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-state">✅ No unauthorized spends detected</td></tr>'; return; }
+
+  tbody.innerHTML = unmatched.map(e => `
+    <tr class="unauth-row">
+      <td class="ps-3">${e.date||'—'}</td>
+      <td>${e.bank||'—'}</td>
+      <td>${e.vendor||'—'}</td>
+      <td class="fw-bold">${INR(e.amount)}</td>
+      <td><span class="badge bg-danger">Unauthorized</span></td>
+      <td>
+        <button class="btn-ignore" onclick="ignoreUnauth('${e.gmail_id}')">Mark as Known</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function ignoreUnauth(gmailId) {
+  await fetch('/api/ignore-unauth', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({gmail_id: gmailId})
+  });
+  loadUnauth();
+}
+
+// ─── SECTION E: CASH RECONCILIATION ─────────────────────────────────────────
+async function loadCash() {
+  const res = await fetch('/api/cash-recon').then(r=>r.json()).catch(()=>[]);
+
+  // Pills
+  const atm = res.atm_total || 0;
+  const cashPaid = res.cash_paid_total || 0;
+  const gap = atm - cashPaid;
+  document.getElementById('cash-pills').innerHTML = [
+    {val: INR(atm), lbl:'ATM Withdrawals (Month)', cls:'text-dark'},
+    {val: INR(cashPaid), lbl:'Cash-Authorised Payments', cls:'text-primary'},
+    {val: INR(Math.abs(gap)), lbl:'Gap', cls: gap>2000?'text-danger':'text-success'},
+    {val: gap>2000?'⚠️ Alert':'✅ OK', lbl:'Status', cls: gap>2000?'text-danger':'text-success'},
+  ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
+
+  const tbody = document.getElementById('cash-table');
+  const rows = res.monthly_rows || [];
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No ATM data found in bank statements.</td></tr>'; return; }
+
+  tbody.innerHTML = rows.map(r => {
+    const g = (r.atm||0) - (r.cash_paid||0);
+    const status = g > 2000 ? '<span class="badge bg-warning text-dark">⚠️ Gap > Rs 2,000</span>' : '<span class="badge bg-success">✅ OK</span>';
+    return `<tr>
+      <td class="ps-3">${r.month}</td>
+      <td>${INR(r.atm)}</td>
+      <td>${INR(r.cash_paid)}</td>
+      <td class="${g>2000?'text-danger fw-bold':''}">${INR(Math.abs(g))}</td>
+      <td>${status}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── ICICI TRANSACTIONS ──────────────────────────────────────────────────────
+async function loadICICI() {
+  const data = await fetch('/api/transactions').then(r=>r.json()).catch(()=>[]);
+  const tbody = document.getElementById('icici-table');
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Click "Sync Statements" to load ICICI transactions.</td></tr>'; return; }
+  tbody.innerHTML = data.slice().reverse().map(t=>`<tr>
+    <td class="ps-3">${t.date||'—'}</td>
+    <td>${t.description||'—'}</td>
+    <td class="fw-bold" style="color:${t.type==='credit'?'#16a34a':'#dc2626'}">${t.type==='credit'?'+':'-'}${INR(t.amount)}</td>
+    <td><span class="badge ${t.type==='credit'?'bg-success':'bg-secondary'}">${t.type}</span></td>
+  </tr>`).join('');
+}
+
+async function syncICICI() {
+  const btn = document.getElementById('sync-btn');
+  btn.textContent = '⏳ Syncing...'; btn.disabled = true;
+  const res = await fetch('/api/sync-statements', {method:'POST'}).then(r=>r.json()).catch(()=>({status:'error'}));
+  btn.textContent = '⬇ Sync Statements'; btn.disabled = false;
+  if (res.status === 'ok') { alert(`✅ ${res.statements} statement(s) synced, ${res.new} new transactions.`); loadICICI(); }
+  else alert('Sync failed: ' + (res.message||'unknown error'));
+}
+
+// ─── LOAD ALL ────────────────────────────────────────────────────────────────
+function loadAll() {
+  loadPending();
+  loadMIS();
+  loadTracker();
+  loadUnauth();
+  loadCash();
+  loadICICI();
+  document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+loadAll();
+setInterval(loadPending, 60000); // auto-refresh pending every 60s
 </script>
 </body>
 </html>

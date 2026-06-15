@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Monthly Expense Report</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    body { background: #f5f7fa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .topbar { background: #1a1a2e; color: white; padding: 14px 24px; }
+    .topbar h5 { margin: 0; font-weight: 600; }
+    .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.07); margin-bottom: 20px; }
+    .card-header { background: white; border-bottom: 1px solid #f0f0f0; border-radius: 12px 12px 0 0 !important; padding: 14px 20px; font-weight: 600; }
+    table { font-size: 0.86rem; }
+    th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: #888; font-weight: 600; }
+    .category-header td { background: #f8f9fb; font-weight: 700; font-size: 0.88rem; color: #1a1a2e; }
+    .subtotal-row td { background: #f0f4ff; font-weight: 700; border-top: 2px solid #e0e7ff; }
+    .grand-total td { background: #1a1a2e; color: white; font-weight: 700; font-size: 0.92rem; }
+    .comparison-row td { background: #fafafa; font-size: 0.82rem; color: #666; }
+    .stat-pill { background: white; border-radius: 10px; padding: 14px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); text-align: center; }
+    .stat-pill .val { font-size: 1.6rem; font-weight: 700; }
+    .stat-pill .lbl { font-size: 0.74rem; color: #888; margin-top: 2px; }
+    .confirm-yes { color: #16a34a; }
+    .confirm-no { color: #dc2626; }
+    .confirm-null { color: #9ca3af; }
+    .pct-green { color: #16a34a; font-weight: 600; }
+    .pct-orange { color: #ea580c; font-weight: 600; }
+    .pct-red { color: #dc2626; font-weight: 600; }
+    .btn-export { background: #1a1a2e; color: white; border: none; border-radius: 8px; padding: 9px 22px; font-weight: 600; font-size: 0.88rem; }
+    .btn-export:hover { background: #2d2d4e; color: white; }
+  </style>
+</head>
+<body>
+
+<div class="topbar d-flex justify-content-between align-items-center">
+  <h5>📄 Monthly Expense Report</h5>
+  <a href="/dashboard" class="btn btn-sm btn-light">← Dashboard</a>
+</div>
+
+<div class="container-fluid py-3 px-3 px-md-4" style="max-width:1100px">
+
+  <!-- Controls -->
+  <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+    <select class="form-select form-select-sm w-auto" id="sel-month" onchange="loadReport()"></select>
+    <button class="btn-export" onclick="exportExcel()">⬇ Export to Excel (ACC27)</button>
+    <span id="export-status" class="text-muted small"></span>
+  </div>
+
+  <!-- Summary pills -->
+  <div class="row g-3 mb-3" id="summary-pills"></div>
+
+  <!-- 3-column comparison banner -->
+  <div class="card mb-3">
+    <div class="card-body p-0">
+      <table class="table mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3" style="width:30%">Category</th>
+            <th>FY26 Actual</th>
+            <th>FY27 Budget</th>
+            <th>FY27 Actual</th>
+            <th>vs Budget</th>
+          </tr>
+        </thead>
+        <tbody id="comparison-table"><tr><td colspan="5" class="text-center p-4 text-muted">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Itemised transactions by category -->
+  <div class="card">
+    <div class="card-header">All Transactions — <span id="report-month-label"></span></div>
+    <div class="card-body p-0">
+      <table class="table mb-0" id="txn-table">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Date</th>
+            <th>Vendor</th>
+            <th>Description</th>
+            <th>Payment</th>
+            <th>Amount</th>
+            <th>Confirmed</th>
+          </tr>
+        </thead>
+        <tbody id="txn-body"><tr><td colspan="6" class="text-center p-4 text-muted">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const INR = n => '₹' + Number(n||0).toLocaleString('en-IN');
+const L   = n => '₹' + (Number(n||0)/100000).toFixed(2) + 'L';
+const cap = s => (s||'').replace(/\b\w/g, c=>c.toUpperCase());
+
+// Populate month selector (last 12 months)
+function populateMonths() {
+  const sel = document.getElementById('sel-month');
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const label = d.toLocaleString('default', {month:'long', year:'numeric'});
+    const opt = document.createElement('option');
+    opt.value = val; opt.textContent = label;
+    if (i === 0) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+async function loadReport() {
+  const month = document.getElementById('sel-month').value;
+  document.getElementById('report-month-label').textContent = document.getElementById('sel-month').selectedOptions[0]?.text || '';
+
+  const [expenses, mis] = await Promise.all([
+    fetch('/api/expenses').then(r=>r.json()).catch(()=>[]),
+    fetch('/api/mis').then(r=>r.json()).catch(()=>({})),
+  ]);
+
+  const approved = expenses.filter(e =>
+    ['AUTO_APPROVE','APPROVED','APPROVED_LOWER'].includes(e.action) &&
+    (e.timestamp||'').startsWith(month)
+  );
+
+  // Summary pills
+  const total = approved.reduce((s,e)=>s+(e.approved_amount||e.amount||0), 0);
+  const confirmed = approved.filter(e=>e.confirmed_paid===true).length;
+  const cash = approved.filter(e=>e.payment_method==='cash').reduce((s,e)=>s+(e.approved_amount||e.amount||0),0);
+  const upi = total - cash;
+  document.getElementById('summary-pills').innerHTML = [
+    {val:INR(total), lbl:'Total Spend', cls:'text-dark'},
+    {val:INR(upi),   lbl:'Bank / UPI', cls:'text-primary'},
+    {val:INR(cash),  lbl:'Cash', cls:'text-warning'},
+    {val:`${confirmed}/${approved.length}`, lbl:'Confirmed Paid', cls: confirmed===approved.length?'text-success':'text-danger'},
+  ].map(p=>`<div class="col-6 col-md-3"><div class="stat-pill"><div class="val ${p.cls}">${p.val}</div><div class="lbl">${p.lbl}</div></div></div>`).join('');
+
+  // 3-column comparison
+  const rows = mis.rows || [];
+  const compTbody = document.getElementById('comparison-table');
+  if (!rows.length) {
+    compTbody.innerHTML = '<tr><td colspan="5" class="text-center p-3 text-muted">No budget data.</td></tr>';
+  } else {
+    let compTotal = {fy26:0, budget:0, actual:0};
+    compTbody.innerHTML = rows.map(r => {
+      compTotal.fy26 += r.fy26_actual||0;
+      compTotal.budget += r.fy27_budget||0;
+      compTotal.actual += r.fy27_actual||0;
+      const pct = r.pct||0;
+      const pctCls = pct>100?'pct-red':pct>80?'pct-orange':'pct-green';
+      const icon = pct>100?'🔴':pct>80?'⚠️':'✅';
+      return `<tr>
+        <td class="ps-3">${cap(r.category)}</td>
+        <td class="text-muted">${L(r.fy26_actual)}</td>
+        <td>${L(r.fy27_budget)}</td>
+        <td class="fw-bold">${L(r.fy27_actual)}</td>
+        <td class="${pctCls}">${pct}% ${icon}</td>
+      </tr>`;
+    }).join('') + `<tr style="background:#f0f4ff;font-weight:700">
+      <td class="ps-3">TOTAL</td>
+      <td class="text-muted">${L(compTotal.fy26)}</td>
+      <td>${L(compTotal.budget)}</td>
+      <td class="fw-bold">${L(compTotal.actual)}</td>
+      <td></td>
+    </tr>`;
+  }
+
+  // Itemised by category
+  const byCategory = {};
+  approved.forEach(e => {
+    const cat = e.category || 'miscellaneous';
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(e);
+  });
+
+  const txnBody = document.getElementById('txn-body');
+  if (!approved.length) {
+    txnBody.innerHTML = '<tr><td colspan="6" class="text-center p-4 text-muted">No approved expenses for this month.</td></tr>';
+    return;
+  }
+
+  let html = '';
+  let grandTotal = 0;
+
+  Object.keys(byCategory).sort().forEach(cat => {
+    const items = byCategory[cat];
+    const catTotal = items.reduce((s,e)=>s+(e.approved_amount||e.amount||0),0);
+    grandTotal += catTotal;
+
+    html += `<tr class="category-header"><td colspan="6" class="ps-3">${cap(cat)}</td></tr>`;
+    items.forEach(e => {
+      const amt = e.approved_amount || e.amount || 0;
+      const cf = e.confirmed_paid;
+      const cfTag = cf===true ? '<span class="confirm-yes">✅</span>'
+                  : cf===false ? '<span class="confirm-no">❌</span>'
+                  : '<span class="confirm-null">—</span>';
+      html += `<tr>
+        <td class="ps-3 text-muted">${(e.timestamp||'').slice(0,10)}</td>
+        <td>${e.vendor||'—'}</td>
+        <td><small>${e.description||'—'}</small></td>
+        <td><small class="text-muted">${e.payment_method||'—'}</small></td>
+        <td class="fw-semibold">${INR(amt)}</td>
+        <td>${cfTag}</td>
+      </tr>`;
+    });
+
+    html += `<tr class="subtotal-row">
+      <td colspan="4" class="ps-3 text-end pe-3">Subtotal — ${cap(cat)}</td>
+      <td class="fw-bold">${INR(catTotal)}</td><td></td>
+    </tr>`;
+  });
+
+  html += `<tr class="grand-total">
+    <td colspan="4" class="ps-3 text-end pe-3">GRAND TOTAL</td>
+    <td>${INR(grandTotal)}</td><td></td>
+  </tr>`;
+
+  txnBody.innerHTML = html;
+}
+
+async function exportExcel() {
+  const month = document.getElementById('sel-month').value;
+  const status = document.getElementById('export-status');
+  status.textContent = 'Exporting...';
+  const res = await fetch(`/export?month=${month}`).then(r=>r.json()).catch(()=>({status:'error'}));
+  status.textContent = res.status === 'exported' ? `✅ Saved to ${res.file}` : '⚠️ Export failed';
+}
+
+populateMonths();
+loadReport();
+</script>
+</body>
+</html>
