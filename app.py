@@ -144,105 +144,114 @@ def api_reconcile_log():
 def api_mis():
     """Return MIS data grouped by super-category.
     Query param: period = month | quarter | ytd  (default: month)
+
+    FY26 column always shows the full-year FY26 actual (from fy26_actuals.json).
+    FY27 Budget:
+      - month/quarter: scaled to period months
+      - ytd: full-year annual budget
+    FY27 Actual: what's been approved in the period (month/quarter/ytd).
     """
     period = request.args.get("period", "month")
 
     with open(os.path.join(CONFIG_DIR, "budget_fy27.json")) as f:
         budget_monthly = json.load(f)["monthly"]
 
-    acc26 = _load_json(os.path.join(DATA_DIR, "acc26_history.json"))
+    # FY26 actuals by ACC26 heading (e.g. "Groceries", "Staff Salary")
+    fy26_by_heading = _load_json(os.path.join(DATA_DIR, "fy26_actuals.json")) or {}
+    if isinstance(fy26_by_heading, list):
+        fy26_by_heading = {}  # handle empty/old format
+
     log = _load_json(APPROVAL_LOG)
 
-    # ── Period date range ─────────────────────────────────────────────────────
+    # ── Period months ─────────────────────────────────────────────────────────
     now = datetime.now()
-    cal_month = now.month  # 1-12
+    cal_month = now.month
+    fy_start_year = now.year if cal_month >= 4 else now.year - 1
 
-    def _fy_months_for_period(period):
-        """Return list of 'YYYY-MM' strings covered by the requested period."""
-        # FY starts April. FY month 1 = Apr, 3 = Jun, 6 = Sep, 9 = Dec, 12 = Mar
-        fy_start_year = now.year if cal_month >= 4 else now.year - 1  # Apr of FY start
+    def _period_months(period):
         if period == "month":
             return [now.strftime("%Y-%m")]
         elif period == "quarter":
-            # Which FY quarter is current month in?
-            fy_month = (cal_month - 4) % 12 + 1  # Apr=1 … Mar=12
-            q_start_fy = ((fy_month - 1) // 3) * 3 + 1  # 1,4,7,10
+            fy_month = (cal_month - 4) % 12 + 1
+            q_start_fy = ((fy_month - 1) // 3) * 3 + 1
             months = []
             for offset in range(3):
-                cm = (q_start_fy - 1 + offset) % 12  # 0-indexed calendar offset from Apr
-                cal = (cm + 4 - 1) % 12 + 1  # back to calendar month
+                cm_idx = (q_start_fy - 1 + offset) % 12
+                cal = (cm_idx + 4 - 1) % 12 + 1
                 yr = fy_start_year if cal >= 4 else fy_start_year + 1
                 months.append(f"{yr}-{cal:02d}")
             return months
-        else:  # ytd — Apr of FY to current month
-            months = []
-            cm = 4  # start April
-            yr = fy_start_year
+        else:  # ytd
+            months, cm, yr = [], 4, fy_start_year
             while True:
                 months.append(f"{yr}-{cm:02d}")
                 if yr == now.year and cm == cal_month:
                     break
                 cm += 1
                 if cm == 13:
-                    cm = 1
-                    yr += 1
+                    cm, yr = 1, yr + 1
             return months
 
-    period_months = _fy_months_for_period(period)
+    period_months = _period_months(period)
     n_months = len(period_months)
 
-    # ── Super-category mapping (app category → ACC26 super-category) ──────────
-    # Based on ExpenseSummary from ACC26ver5_MASTER.xlsx
+    # ── Mappings ──────────────────────────────────────────────────────────────
+    # App category → ACC26 headings (for pulling FY26 data)
+    CAT_TO_HEADINGS = {
+        "groceries":     ["Groceries"],
+        "staff":         ["Staff Salary"],
+        "utilities":     ["Electricity & Gas"],
+        "miscellaneous": ["Misc"],
+        "personal_care": ["Wellness"],
+        "clothing":      ["Clothes"],
+        "gifts":         ["Gifts"],
+        "medical":       ["Medical"],
+        "education":     ["Children Education"],
+        "dining":        ["Eating Out"],
+        "entertainment": ["Entertainment"],
+        "transport":     ["Holiday"],
+        "maintenance":   ["Maintenance Expense", "Kalpataru Maintenance"],
+        "home_repair":   ["One Time Charge", "Home office"],
+    }
+    # App category → super-category
     SUPER_CAT = {
-        "groceries":     "Household",
-        "staff":         "Household",
-        "utilities":     "Household",
-        "miscellaneous": "Household",
+        "groceries": "Household", "staff": "Household",
+        "utilities": "Household", "miscellaneous": "Household",
         "personal_care": "Personal",
-        "clothing":      "Family",
-        "gifts":         "Family",
-        "medical":       "Family",
-        "education":     "Family",
-        "dining":        "Lifestyle",
-        "entertainment": "Lifestyle",
-        "transport":     "Lifestyle",
-        "maintenance":   "Property",
-        "home_repair":   "Property",
+        "clothing": "Family", "gifts": "Family",
+        "medical": "Family", "education": "Family",
+        "dining": "Lifestyle", "entertainment": "Lifestyle", "transport": "Lifestyle",
+        "maintenance": "Property", "home_repair": "Property",
     }
     SUPER_ORDER = ["Household", "Personal", "Family", "Giving", "Lifestyle", "Property", "Financial"]
 
-    # ── FY26 annual totals per category → scale to period ────────────────────
-    fy26_annual: dict = {}
-    for e in acc26:
-        cat = e.get("category", "miscellaneous")
-        fy26_annual[cat] = fy26_annual.get(cat, 0) + e.get("amount", 0)
-    # Scale: monthly avg × n_months
-    fy26_period = {k: round(v / 12 * n_months) for k, v in fy26_annual.items()}
+    # ── FY26 full-year per app-category (sum of mapped headings) ─────────────
+    def _fy26_for_cat(cat):
+        return sum(fy26_by_heading.get(h, 0) for h in CAT_TO_HEADINGS.get(cat, []))
 
-    # ── FY27 budget scaled to period ─────────────────────────────────────────
-    budget_period = {k: v * n_months for k, v in budget_monthly.items()}
+    # ── FY27 budget: full year for ytd, scaled for month/quarter ─────────────
+    def _budget_for_cat(cat):
+        monthly = budget_monthly.get(cat, 0)
+        return monthly * 12 if period == "ytd" else monthly * n_months
 
-    # ── FY27 actual for period ────────────────────────────────────────────────
+    # ── FY27 actual for the period ────────────────────────────────────────────
     fy27_actual: dict = {}
     for e in log:
         if e.get("action") not in ("AUTO_APPROVE", "APPROVED", "APPROVED_LOWER"):
             continue
-        ts = (e.get("timestamp") or "")[:7]
-        if ts not in period_months:
+        if (e.get("timestamp") or "")[:7] not in period_months:
             continue
         cat = e.get("category", "miscellaneous")
         amt = e.get("approved_amount") or e.get("amount", 0)
         fy27_actual[cat] = fy27_actual.get(cat, 0) + amt
 
     # ── Build grouped rows ────────────────────────────────────────────────────
-    all_cats = set(list(budget_monthly.keys()) + list(fy27_actual.keys()))
     by_super: dict = {s: [] for s in SUPER_ORDER}
-
-    for cat in sorted(all_cats):
+    for cat in sorted(budget_monthly.keys()):
         super_cat = SUPER_CAT.get(cat, "Household")
-        budget = budget_period.get(cat, 0)
+        fy26 = round(_fy26_for_cat(cat))
+        budget = _budget_for_cat(cat)
         actual = round(fy27_actual.get(cat, 0))
-        fy26 = fy26_period.get(cat, 0)
         pct = round(actual / budget * 100) if budget else 0
         by_super.setdefault(super_cat, []).append({
             "category": cat,
@@ -252,6 +261,27 @@ def api_mis():
             "pct": pct,
         })
 
+    # Add FY26-only super-categories (Giving, Financial) as reference rows
+    HEADING_SUPER = {
+        "Charity": "Giving", "Uspaar": "Giving",
+        "Financial Expense / OD Interest": "Financial",
+        "Insurance": "Financial", "Home Loan": "Financial", "Tax": "Financial",
+        "Amma": "Family", "Ketki": "Family",
+        "Malhar": "Property", "Cash": "Household", "Alcohol": "Personal",
+    }
+    already_mapped = {h for cat in CAT_TO_HEADINGS.values() for h in cat}
+    for heading, fy26_amt in fy26_by_heading.items():
+        if heading in already_mapped:
+            continue
+        super_cat = HEADING_SUPER.get(heading, "Household")
+        by_super.setdefault(super_cat, []).append({
+            "category": heading,
+            "fy26_actual": round(fy26_amt),
+            "fy27_budget": 0,
+            "fy27_actual": 0,
+            "pct": 0,
+        })
+
     groups = []
     grand = {"fy26": 0, "budget": 0, "actual": 0}
     for super_cat in SUPER_ORDER:
@@ -259,12 +289,12 @@ def api_mis():
         if not rows:
             continue
         sub = {
-            "fy26": sum(r["fy26_actual"] for r in rows),
+            "fy26":   sum(r["fy26_actual"] for r in rows),
             "budget": sum(r["fy27_budget"] for r in rows),
             "actual": sum(r["fy27_actual"] for r in rows),
         }
         sub["pct"] = round(sub["actual"] / sub["budget"] * 100) if sub["budget"] else 0
-        grand["fy26"] += sub["fy26"]
+        grand["fy26"]   += sub["fy26"]
         grand["budget"] += sub["budget"]
         grand["actual"] += sub["actual"]
         groups.append({"super_category": super_cat, "rows": rows, "subtotal": sub})

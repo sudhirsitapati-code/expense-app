@@ -500,6 +500,19 @@ async function loadMIS() {
     return {fill, cls, icon};
   }
 
+  // Update column headers based on period
+  const fy26Label = 'FY26 Full Year';
+  const budgetLabel = _misPeriod === 'ytd' ? 'FY27 Annual Budget' : 'FY27 Budget';
+  const actualLabel = _misPeriod === 'ytd' ? 'FY27 YTD Actual' : _misPeriod === 'quarter' ? 'FY27 Qtr Actual' : 'FY27 Month Actual';
+  document.querySelectorAll('#mis-table').forEach(()=>{});
+  const hdr = document.querySelector('#tab-mis thead tr');
+  if (hdr) {
+    const ths = hdr.querySelectorAll('th');
+    if (ths[1]) ths[1].textContent = fy26Label;
+    if (ths[2]) ths[2].textContent = budgetLabel;
+    if (ths[3]) ths[3].textContent = actualLabel;
+  }
+
   let html = '';
   groups.forEach(group => {
     const sc = group.super_category;
