@@ -158,14 +158,14 @@ Reply ONLY with JSON."""
             self._save_to_log(req, decision)
             return decision
 
-        # Rule 3: Under Rs 10,000 and not blowing the budget — auto-approve
-        if req.amount < 10000 and not self._budget_alert(req.category, req.amount):
+        # Rule 3: Small amount — auto-approve
+        if req.amount < 5000 and not self._budget_alert(req.category, req.amount):
             decision.action = "AUTO_APPROVE"
-            decision.reason = "Amount under Rs 10,000 and within budget"
+            decision.reason = "Amount < Rs 5,000 and within budget"
             self._save_to_log(req, decision)
             return decision
 
-        # Rule 4: Market check (only for Rs 10,000+)
+        # Rule 4: Market check
         market_result = self.market_checker.check(
             description=req.description, vendor=req.vendor,
             amount=req.amount, category=req.category
@@ -174,18 +174,19 @@ Reply ONLY with JSON."""
         decision.market_rate = market_result.get("rate_range")
         decision.budget_alert = self._budget_alert(req.category, req.amount)
 
-        # Rule 5: Escalate only for large amounts or clearly overpriced quotes
-        # Rs 10k–75k: auto-approve unless price is very_high
-        # > Rs 75k: always ask
-        if req.amount > 75000:
+        # Rule 5: Thresholds
+        if req.amount > 30000:
             decision.action = "ESCALATE"
-            decision.reason = f"Amount Rs {req.amount:,.0f} — above Rs 75,000 threshold"
+            decision.reason = "Amount > Rs 30,000"
         elif decision.market_status == "very_high":
             decision.action = "ESCALATE"
-            decision.reason = f"Quote significantly above market rate ({decision.market_rate})"
+            decision.reason = f"Quote >30% above market rate ({decision.market_rate})"
+        elif req.amount >= 5000:
+            decision.action = "ESCALATE"
+            decision.reason = "Amount Rs 5,000–30,000: requires approval"
         else:
             decision.action = "AUTO_APPROVE"
-            decision.reason = "Within threshold, price looks reasonable"
+            decision.reason = "Within threshold, market rate OK"
 
         if decision.action == "ESCALATE":
             market_note = ""
