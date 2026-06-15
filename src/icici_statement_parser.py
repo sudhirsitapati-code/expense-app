@@ -268,17 +268,13 @@ def fetch_and_parse_statements(force_reprocess: bool = False) -> dict:
     new_count = 0
     statements_processed = 0
 
-    labels_result = service.users().labels().list(userId="me").execute()
-    label_id = next(
-        (l["id"] for l in labels_result.get("labels", []) if l["name"] == ICICI_LABEL),
-        None
-    )
-    if not label_id:
-        print(f"Gmail label '{ICICI_LABEL}' not found.")
-        return {"statements": 0, "transactions": len(existing), "new": 0}
-
+    # Search by sender + PDF attachment — works without needing a Gmail label
     messages_result = service.users().messages().list(
-        userId="me", labelIds=[label_id], maxResults=50
+        userId="me",
+        q="(from:customernotification@icici.bank.in OR from:alert@icici.bank.in "
+          "OR from:estatement@icici.bank.in) "
+          "has:attachment filename:pdf",
+        maxResults=50
     ).execute()
 
     for msg_ref in messages_result.get("messages", []):
