@@ -20,6 +20,7 @@ from src.master_ledger import (
     sync_from_gmail as ledger_sync_gmail,
     get_cc_balance, reconcile_with_approvals,
     import_from_icici_transactions,
+    repair_pdf_descriptions,
 )
 from src.whatsapp_handler import (
     build_twiml_reply, parse_incoming,
@@ -708,6 +709,10 @@ def api_ledger_sync():
 
     pdf_imported = import_from_icici_transactions()
     result["pdf_imported"] = pdf_imported
+
+    # Backfill descriptions on any blank-description pdf_import entries
+    repaired = repair_pdf_descriptions()
+    result["pdf_repaired"] = repaired
 
     # Reconcile SBI/ICICI entries with approval log
     log = _load_json(APPROVAL_LOG)

@@ -894,8 +894,8 @@ def import_from_icici_transactions() -> int:
             dt = datetime.now()
         fy = _fy_info(dt)
 
-        debit  = t.get("amount", 0) if t.get("type") == "debit" else 0
-        credit = t.get("amount", 0) if t.get("type") == "credit" else 0
+        debit  = t.get("debit") or (t.get("amount", 0) if t.get("type") == "debit" else 0)
+        credit = t.get("credit") or (t.get("amount", 0) if t.get("type") == "credit" else 0)
 
         txn = {
             "txn_id":          txn_id,
@@ -906,7 +906,7 @@ def import_from_icici_transactions() -> int:
             "account":         t.get("account", "ICICI-????"),
             "account_type":    "savings",
             "bank":            "ICICI",
-            "raw_description": t.get("description", ""),
+            "raw_description": t.get("transaction_details") or t.get("description", ""),
             "paid_to":         t.get("paid_to", ""),
             "debit":           debit,
             "credit":          credit,
@@ -937,6 +937,36 @@ def import_from_icici_transactions() -> int:
         _save_json(LEDGER_PATH, existing)
 
     return added
+
+
+def repair_pdf_descriptions() -> int:
+    """
+    Backfill raw_description and classification from icici_transactions into
+    ledger entries that have blank descriptions (imported before the field-name fix).
+    Returns count of repaired entries.
+    """
+    ledger = _load_json(LEDGER_PATH)
+    source_map = {t.get("txn_id"): t for t in _db.load("icici_transactions") if t.get("txn_id")}
+    repaired = 0
+    for txn in ledger:
+        if txn.get("raw_description") or txn.get("source") != "pdf_import":
+            continue
+        src = source_map.get(txn["txn_id"])
+        if not src:
+            continue
+        txn["raw_description"] = src.get("transaction_details") or src.get("description", "")
+        if not txn.get("type") and src.get("acc_type"):
+            txn["type"] = src["acc_type"]
+        if not txn.get("heading") and src.get("heading"):
+            txn["heading"] = src["heading"]
+        if not txn.get("paid_to") and src.get("paid_to"):
+            txn["paid_to"] = src["paid_to"]
+        if txn["raw_description"] and not txn.get("type"):
+            txn = classify_transaction(txn)
+        repaired += 1
+    if repaired:
+        _save_json(LEDGER_PATH, ledger)
+    return repaired
 
 
 def load_ledger() -> list:
