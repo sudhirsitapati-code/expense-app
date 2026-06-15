@@ -278,8 +278,12 @@ def api_mis():
         "maintenance":"Maintenance Expense","home_repair":"One Time Charge",
     }
 
-    # ── FY26 full-year actual (always shown as annual benchmark) ─────────────
+    # ── FY26 for period: sum actual monthly data for the matched FY months ────
     def _fy26_period(heading):
+        monthly = FY26_MONTHLY.get(heading, {})
+        return max(0, sum(monthly.get(m, 0) for m in fy_mon_names))
+
+    def _fy26_full_year(heading):
         monthly = FY26_MONTHLY.get(heading, {})
         return max(0, sum(monthly.values()))
 
@@ -311,16 +315,19 @@ def api_mis():
         budget = _budget(heading)
         actual = round(fy27_actual.get(heading, 0))
         pct = round(actual / budget * 100) if budget else 0
-        by_super.setdefault(super_cat, []).append({
+        row = {
             "category": heading,
             "fy26_actual": fy26,
             "fy27_budget": budget,
             "fy27_actual": actual,
             "pct": pct,
-        })
+        }
+        if period == "ytd":
+            row["fy26_full_year"] = round(_fy26_full_year(heading))
+        by_super.setdefault(super_cat, []).append(row)
 
     groups = []
-    grand = {"fy26": 0, "budget": 0, "actual": 0}
+    grand = {"fy26": 0, "fy26_full_year": 0, "budget": 0, "actual": 0}
     for super_cat in SUPER_ORDER:
         rows = by_super.get(super_cat, [])
         if not rows:
@@ -330,6 +337,9 @@ def api_mis():
             "budget": sum(r["fy27_budget"] for r in rows),
             "actual": sum(r["fy27_actual"] for r in rows),
         }
+        if period == "ytd":
+            sub["fy26_full_year"] = sum(r.get("fy26_full_year", 0) for r in rows)
+            grand["fy26_full_year"] += sub["fy26_full_year"]
         sub["pct"] = round(sub["actual"] / sub["budget"] * 100) if sub["budget"] else 0
         grand["fy26"]   += sub["fy26"]
         grand["budget"] += sub["budget"]
