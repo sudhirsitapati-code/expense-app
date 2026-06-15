@@ -12,6 +12,7 @@ from flask import Flask, request, render_template, jsonify
 
 from src.approval_engine import ApprovalEngine, ExpenseRequest
 from src.reconcile import run_reconciliation
+from src.icici_statement_parser import fetch_and_parse_statements
 from src.acc27_writer import sync_approved_to_history, export_monthly_excel
 from src.whatsapp_handler import (
     build_twiml_reply,
@@ -219,6 +220,27 @@ def api_expenses():
 @app.route("/health", methods=["GET"])
 def health():
     return {"status": "ok"}, 200
+
+
+@app.route("/api/transactions", methods=["GET"])
+def api_transactions():
+    path = os.path.join(os.path.dirname(__file__), "data", "icici_transactions.json")
+    if not os.path.exists(path):
+        return jsonify([])
+    with open(path) as f:
+        try:
+            return jsonify(json.load(f))
+        except json.JSONDecodeError:
+            return jsonify([])
+
+
+@app.route("/api/sync-statements", methods=["POST"])
+def sync_statements():
+    try:
+        result = fetch_and_parse_statements()
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route("/export", methods=["GET"])

@@ -56,7 +56,10 @@
 
 <header>
   <h1>🏠 Household Expense Dashboard</h1>
-  <button class="refresh" onclick="location.reload()">↻ Refresh</button>
+  <div style="display:flex;gap:10px">
+    <button class="refresh" id="sync-btn" onclick="syncStatements()">⬇ Sync ICICI Statements</button>
+    <button class="refresh" onclick="location.reload()">↻ Refresh</button>
+  </div>
 </header>
 
 <div class="container">
@@ -83,6 +86,12 @@
       <div class="label">Total Spend (Month)</div>
       <div class="value" id="total-spend">—</div>
     </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="filters" style="margin-bottom:20px">
+    <button class="filter-btn active tab-btn" id="tab-expenses" onclick="switchTab('expenses')">📋 Expense Approvals</button>
+    <button class="filter-btn tab-btn" id="tab-transactions" onclick="switchTab('transactions')">🏦 ICICI Transactions</button>
   </div>
 
   <!-- Filters -->
@@ -188,19 +197,82 @@
     document.getElementById('total-spend').textContent = formatAmount(monthSpend);
   }
 
-  fetch('/api/expenses')
-    .then(r => r.json())
-    .then(data => {
-      allData = data;
-      renderTable(data);
-      updateStats(data);
-    })
-    .catch(() => {
-      document.getElementById('table-body').innerHTML = '<tr><td colspan="8" class="empty">No expense data yet. Submit an expense via WhatsApp to get started!</td></tr>';
-      ['count-auto','count-approved','count-pending','count-rejected','total-spend'].forEach(id => {
-        document.getElementById(id).textContent = '0';
+  // Tab state
+  let activeTab = 'expenses';
+
+  function switchTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    if (tab === 'expenses') loadExpenses();
+    else loadTransactions();
+  }
+
+  function loadExpenses() {
+    fetch('/api/expenses')
+      .then(r => r.json())
+      .then(data => {
+        allData = data;
+        renderTable(data);
+        updateStats(data);
+      })
+      .catch(() => {
+        document.getElementById('table-body').innerHTML = '<tr><td colspan="8" class="empty">No expense data yet. Submit an expense via WhatsApp to get started!</td></tr>';
+        ['count-auto','count-approved','count-pending','count-rejected','total-spend'].forEach(id => {
+          document.getElementById(id).textContent = '0';
+        });
       });
-    });
+  }
+
+  function loadTransactions() {
+    fetch('/api/transactions')
+      .then(r => r.json())
+      .then(data => {
+        const tbody = document.getElementById('table-body');
+        if (!data.length) {
+          tbody.innerHTML = '<tr><td colspan="8" class="empty">No ICICI transactions yet. Click "Sync ICICI Statements" to load.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.slice().reverse().map(t => `
+          <tr>
+            <td class="meta">${t.date || '—'}</td>
+            <td colspan="2"><strong>${t.description || '—'}</strong></td>
+            <td class="meta">—</td>
+            <td class="amount" style="color:${t.type === 'credit' ? '#16a34a' : '#dc2626'}">
+              ${t.type === 'credit' ? '+' : '-'}₹${Number(t.amount).toLocaleString('en-IN')}
+            </td>
+            <td class="meta">${t.type}</td>
+            <td><span class="badge ${t.type === 'credit' ? 'approved' : 'escalate'}">${t.type === 'credit' ? 'Credit' : 'Debit'}</span></td>
+            <td class="meta">ICICI</td>
+          </tr>
+        `).join('');
+      });
+  }
+
+  function syncStatements() {
+    const btn = document.getElementById('sync-btn');
+    btn.textContent = '⏳ Syncing...';
+    btn.disabled = true;
+    fetch('/api/sync-statements', { method: 'POST' })
+      .then(r => r.json())
+      .then(result => {
+        btn.textContent = `⬇ Sync ICICI Statements`;
+        btn.disabled = false;
+        if (result.status === 'ok') {
+          alert(`✅ Synced ${result.statements} statement(s), ${result.new} new transaction(s) imported.`);
+          if (activeTab === 'transactions') loadTransactions();
+        } else {
+          alert('Error: ' + result.message);
+        }
+      })
+      .catch(() => {
+        btn.textContent = '⬇ Sync ICICI Statements';
+        btn.disabled = false;
+        alert('Sync failed. Check your connection.');
+      });
+  }
+
+  loadExpenses();
 </script>
 </body>
 </html>
