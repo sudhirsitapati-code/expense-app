@@ -1036,9 +1036,31 @@ def repair_pdf_descriptions() -> int:
                 txn["uncertain"] = True
 
         repaired += 1
-    if repaired:
+
+    # Second pass: reclassify ANY non-manual entry with a description but bad heading
+    # (catches gmail_alert entries that were classified before rule updates)
+    BAD_HEADINGS = {"Unknown", "Misc", "", None}
+    reclassified = 0
+    for txn in ledger:
+        if txn.get("confidence") == "manual":
+            continue
+        if txn.get("heading") not in BAD_HEADINGS:
+            continue
+        desc = txn.get("raw_description", "")
+        if not desc:
+            continue
+        classified = classify_transaction(dict(txn))
+        new_type    = classified.get("type", "")
+        new_heading = classified.get("heading", "")
+        if new_type and new_heading and new_heading not in BAD_HEADINGS:
+            txn["type"]    = new_type
+            txn["heading"] = new_heading
+            txn["paid_to"] = txn.get("paid_to") or classified.get("paid_to", "")
+            reclassified += 1
+
+    if repaired or reclassified:
         _save_json(LEDGER_PATH, ledger)
-    return repaired
+    return repaired + reclassified
 
 
 def load_ledger() -> list:
