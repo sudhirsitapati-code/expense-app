@@ -513,11 +513,31 @@ async function loadMIS() {
     if (ths[3]) ths[3].textContent = actualLabel;
   }
 
+  const OPERATIONAL = ["Household","Personal","Family","Giving","Lifestyle","Property"];
+
   let html = '';
+  let opTotal = {fy26:0, budget:0, actual:0};
+  let opInserted = false;
+
   groups.forEach(group => {
     const sc = group.super_category;
     const sub = group.subtotal;
     const {fill, cls, icon} = pctBar(sub.pct||0);
+
+    // Insert Operational Expenses subtotal before Financial
+    if (sc === 'Financial' && !opInserted) {
+      opInserted = true;
+      const opPct = opTotal.budget ? Math.round(opTotal.actual/opTotal.budget*100) : 0;
+      const {fill:of,cls:oc} = pctBar(opPct);
+      html += `<tr style="background:#1e3a5f;color:white;border-top:3px solid #60a5fa">
+        <td class="ps-3 fw-bold" style="font-size:0.82rem;letter-spacing:0.04em">OPERATIONAL EXPENSES</td>
+        <td class="text-end fw-bold">${L(opTotal.fy26)}</td>
+        <td class="text-end fw-bold">${L(opTotal.budget)}</td>
+        <td class="text-end fw-bold">${L(opTotal.actual)}</td>
+        <td class="text-end fw-bold">${opPct}%</td>
+        <td><div class="budget-bar" style="background:rgba(255,255,255,0.2)"><div class="budget-fill" style="width:${Math.min(opPct,100)}%;background:#60a5fa"></div></div></td>
+      </tr>`;
+    }
 
     // Super-category header row
     html += `<tr style="background:#eef2ff;border-top:2px solid #c7d2fe">
@@ -541,6 +561,13 @@ async function loadMIS() {
         <td><div class="budget-bar"><div class="budget-fill" style="width:${Math.min(r.pct,100)}%;background:${rf}"></div></div></td>
       </tr>`;
     });
+
+    // Accumulate operational total for all non-Financial super-categories
+    if (OPERATIONAL.includes(sc)) {
+      opTotal.fy26   += sub.fy26;
+      opTotal.budget += sub.budget;
+      opTotal.actual += sub.actual;
+    }
   });
 
   // Grand total
