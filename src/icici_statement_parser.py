@@ -224,53 +224,65 @@ def _parse_from_text(text: str) -> list:
     Parse transactions from raw ICICI statement text.
     Handles two column formats:
       - Savings/legacy: ...amount Dr/Cr
-      - Current/e-statement: date mode particulars deposits withdrawals balance
+      - Current/OD e-statement: date particulars deposits withdrawals balance
+    Uses running balance to determine debit/credit direction for single-amount rows.
     """
     transactions = []
 
     # Format 1: ICICI e-statement (current/savings detailed)
-    # Line: DD-MM-YYYY  [MODE]  PARTICULARS  [DEPOSITS]  [WITHDRAWALS]  BALANCE
-    # The line has the date at start; deposits/withdrawals are optional (only one present per row)
+    # Line: DD-MM-YYYY  PARTICULARS  [DEPOSITS]  [WITHDRAWALS]  BALANCE
+    # Note: no MODE token captured — MODE is often absent or part of PARTICULARS
     efmt = re.compile(
         r"^(\d{2}-\d{2}-\d{4})\s+"        # date
-        r"(?:\S+\s+)?"                      # optional MODE token
-        r"(.+?)\s+"                         # particulars (greedy)
+        r"(.+?)\s+"                         # particulars (lazy, stops at first amount)
         r"([\d,]+\.\d{2})\s+"              # amount1
         r"(?:([\d,]+\.\d{2})\s+)?"         # amount2 optional
-        r"(-?[\d,]+\.\d{2})\s*$",          # balance
+        r"(-?[\d,]+\.\d{2})\s*$",          # balance (may be negative for OD accounts)
         re.MULTILINE
     )
+
+    # Extract opening B/F balance so we can track direction from balance changes
+    bf_match = re.search(r"\d{2}-\d{2}-\d{4}\s+B/F\s+(-?[\d,]+\.\d{2})", text, re.IGNORECASE)
+    prev_balance = float(bf_match.group(1).replace(",", "")) if bf_match else None
+
     seen = set()
     for m in efmt.finditer(text):
-        date_str, desc, amt1, amt2, balance = m.groups()
+        date_str, desc, amt1, amt2, balance_str = m.groups()
         desc = desc.strip()
-        # Skip header row
+        # Skip header / B/F / Total rows
         if desc.upper() in ("PARTICULARS", "MODE PARTICULARS", "DATE"):
             continue
-        # Skip B/F (brought forward) line
-        if "B/F" in desc.upper() or "B/F" == desc.strip():
+        if "B/F" in desc.upper():
+            prev_balance = float(balance_str.replace(",", ""))
             continue
-        # Skip Total row
-        if "Total:" in desc or desc.strip() == "Total:":
+        if desc.strip().rstrip(":").upper() == "TOTAL":
             continue
 
-        # If two amounts present, amt1=deposits, amt2=withdrawals
-        # If one amount, check balance direction to decide
+        balance = float(balance_str.replace(",", ""))
+        a1 = float(amt1.replace(",", ""))
+        a2 = float(amt2.replace(",", "")) if amt2 else 0.0
+
         if amt2:
-            dep = float(amt1.replace(",", ""))
-            wdl = float(amt2.replace(",", ""))
-            if wdl > 0:
-                amount, direction = wdl, "debit"
+            # Two amounts present: deposits column and withdrawals column
+            # Pick the non-zero one; withdrawal (debit) takes priority
+            if a2 > 0:
+                amount, direction = a2, "debit"
             else:
-                amount, direction = dep, "credit"
+                amount, direction = a1, "credit"
         else:
-            amount = float(amt1.replace(",", ""))
-            # Heuristic: if balance went more negative → debit
-            direction = "debit"  # default; classifier will refine
+            amount = a1
+            if prev_balance is not None:
+                # Balance went up (or less negative) → credit; down (more negative) → debit
+                direction = "credit" if balance > prev_balance else "debit"
+            else:
+                direction = "debit"  # safe default
+
+        prev_balance = balance
 
         if amount < 1:
             continue
-        key = f"{date_str}|{desc}|{amount}"
+        # Include balance in key so same-amount debit+credit pair aren't deduped
+        key = f"{date_str}|{desc}|{amount}|{balance_str}"
         if key in seen:
             continue
         seen.add(key)
@@ -347,11 +359,12 @@ def fetch_and_parse_statements(force_reprocess: bool = False) -> dict:
     new_count = 0
     statements_processed = 0
 
-    # Search by sender + PDF attachment — works without needing a Gmail label
+    # Search by ICICI sender OR the ICICI label (catches forwarded emails from personal Gmail)
+    label_query = f"label:{ICICI_LABEL.lower().replace(' ', '-')}"
     messages_result = service.users().messages().list(
         userId="me",
-        q="(from:customernotification@icici.bank.in OR from:alert@icici.bank.in "
-          "OR from:estatement@icici.bank.in) "
+        q=f"(from:customernotification@icici.bank.in OR from:alert@icici.bank.in "
+          f"OR from:estatement@icici.bank.in OR {label_query}) "
           "has:attachment filename:pdf",
         maxResults=50
     ).execute()

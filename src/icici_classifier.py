@@ -60,6 +60,12 @@ RULES = [
       "trf/godrej consumer products ltd esgs", "taxs"],
      "Expense", "Tax"),
 
+    # ── OD / CURRENT ACCOUNT INTEREST & BANK CHARGES ─────────────────────────
+    (["int.coll", "int coll", "interest collected", "od interest",
+      "renewal fees", "sgst", "cgst", "bank charges", "service charge",
+      "processing fee", "transfer int"],
+     "Expense", "Financial Expense"),
+
     # ── HOME LOAN / OD INTEREST ───────────────────────────────────────────────
     (["bil/home loan", "home loan xx", "emi sudhir", "xx99508", "xx00382",
       "smp/tbmum", "102205009175"],
@@ -94,7 +100,7 @@ RULES = [
      "Transfer", "Interbank"),
 
     (["trfr to", "transfer to icici", "transfer to hdfc", "transfer to sbi",
-      "neft/", "rtgs/", "imps/"],
+      "neft/", "rtgs/", "imps/", ":transfer ", "007281:"],
      "Transfer", "Interbank"),
 
     # ── KALPATARU MAINTENANCE ─────────────────────────────────────────────────

@@ -293,7 +293,9 @@ def api_mis():
     for e in log:
         if e.get("action") not in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER"):
             continue
-        if (e.get("timestamp") or "")[:7] not in period_months:
+        # Use response_timestamp (when approved) for approved entries, fall back to submission timestamp
+        ts = e.get("response_timestamp") or e.get("timestamp") or ""
+        if ts[:7] not in period_months:
             continue
         heading = APP_TO_HEADING.get(e.get("category","miscellaneous"), "Misc")
         amt = e.get("approved_amount") or e.get("amount", 0)
