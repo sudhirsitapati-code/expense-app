@@ -614,19 +614,26 @@ def api_approvals_structured():
     # Allow caller to pass ?month=YYYY-MM; default to current month
     month_prefix = request.args.get("month") or now.strftime("%Y-%m")
 
-    # All months that have at least one approved entry (for the month picker)
     approved_actions = ("AUTO_APPROVE", "APPROVED", "APPROVED_LOWER")
+
+    def _effective_month(e):
+        """Use approval date for approved entries; submission date for auto-approvals."""
+        if e.get("action") in ("APPROVED", "APPROVED_LOWER"):
+            return (e.get("response_timestamp") or e.get("timestamp",""))[:7]
+        return (e.get("timestamp",""))[:7]
+
+    # All months that have at least one approved entry (for the month picker)
     months_with_data = sorted({
-        (e.get("timestamp",""))[:7]
+        _effective_month(e)
         for e in log
         if (e.get("action") in approved_actions
             or (e.get("action") == "ESCALATE" and "sudhir_response" in e))
-        and len((e.get("timestamp",""))[:7]) == 7
+        and len(_effective_month(e)) == 7
     }, reverse=True)
 
     pending      = [e for e in log if e.get("action") == "ESCALATE" and "sudhir_response" not in e]
     this_month   = [e for e in log
-                    if (e.get("timestamp",""))[:7] == month_prefix
+                    if _effective_month(e) == month_prefix
                     and (e.get("action") in approved_actions
                          or (e.get("action") == "ESCALATE" and "sudhir_response" in e))]
     unauthorized = [e for e in recon if not e.get("matched") and not e.get("is_recurring") and not e.get("ignored")]
