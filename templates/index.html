@@ -285,7 +285,7 @@
   <table class="table table-sm mb-0">
     <thead><tr>
       <th style="width:33%">Category</th>
-      <th class="text-end">FY26 Actual</th>
+      <th class="text-end" id="misColFy26Label">FY26</th>
       <th class="text-end" id="misColFy26FY" style="display:none">FY26 Full Year</th>
       <th class="text-end">FY27 Budget</th>
       <th class="text-end">FY27 Actual</th>
@@ -741,6 +741,12 @@ async function loadMIS(period, btn) {
   const isYtd = period === 'ytd';
   const cols = isYtd ? 6 : 5;
   document.getElementById('misColFy26FY').style.display = isYtd ? '' : 'none';
+  const MONTH_ABBR = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const nowMonth = new Date().getMonth() + 1;
+  const fy26Label = period === 'month' ? `FY26 ${MONTH_ABBR[nowMonth]}`
+                  : period === 'quarter' ? 'FY26 QTD'
+                  : 'FY26 YTD';
+  document.getElementById('misColFy26Label').textContent = fy26Label;
 
   const tbody = document.getElementById('misBody');
   let html = '';
