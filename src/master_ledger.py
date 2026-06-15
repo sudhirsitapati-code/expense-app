@@ -950,20 +950,24 @@ def repair_pdf_descriptions() -> int:
     source_map = {t.get("txn_id"): t for t in _db.load("icici_transactions") if t.get("txn_id")}
     repaired = 0
     for txn in ledger:
-        if txn.get("raw_description") or txn.get("source") != "pdf_import":
+        if txn.get("source") != "pdf_import" or txn.get("confidence") == "manual":
+            continue
+        needs_desc = not txn.get("raw_description")
+        needs_class = not txn.get("type") or not txn.get("heading") or txn.get("heading") == "Unknown"
+        if not needs_desc and not needs_class:
             continue
         src = source_map.get(txn["txn_id"])
-        if not src:
-            continue
-        txn["raw_description"] = src.get("transaction_details") or src.get("description", "")
-        if not txn.get("type") and src.get("acc_type"):
-            txn["type"] = src["acc_type"]
-        if not txn.get("heading") and src.get("heading"):
-            txn["heading"] = src["heading"]
-        if not txn.get("paid_to") and src.get("paid_to"):
+        if needs_desc:
+            if not src:
+                continue
+            txn["raw_description"] = src.get("transaction_details") or src.get("description", "")
+        if not txn.get("paid_to") and src and src.get("paid_to"):
             txn["paid_to"] = src["paid_to"]
-        if txn["raw_description"] and not txn.get("type"):
-            txn = classify_transaction(txn)
+        if needs_class and txn.get("raw_description"):
+            classified = classify_transaction(dict(txn))
+            txn["type"] = classified.get("type") or txn.get("type", "")
+            txn["heading"] = classified.get("heading") or txn.get("heading")
+            txn["paid_to"] = txn.get("paid_to") or classified.get("paid_to", "")
         repaired += 1
     if repaired:
         _save_json(LEDGER_PATH, ledger)

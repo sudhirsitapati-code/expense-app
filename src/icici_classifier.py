@@ -100,7 +100,9 @@ RULES = [
      "Transfer", "Interbank"),
 
     (["trfr to", "transfer to icici", "transfer to hdfc", "transfer to sbi",
-      "neft/", "rtgs/", "imps/", ":transfer ", "007281:"],
+      "neft/", "rtgs/", "imps/", ":transfer ", "007281:", "011331:",
+      "upi/", "upi-", "@okaxis", "@oksbi", "@okicici", "@ybl", "@ibl",
+      "fund transfer", "bil/neft", "bil/imps"],
      "Transfer", "Interbank"),
 
     # ── KALPATARU MAINTENANCE ─────────────────────────────────────────────────
