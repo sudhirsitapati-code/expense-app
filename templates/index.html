@@ -653,12 +653,31 @@ function renderLedger(txns) {
 }
 
 const TYPES    = ['expense','income','investment','transfer','official'];
-const HEADINGS = ['Groceries','Staff Salary','Electricity & Gas','Misc','Cash','Alcohol',
-  'Wellness','Clothes','Gifts','Medical','Amma','Ketki','Children Education','Charity',
-  'Uspaar','Holiday','Eating Out','Entertainment','Malhar','Maintenance Expense',
-  'Home office','One Time Charge','Kalpataru Maintenance',
-  'Financial Expense / OD Interest','Insurance','Home Loan','Tax',
-  'Short Term Advance','Credit Card Loan','Investment'];
+
+const HEADINGS_BY_TYPE = {
+  expense:    ['Groceries','Staff Salary','Electricity & Gas','Cash','Alcohol','Wellness',
+               'Clothes','Gifts','Medical','Amma','Ketki','Children Education','Charity',
+               'Uspaar','Holiday','Eating Out','Entertainment','Malhar','Maintenance Expense',
+               'Home office','One Time Charge','Kalpataru Maintenance',
+               'Financial Expense','Insurance','Home Loan','Tax','Misc'],
+  income:     ['Salary','Refund','Misc'],
+  investment: ['Art','Foreign Investment','GCPL Share Sale','Property Investment',
+               'Loan Repayment','Renovation','Jewelry','Startup','Club','Loans','Uspaar'],
+  transfer:   ['Interbank'],
+  official:   ['Financial Expense'],
+};
+const HEADINGS = [...new Set(Object.values(HEADINGS_BY_TYPE).flat())];
+
+function headingOpts(type, current) {
+  const list = HEADINGS_BY_TYPE[(type||'').toLowerCase()] || HEADINGS;
+  const opts = list.map(h => `<option value="${h}" ${current===h?'selected':''}>${h}</option>`);
+  return ['<option value="">— none —</option>', ...opts].join('');
+}
+
+function refreshHeadings(txnId, type) {
+  const sel = document.getElementById('nsh-' + txnId);
+  if (sel) sel.innerHTML = headingOpts(type, sel.value);
+}
 
 function renderNotSure(txns) {
   const tbody = document.getElementById('notSureBody');
@@ -669,10 +688,8 @@ function renderNotSure(txns) {
   tbody.innerHTML = txns.map(t => {
     const amt     = t.debit || t.credit || 0;
     const typeOpts = TYPES.map(v =>
-      `<option value="${v}" ${t.type===v?'selected':''}>${v}</option>`).join('');
-    const headOpts = ['<option value="">— none —</option>',
-      ...HEADINGS.map(h => `<option value="${h}" ${t.heading===h?'selected':''}>${h}</option>`)
-    ].join('');
+      `<option value="${v}" ${(t.type||'').toLowerCase()===v?'selected':''}>${v}</option>`).join('');
+    const headOpts = headingOpts(t.type, t.heading);
     const serial = (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || '';
     return `<tr id="ns-${t.txn_id}" class="uncertain-row">
       <td class="text-muted" style="white-space:nowrap;font-size:.75rem">${serial}</td>
@@ -681,7 +698,7 @@ function renderNotSure(txns) {
       <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.raw_description||''}">${t.raw_description||'—'}</td>
       <td><input class="inline-inp" value="${t.paid_to||''}" id="nsp-${t.txn_id}" onclick="event.stopPropagation()"></td>
       <td class="text-end ${t.debit?'text-danger':'text-success'} fw-semibold">${fmt(amt)}</td>
-      <td><select class="inline-sel" id="nst-${t.txn_id}" onclick="event.stopPropagation()">${typeOpts}</select></td>
+      <td><select class="inline-sel" id="nst-${t.txn_id}" onclick="event.stopPropagation()" onchange="refreshHeadings('${t.txn_id}',this.value)">${typeOpts}</select></td>
       <td><select class="inline-sel" id="nsh-${t.txn_id}" onclick="event.stopPropagation()">${headOpts}</select></td>
       <td><input class="inline-inp" placeholder="Notes…" id="nsr-${t.txn_id}" value="${t.remarks||''}" onclick="event.stopPropagation()"></td>
       <td><button class="btn btn-sm btn-primary py-0" onclick="event.stopPropagation();saveNotSure('${t.txn_id}')">💾</button></td>
