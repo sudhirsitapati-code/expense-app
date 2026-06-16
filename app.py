@@ -889,6 +889,22 @@ def api_debug_ledger_accounts():
     })
 
 
+@app.route("/api/debug/search-ledger", methods=["GET"])
+@login_required
+def api_debug_search_ledger():
+    """Search ledger by keyword across description, paid_to, account."""
+    q = (request.args.get("q") or "").lower()
+    if not q:
+        return jsonify({"error": "provide ?q=keyword"}), 400
+    ledger = _ml_load_json(LEDGER_PATH)
+    hits = [t for t in ledger if any(
+        q in str(t.get(f) or "").lower()
+        for f in ("raw_description", "paid_to", "account", "heading", "type")
+    )]
+    hits.sort(key=lambda t: t.get("date", ""))
+    return jsonify({"count": len(hits), "results": hits})
+
+
 @app.route("/api/master-ledger/<txn_id>", methods=["PATCH"])
 @login_required
 def api_ledger_update(txn_id):

@@ -1128,6 +1128,30 @@ def repair_pdf_descriptions() -> int:
             txn["uncertain"] = not classified.get("uncertain", True)
             reclassified += 1
 
+    # Named-payee pass: known people whose payments always map to a fixed heading
+    # Overrides any non-manual classification, not just bad headings.
+    NAMED_PAYEES = {
+        "vincent fe":      ("Expense", "Staff Salary"),
+        "vincent fern":    ("Expense", "Staff Salary"),
+        "ketkisitap":      ("Expense", "Ketki"),
+        "ketki sitapati":  ("Expense", "Ketki"),
+        "susan.9510":      ("Expense", "Wellness"),
+        "sue.j.walker":    ("Expense", "Wellness"),
+    }
+    named_fixed = 0
+    for txn in ledger:
+        if txn.get("confidence") == "manual":
+            continue
+        desc = (txn.get("raw_description") or "").lower()
+        for kw, (typ, hdg) in NAMED_PAYEES.items():
+            if kw in desc:
+                if txn.get("type") != typ or txn.get("heading") != hdg:
+                    txn["type"]    = typ
+                    txn["heading"] = hdg
+                    txn["uncertain"] = False
+                    named_fixed += 1
+                break
+
     # Third pass: round-thousand unclassified amounts + sudhir sitapati payee = Transfer
     # Only applies when heading is still bad (Unknown/Misc/empty) to avoid overriding
     # known categories like Staff Salary, Home Loan, Charity which are also round numbers.
@@ -1156,9 +1180,9 @@ def repair_pdf_descriptions() -> int:
             txn["uncertain"] = False
             round_fixed += 1
 
-    if repaired or reclassified or round_fixed:
+    if repaired or reclassified or named_fixed or round_fixed:
         _save_json(LEDGER_PATH, ledger)
-    return repaired + reclassified + round_fixed
+    return repaired + reclassified + named_fixed + round_fixed
 
 
 def load_ledger() -> list:
