@@ -1256,22 +1256,22 @@ def repair_pdf_descriptions() -> int:
             txn["type"] = "Expense"; txn["heading"] = "Financial Expense"; txn["uncertain"] = False
             det_fixed += 1; continue
 
-        # Skip if already well-classified
-        if already:
-            continue
+        # Eating out / Entertainment only applied to unclassified entries
+        if not already:
+            if any(kw in desc for kw in EATING_OUT_KW):
+                txn["type"] = "Expense"; txn["heading"] = "Eating Out"; txn["uncertain"] = False
+                det_fixed += 1; continue
 
-        # Eating out keywords
-        if any(kw in desc for kw in EATING_OUT_KW):
-            txn["type"] = "Expense"; txn["heading"] = "Eating Out"; txn["uncertain"] = False
-            det_fixed += 1; continue
+            if any(kw in desc for kw in ENTERTAINMENT_KW):
+                txn["type"] = "Expense"; txn["heading"] = "Entertainment"; txn["uncertain"] = False
+                det_fixed += 1; continue
 
-        # Entertainment keywords
-        if any(kw in desc for kw in ENTERTAINMENT_KW):
-            txn["type"] = "Expense"; txn["heading"] = "Entertainment"; txn["uncertain"] = False
-            det_fixed += 1; continue
-
-        # Small amounts (< Rs. 500) → Misc, certain
-        if amount < 500:
+        # Small amounts (< Rs. 500) → Misc
+        # Skip only if it already has a specific expense heading (not Interbank/Unknown/Misc/blank)
+        NON_EXPENSE_HEADINGS = {"Interbank", "Unknown", "Misc", "", None}
+        skip_types = {"income", "official", "investment"}
+        good_heading = heading not in BAD_HEADINGS and heading not in NON_EXPENSE_HEADINGS
+        if amount < 500 and not good_heading and (txn.get("type") or "").lower() not in skip_types:
             txn["type"] = "Expense"; txn["heading"] = "Misc"; txn["uncertain"] = False
             det_fixed += 1; continue
 
