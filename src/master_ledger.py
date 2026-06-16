@@ -1208,8 +1208,8 @@ def repair_pdf_descriptions() -> int:
     # Third pass: self-transfers (sudhir/sitapati in paid_to or desc) + large round amounts
     # Sudhir/sitapati applies at any amount. Round-thousand rule only above Rs. 10,000
     # (small round amounts like Rs. 1000/2000 are common expenses — restaurants, etc.)
-    SELF_NAMES = ["sudhir sitapati", "sudhirsitapati", "s sitapati",
-                  "sudhir s", "sitapati"]
+    # Self-name tokens — any of these in paid_to OR description = transfer to self
+    SELF_TOKENS = ["sudhir", "sitapati", "sudhirsitapati"]
     round_fixed = 0
     for txn in ledger:
         if txn.get("confidence") == "manual":
@@ -1218,11 +1218,17 @@ def repair_pdf_descriptions() -> int:
             continue
         paid_to = (txn.get("paid_to") or "").lower()
         desc    = (txn.get("raw_description") or "").lower()
-        haystack = paid_to + " " + desc
-        is_self = any(name in haystack for name in SELF_NAMES)
         debit   = float(txn.get("debit") or 0)
         credit  = float(txn.get("credit") or 0)
         amount  = debit or credit
+        # For large amounts (≥ Rs. 10,000) check paid_to for self-name tokens
+        # For small amounts only match full "sudhir sitapati" to avoid false positives
+        if amount >= 10_000:
+            is_self = any(tok in paid_to for tok in SELF_TOKENS) or \
+                      any(tok in desc for tok in SELF_TOKENS)
+        else:
+            is_self = "sudhir sitapati" in paid_to or "sudhirsitapati" in paid_to or \
+                      "sudhir sitapati" in desc or "sudhirsitapati" in desc
         heading = txn.get("heading") or ""
         is_bad  = heading in BAD_HEADINGS
         # Round-thousand rule: only for amounts > Rs. 10,000 to avoid catching small expenses
@@ -1242,7 +1248,7 @@ def repair_pdf_descriptions() -> int:
     # so they surface in the uncertain queue for manual review.
     HARD_TRANSFER_KW = ["inft", "neft", "rtgs", "imps", "inf/", "/inf/",
                         "credit card", "bil/001", "bill pay", "trfr to",
-                        "sudhir sitapati", "sudhirsitapati", "sitapati"]
+                        "sudhir", "sitapati"]
     small_fixed = 0
     for txn in ledger:
         if txn.get("confidence") == "manual":
