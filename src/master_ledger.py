@@ -1269,6 +1269,11 @@ def repair_pdf_descriptions() -> int:
         txn["uncertain"] = True
         small_fixed += 1
 
+    # Final pass: Transfer/Income/Investment entries should never be uncertain
+    for txn in ledger:
+        if txn.get("type", "").lower() in ("transfer", "income", "investment", "official"):
+            txn["uncertain"] = False
+
     if repaired or reclassified or named_fixed or round_fixed or small_fixed:
         _save_json(LEDGER_PATH, ledger)
     return repaired + reclassified + named_fixed + round_fixed + small_fixed

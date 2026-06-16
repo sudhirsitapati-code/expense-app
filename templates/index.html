@@ -275,7 +275,7 @@
   <div class="table-wrap">
   <table class="table table-hover mb-0">
     <thead><tr>
-      <th>Date</th><th>Account</th><th>Description</th><th>Paid To</th>
+      <th>#</th><th>Date</th><th>Account</th><th>Description</th><th>Paid To</th>
       <th class="text-end">Amount</th><th>Type ⚠</th><th>Heading ⚠</th><th>Remarks</th><th></th>
     </tr></thead>
     <tbody id="notSureBody"></tbody>
@@ -608,6 +608,10 @@ async function loadLedger() {
     HEADINGS.forEach(h => heSel.add(new Option(h, h)));
   }
 
+  // Build global serial-number map keyed by txn_id so both views share the same numbers
+  window._ledgerSerials = {};
+  d.transactions.forEach((t, i) => { window._ledgerSerials[t.txn_id] = i + 1; });
+
   renderLedger(d.transactions);
   renderNotSure(d.transactions.filter(t => t.uncertain));
 }
@@ -631,8 +635,9 @@ function renderLedger(txns) {
       ? `<span class="saving-badge" title="${t.ai_saving_tip}">💡 ${t.saving_agreed===true?'✅':t.saving_agreed===false?'❌':'?'}</span>`
       : '';
     const txnJ = encodeURIComponent(JSON.stringify(t));
+    const serial = (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || (i+1);
     return `<tr class="${unc}" onclick="openEdit('${t.txn_id}','${txnJ}')">
-      <td class="text-muted" style="white-space:nowrap;font-size:.75rem">${i+1}</td>
+      <td class="text-muted" style="white-space:nowrap;font-size:.75rem">${serial}</td>
       <td style="white-space:nowrap">${t.date}</td>
       <td><span class="badge bg-light text-dark border">${t.account||'—'}</span></td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.raw_description||''}">${t.raw_description||'—'}</td>
@@ -668,7 +673,9 @@ function renderNotSure(txns) {
     const headOpts = ['<option value="">— none —</option>',
       ...HEADINGS.map(h => `<option value="${h}" ${t.heading===h?'selected':''}>${h}</option>`)
     ].join('');
+    const serial = (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || '';
     return `<tr id="ns-${t.txn_id}" class="uncertain-row">
+      <td class="text-muted" style="white-space:nowrap;font-size:.75rem">${serial}</td>
       <td style="white-space:nowrap">${t.date}</td>
       <td><span class="badge bg-light text-dark border">${t.account||'—'}</span></td>
       <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.raw_description||''}">${t.raw_description||'—'}</td>
