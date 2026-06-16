@@ -930,6 +930,34 @@ def api_debug_search_ledger():
     ]})
 
 
+@app.route("/api/debug/mis-actuals", methods=["GET"])
+@login_required
+def api_debug_mis_actuals():
+    """Show what the MIS endpoint aggregates from the master ledger for FY27."""
+    from src.master_ledger import _parse_date as _ml_parse_date
+    from datetime import datetime
+    _fy27_start = datetime(2026, 4, 1)
+    fy27_actual = {}
+    skipped = []
+    for txn in load_ledger():
+        dt = _ml_parse_date(txn.get("date", ""))
+        if not dt or dt < _fy27_start:
+            continue
+        reason = None
+        if txn.get("type") not in ("Expense", "Official"):
+            reason = f"type={txn.get('type')}"
+        elif txn.get("uncertain"):
+            reason = "uncertain=True"
+        elif not float(txn.get("debit", 0) or 0):
+            reason = "debit=0"
+        if reason:
+            skipped.append({"seq": txn.get("seq"), "date": txn.get("date"), "heading": txn.get("heading"), "type": txn.get("type"), "uncertain": txn.get("uncertain"), "debit": txn.get("debit"), "reason": reason})
+        else:
+            h = txn.get("heading") or "Misc"
+            fy27_actual[h] = fy27_actual.get(h, 0) + float(txn.get("debit", 0))
+    return jsonify({"included": fy27_actual, "skipped_count": len(skipped), "skipped_sample": skipped[:30]})
+
+
 @app.route("/api/master-ledger/<txn_id>", methods=["PATCH"])
 @login_required
 def api_ledger_update(txn_id):
