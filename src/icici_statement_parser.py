@@ -280,13 +280,15 @@ def _parse_cc_statement_text(text: str) -> list:
     Parse ICICI credit card 'VIEW CURRENT STATEMENT' / CCStatement format.
     Line format: DD-MM-YYYY  DESCRIPTION  AMOUNT Dr./Cr.  REWARD_PTS  REF_NO
     Example: 05-06-2026 UPI Payment Received 46892 Cr. 0 13544537631
+    Also handles: 05-06-2026 AMAZON PAY 12345.00 Dr. 50 987654321
     """
     transactions = []
     seen = set()
-    # Match: date  description  amount Dr./Cr.  (reward points  ref_no optional)
+    # Match: date  description  amount  Dr./Cr. (with or without period, any case)
+    # Allow optional leading whitespace per line
     pat = re.compile(
-        r"^(\d{2}-\d{2}-\d{4})\s+(.+?)\s+([\d,]+(?:\.\d{2})?)\s+(Dr\.|Cr\.)",
-        re.MULTILINE
+        r"^\s*(\d{2}-\d{2}-\d{4})\s+(.+?)\s+([\d,]+(?:\.\d{2})?)\s+(Dr\.?|Cr\.?|DR\.?|CR\.?)\b",
+        re.MULTILINE | re.IGNORECASE
     )
     for m in pat.finditer(text):
         date_raw, desc, amount_str, dr_cr = m.groups()
@@ -298,7 +300,7 @@ def _parse_cc_statement_text(text: str) -> list:
             continue
         d, mo, yr = date_raw.split("-")
         date_str = f"{d}/{mo}/{yr}"
-        direction = "credit" if "Cr" in dr_cr else "debit"
+        direction = "credit" if dr_cr.lower().startswith("cr") else "debit"
         key = f"{date_str}|{desc[:30]}|{amount}"
         if key in seen:
             continue

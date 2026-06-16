@@ -968,6 +968,61 @@ def api_fix_7631():
     })
 
 
+@app.route("/api/debug/parse-cc", methods=["GET"])
+@login_required
+def api_debug_parse_cc():
+    """Debug: re-fetch CC emails and show what each parser returns (first 5 txns + counts)."""
+    from src.icici_statement_parser import (
+        _get_pdf_attachments, _open_pdf,
+        _parse_cc_statement_text, _parse_savings_statement_text,
+        _parse_od_savings_text, _parse_from_text,
+        _extract_account_from_text,
+    )
+    from googleapiclient.discovery import build
+    from src.gmail_utils import get_credentials
+    service = build("gmail", "v1", credentials=get_credentials())
+
+    CC_MSG_IDS = [
+        "19ed2026b5009714",
+        "19ecb0676fed14a6",
+        "19ecbbedc9cece89",
+        "19ecb05c7c3d4452",
+    ]
+    results = []
+    for msg_id in CC_MSG_IDS:
+        try:
+            pdfs = _get_pdf_attachments(service, msg_id)
+            for pdf_bytes in pdfs:
+                try:
+                    with _open_pdf(pdf_bytes) as pdf:
+                        full_text = ""
+                        for page in pdf.pages:
+                            full_text += (page.extract_text() or "") + "\n"
+                    acct = _extract_account_from_text(full_text)
+                    cc = _parse_cc_statement_text(full_text)
+                    sv = _parse_savings_statement_text(full_text)
+                    od_sv = _parse_od_savings_text(full_text)
+                    od = _parse_from_text(full_text)
+                    best = max([cc, sv, od_sv, od], key=len)
+                    results.append({
+                        "msg_id": msg_id,
+                        "account_detected": acct,
+                        "cc_parser": len(cc),
+                        "savings_parser": len(sv),
+                        "od_savings_parser": len(od_sv),
+                        "od_parser": len(od),
+                        "winner": "cc" if best is cc else "savings" if best is sv else "od_savings" if best is od_sv else "od",
+                        "winner_count": len(best),
+                        "first_5_winner": best[:5],
+                        "text_sample": full_text[:500],
+                    })
+                except Exception as e:
+                    results.append({"msg_id": msg_id, "error": str(e)})
+        except Exception as e:
+            results.append({"msg_id": msg_id, "fetch_error": str(e)})
+    return jsonify(results)
+
+
 @app.route("/api/account-status", methods=["GET"])
 @login_required
 def api_account_status():
