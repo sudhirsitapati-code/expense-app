@@ -930,7 +930,7 @@ def api_debug_search_ledger():
     ]})
 
 
-@app.route("/api/admin/fix-7631", methods=["POST"])
+@app.route("/api/admin/fix-7631", methods=["GET","POST"])
 @login_required
 def api_fix_7631():
     """Remove all 7631 entries from master ledger + icici_transactions, unmark CC emails for reprocessing."""
