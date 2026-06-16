@@ -937,14 +937,19 @@ def deduplicate_ledger() -> int:
 
     # Second dedup: known salary/recurring payees — same year-month + amount = duplicate
     # Catches cases where Gmail alert and PDF record the payment on different dates (e.g. 27th vs 28th)
-    SALARY_KEYWORDS = ["vincent fe", "vincent fern", "ketkisitap", "ketki sitapati",
-                       "gcplsalary", "cms/ gcplsalary"]
+    SALARY_KEYWORDS = ["vincent fe", "vincent fern", "vincent", "ketkisitap",
+                       "ketki sitapati", "gcplsalary", "cms/ gcplsalary"]
     salary_groups = defaultdict(list)
     for txn in ledger:
         if txn.get("confidence") == "manual":
             continue
-        desc = (txn.get("raw_description") or "").lower()
-        matched_kw = next((kw for kw in SALARY_KEYWORDS if kw in desc), None)
+        # Check both raw_description and paid_to
+        haystack = " ".join([
+            (txn.get("raw_description") or ""),
+            (txn.get("paid_to") or ""),
+            (txn.get("description") or ""),
+        ]).lower()
+        matched_kw = next((kw for kw in SALARY_KEYWORDS if kw in haystack), None)
         if not matched_kw:
             continue
         date_str = txn.get("date", "")

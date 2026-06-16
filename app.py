@@ -899,10 +899,13 @@ def api_debug_search_ledger():
     ledger = _ml_load_json(LEDGER_PATH)
     hits = [t for t in ledger if any(
         q in str(t.get(f) or "").lower()
-        for f in ("raw_description", "paid_to", "account", "heading", "type")
+        for f in ("raw_description", "paid_to", "account", "heading", "type", "description")
     )]
     hits.sort(key=lambda t: t.get("date", ""))
-    return jsonify({"count": len(hits), "results": hits})
+    return jsonify({"count": len(hits), "results": [
+        {k: t.get(k) for k in ("txn_id","date","account","debit","credit","type","heading","source","confidence","raw_description","paid_to","description")}
+        for t in hits
+    ]})
 
 
 @app.route("/api/master-ledger/<txn_id>", methods=["PATCH"])
