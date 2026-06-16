@@ -930,6 +930,44 @@ def api_debug_search_ledger():
     ]})
 
 
+@app.route("/api/admin/fix-7631", methods=["POST"])
+@login_required
+def api_fix_7631():
+    """Remove all 7631 entries from master ledger + icici_transactions, unmark CC emails for reprocessing."""
+    from src import db as _db
+
+    # 1. Remove from master ledger
+    ledger = load_ledger()
+    before_ledger = len(ledger)
+    ledger = [t for t in ledger if "7631" not in str(t.get("account", ""))]
+    from src.master_ledger import _load_json, _save_json, LEDGER_PATH
+    _save_json(LEDGER_PATH, ledger)
+
+    # 2. Remove from icici_transactions
+    icici = _db.load("icici_transactions") or []
+    before_icici = len(icici)
+    icici = [t for t in icici if "7631" not in str(t.get("account", ""))]
+    _db.save("icici_transactions", icici)
+
+    # 3. Unmark CC statement emails so they get re-parsed by Sync PDF
+    CC_MSG_IDS = {
+        "19ed2026b5009714",  # CCStatement_Current17-06-2026
+        "19ecb0676fed14a6",  # Monthlystatement_19 Apr-18 May
+        "19ecbbedc9cece89",  # Fwd: Monthlystatement_19 Apr-18 May
+        "19ecb05c7c3d4452",  # Monthlystatement_19 Mar-18 Apr
+    }
+    processed = set(_db.load("processed_statement_ids", default=[]))
+    processed -= CC_MSG_IDS
+    _db.save("processed_statement_ids", list(processed))
+
+    return jsonify({
+        "ledger_removed": before_ledger - len(ledger),
+        "icici_txns_removed": before_icici - len(icici),
+        "emails_unmarked": len(CC_MSG_IDS),
+        "message": "Done — now run Sync PDF to reimport correctly as ICICI-7009",
+    })
+
+
 @app.route("/api/account-status", methods=["GET"])
 @login_required
 def api_account_status():
