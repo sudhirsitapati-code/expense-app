@@ -1221,6 +1221,60 @@ def repair_pdf_descriptions() -> int:
                     named_fixed += 1
                 break
 
+    # Deterministic expense pass — high-confidence rules that should never go to not-sure
+    EATING_OUT_KW   = ["food", "eat", "restaurant", "cafe", "bistro", "kitchen",
+                       "grill", "dhaba", "dining", "swiggy", "zomato", "pizza",
+                       "bkc saz", "forty two", "jap restaur", "eih limited",
+                       "shree thake", "smaaash", "status rest", "taj lands e",
+                       "buono pizze", "mayfairhot", "msw mahesh", "msw rigmor",
+                       "bombay coff", "tata starbu", "mansuri cat", "nmacc food",
+                       "semolina", "madras crea", "carnatic", "manis cafe", "gravity"]
+    ENTERTAINMENT_KW = ["prime video", "primevideo", "netflix", "netflixupi",
+                        "google play", "googleplay", "spotify", "hotstar",
+                        "bookmyshow", "pvr", "apple medi", "appleservices"]
+    HOME_LOAN_KW    = ["home loan", "tbmum", "xx99508", "xx00382", "xx42596",
+                       "102205009175", "9175:int"]
+    det_fixed = 0
+    for txn in ledger:
+        if txn.get("confidence") == "manual":
+            continue
+        desc    = (txn.get("raw_description") or "").lower()
+        account = (txn.get("account") or "").lower()
+        debit   = float(txn.get("debit") or 0)
+        credit  = float(txn.get("credit") or 0)
+        amount  = debit or credit
+        heading = txn.get("heading") or ""
+        already = heading not in BAD_HEADINGS
+
+        # Home loan — overrides everything non-manual
+        if any(kw in desc for kw in HOME_LOAN_KW):
+            txn["type"] = "Expense"; txn["heading"] = "Home Loan"; txn["uncertain"] = False
+            det_fixed += 1; continue
+
+        # 7281 account debits → Financial Expense (OD interest / charges)
+        if "7281" in account and debit > 0 and not already:
+            txn["type"] = "Expense"; txn["heading"] = "Financial Expense"; txn["uncertain"] = False
+            det_fixed += 1; continue
+
+        # Skip if already well-classified
+        if already:
+            continue
+
+        # Eating out keywords
+        if any(kw in desc for kw in EATING_OUT_KW):
+            txn["type"] = "Expense"; txn["heading"] = "Eating Out"; txn["uncertain"] = False
+            det_fixed += 1; continue
+
+        # Entertainment keywords
+        if any(kw in desc for kw in ENTERTAINMENT_KW):
+            txn["type"] = "Expense"; txn["heading"] = "Entertainment"; txn["uncertain"] = False
+            det_fixed += 1; continue
+
+        # Small amounts (< Rs. 500) → Misc, certain
+        if amount < 500:
+            txn["type"] = "Expense"; txn["heading"] = "Misc"; txn["uncertain"] = False
+            det_fixed += 1; continue
+
     # Third pass: self-transfers (sudhir/sitapati in paid_to or desc) + large round amounts
     # ── Amount-based classification pass ─────────────────────────────────────
     # Rules (applied to all non-manual entries not already well-classified):
@@ -1298,9 +1352,9 @@ def repair_pdf_descriptions() -> int:
     # Assign permanent seq numbers to any new entries
     seq_changed = _assign_seq(ledger)
 
-    if repaired or reclassified or named_fixed or round_fixed or small_fixed or seq_changed:
+    if repaired or reclassified or named_fixed or det_fixed or round_fixed or small_fixed or seq_changed:
         _save_json(LEDGER_PATH, ledger)
-    return repaired + reclassified + named_fixed + round_fixed + small_fixed
+    return repaired + reclassified + named_fixed + det_fixed + round_fixed + small_fixed
 
 
 def load_ledger() -> list:
