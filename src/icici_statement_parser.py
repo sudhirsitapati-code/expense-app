@@ -128,10 +128,11 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             # Try to get account from header
             account = _extract_account_from_text(full_text)
 
-            # Detect savings vs OD format and use the right text parser
+            # Detect format and use the right text parser
+            cc_txns = _parse_cc_statement_text(full_text)  # CC "VIEW CURRENT STATEMENT" format
             savings_txns = _parse_savings_statement_text(full_text)
             od_txns = _parse_from_text(full_text)
-            best_text = savings_txns if len(savings_txns) >= len(od_txns) else od_txns
+            best_text = max([cc_txns, savings_txns, od_txns], key=len)
             if best_text and len(best_text) > len(transactions):
                 transactions = best_text
 
@@ -191,6 +192,43 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
     return enriched
 
 
+def _parse_cc_statement_text(text: str) -> list:
+    """
+    Parse ICICI credit card 'VIEW CURRENT STATEMENT' / CCStatement format.
+    Line format: DD-MM-YYYY  DESCRIPTION  AMOUNT Dr./Cr.  REWARD_PTS  REF_NO
+    Example: 05-06-2026 UPI Payment Received 46892 Cr. 0 13544537631
+    """
+    transactions = []
+    seen = set()
+    # Match: date  description  amount Dr./Cr.  (reward points  ref_no optional)
+    pat = re.compile(
+        r"^(\d{2}-\d{2}-\d{4})\s+(.+?)\s+([\d,]+(?:\.\d{2})?)\s+(Dr\.|Cr\.)",
+        re.MULTILINE
+    )
+    for m in pat.finditer(text):
+        date_raw, desc, amount_str, dr_cr = m.groups()
+        try:
+            amount = float(amount_str.replace(",", ""))
+        except ValueError:
+            continue
+        if amount < 1:
+            continue
+        d, mo, yr = date_raw.split("-")
+        date_str = f"{d}/{mo}/{yr}"
+        direction = "credit" if "Cr" in dr_cr else "debit"
+        key = f"{date_str}|{desc[:30]}|{amount}"
+        if key in seen:
+            continue
+        seen.add(key)
+        transactions.append({
+            "date": date_str,
+            "description": desc.strip(),
+            "amount": amount,
+            "txn_direction": direction,
+        })
+    return transactions
+
+
 def _parse_transaction_row(row: list) -> Optional[dict]:
     """Try to parse a table row as a transaction."""
     if not row or len(row) < 3:
@@ -226,21 +264,21 @@ def _parse_transaction_row(row: list) -> Optional[dict]:
 
 def _extract_account_from_text(text: str) -> str:
     """Extract last 4 digits of account number from statement text."""
-    # Prefer masked account number pattern: XXXXXXXX7281 (8+ X's followed by digits)
-    # over Customer ID (XXXXX6511 = shorter X sequence)
     for pat in [
+        r"\d{4,6}[\*x]{4,}(\d{4})",                               # CC format: 552418******7009
         r"[Xx]{6,}(\d{4})\b",                                      # long masked account e.g. XXXXXXXX7281
         r"[Aa]ccount\s*(?:[Nn]o|[Nn]umber)[\.\:]?\s*[\dX]{6,}(\d{4})",  # Account No: XXXXXXXX7281
         r"[Aa]/[Cc]\s+[Xx]{4,}(\d{4})\b",                         # A/c XXXX1234
         r"Statement.*?[Aa]ccount\s+[Xx\d]{6,}(\d{4})",            # in statement header line
+        r"Saving Account no\.\s*\d+(\d{4})\b",                    # Saving Account no. 003801011331
     ]:
         m = re.search(pat, text[:2000])
         if m:
             return f"ICICI-{m.group(1)}"
-    # Fallback: full numeric account number (10+ digits like 003801011331)
-    m = re.search(r"\b\d{6,}(\d{4})\b", text[:3000])
+    # Fallback: only match long numeric account numbers (12+ digits), not short reference numbers
+    m = re.search(r"\b(\d{8,})(\d{4})\b", text[:1000])
     if m:
-        return f"ICICI-{m.group(1)}"
+        return f"ICICI-{m.group(2)}"
     return "ICICI"
 
 
