@@ -992,38 +992,53 @@ async function loadAcctStatus() {
   el.innerHTML = '<div class="text-muted small">Loading…</div>';
   try {
     const r = await fetch('/api/account-status');
-    const accounts = await r.json();
+    const d = await r.json();
+    const {accounts, fy_months} = d;
     if (!accounts.length) { el.innerHTML = '<div class="text-muted small">No transactions in ledger yet.</div>'; return; }
-    const today = new Date();
-    function daysSince(dateStr) {
-      const [d,m,y] = dateStr.split('/');
-      const dt = new Date(`${y}-${m}-${d}`);
-      return Math.floor((today - dt) / 86400000);
-    }
-    function staleBadge(days) {
-      if (days <= 7)  return '<span class="badge bg-success">Up to date</span>';
-      if (days <= 30) return '<span class="badge bg-warning text-dark">'+days+' days ago</span>';
-      return '<span class="badge bg-danger">'+days+' days ago</span>';
-    }
-    el.innerHTML = `<table class="table table-hover mb-0">
-      <thead class="table-light"><tr>
-        <th>Account</th><th>Bank</th><th>Type</th>
-        <th class="text-end">Latest Transaction</th><th>Status</th><th class="text-end">Transactions</th>
-      </tr></thead>
-      <tbody>
-        ${accounts.map(a => {
-          const days = daysSince(a.latest_date);
-          return `<tr>
-            <td class="fw-semibold">${a.account}</td>
-            <td>${a.bank || '—'}</td>
-            <td>${a.account_type || '—'}</td>
-            <td class="text-end">${a.latest_date}</td>
-            <td>${staleBadge(days)}</td>
-            <td class="text-end text-muted">${a.count}</td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>`;
+
+    const MON = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthLabel = ym => { const [y,m] = ym.split('-'); return MON[+m] + ' ' + y.slice(2); };
+    const nowYm = new Date().toISOString().slice(0,7);
+
+    const headerCells = fy_months.map(ym =>
+      `<th class="text-center" style="min-width:52px;font-size:11px">${monthLabel(ym)}</th>`
+    ).join('');
+
+    const rows = accounts.map(a => {
+      const cells = fy_months.map((ym, i) => {
+        const cnt = a.month_counts[i];
+        const isFuture = ym > nowYm;
+        if (isFuture) return `<td class="text-center" style="background:#f8f9fa;color:#ccc;font-size:11px">—</td>`;
+        if (cnt === 0) return `<td class="text-center" style="background:#fee2e2" title="No transactions"><span style="color:#dc2626;font-size:13px">✗</span></td>`;
+        return `<td class="text-center" style="background:#dcfce7;font-size:11px;color:#166534" title="${cnt} transactions">${cnt}</td>`;
+      }).join('');
+      return `<tr>
+        <td class="fw-semibold" style="white-space:nowrap">${a.account}</td>
+        <td class="text-muted" style="font-size:11px">${a.bank||'—'}</td>
+        <td class="text-muted" style="font-size:11px">${a.account_type||'—'}</td>
+        ${cells}
+      </tr>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div style="overflow-x:auto">
+      <table class="table table-bordered mb-0" style="font-size:12px">
+        <thead class="table-light">
+          <tr>
+            <th style="min-width:110px">Account</th>
+            <th style="min-width:50px">Bank</th>
+            <th style="min-width:60px">Type</th>
+            ${headerCells}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      </div>
+      <div class="mt-2 d-flex gap-3" style="font-size:11px;color:#666">
+        <span><span style="background:#dcfce7;padding:1px 6px;border-radius:3px">12</span> = transaction count</span>
+        <span><span style="background:#fee2e2;padding:1px 6px;border-radius:3px;color:#dc2626">✗</span> = no data (gap)</span>
+        <span><span style="background:#f8f9fa;padding:1px 6px;border-radius:3px;color:#ccc">—</span> = future month</span>
+      </div>`;
   } catch(e) {
     el.innerHTML = '<div class="text-danger small">Error loading account status.</div>';
   }

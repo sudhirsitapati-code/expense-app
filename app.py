@@ -933,25 +933,41 @@ def api_debug_search_ledger():
 @app.route("/api/account-status", methods=["GET"])
 @login_required
 def api_account_status():
-    """Latest transaction date and count per account."""
+    """Per-account, per-FY-month transaction counts. FY27 = Apr 2026 onwards."""
     from src.master_ledger import _parse_date as _ml_parse_date
+    now = datetime.now()
+    # Build list of FY27 months from Apr 2026 up to current month
+    fy_months = []
+    yr, mo = 2026, 4
+    while (yr, mo) <= (now.year, now.month):
+        fy_months.append(f"{yr}-{mo:02d}")
+        mo += 1
+        if mo == 13:
+            mo, yr = 1, yr + 1
+
     ledger = load_ledger()
-    accounts = {}
+    accounts = {}  # acct -> {meta, months: {ym: count}}
     for txn in ledger:
         acct = txn.get("account") or "Unknown"
         dt = _ml_parse_date(txn.get("date", ""))
         if not dt:
             continue
+        ym = dt.strftime("%Y-%m")
         if acct not in accounts:
-            accounts[acct] = {"account": acct, "bank": txn.get("bank",""), "account_type": txn.get("account_type",""), "latest_dt": dt, "latest_date": txn.get("date",""), "count": 0}
-        if dt > accounts[acct]["latest_dt"]:
-            accounts[acct]["latest_dt"] = dt
-            accounts[acct]["latest_date"] = txn.get("date","")
-        accounts[acct]["count"] += 1
-    result = sorted(accounts.values(), key=lambda x: x["latest_dt"], reverse=True)
+            accounts[acct] = {
+                "account": acct,
+                "bank": txn.get("bank", ""),
+                "account_type": txn.get("account_type", ""),
+                "months": {}
+            }
+        accounts[acct]["months"][ym] = accounts[acct]["months"].get(ym, 0) + 1
+
+    result = sorted(accounts.values(), key=lambda x: x["account"])
     for r in result:
-        del r["latest_dt"]
-    return jsonify(result)
+        r["fy_months"] = fy_months
+        r["month_counts"] = [r["months"].get(ym, 0) for ym in fy_months]
+        del r["months"]
+    return jsonify({"accounts": result, "fy_months": fy_months})
 
 
 @app.route("/api/debug/mis-actuals", methods=["GET"])
