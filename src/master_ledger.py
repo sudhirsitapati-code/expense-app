@@ -1246,8 +1246,8 @@ def repair_pdf_descriptions() -> int:
         is_self  = any(tok in paid_to or tok in desc for tok in SELF_TOKENS)
         is_lakh_step = amount >= LAKH and amount % LAKH == 0
 
-        # Rule 1: sudhir/sitapati + 1L–10L → Transfer (certain, never uncertain)
-        if is_self and LAKH <= amount <= 10 * LAKH:
+        # Rule 1: sudhir/sitapati OR 1L–10L lakh-step → Transfer (certain, never uncertain)
+        if (is_self or is_lakh_step) and LAKH <= amount <= 10 * LAKH:
             txn["type"]    = "Transfer"
             txn["heading"] = "Interbank"
             txn["uncertain"] = False
@@ -1268,8 +1268,8 @@ def repair_pdf_descriptions() -> int:
             # Keep if genuine transfer keyword in description
             if any(kw in desc or kw in paid_to for kw in HARD_TRANSFER):
                 continue
-            # Keep if valid transfer amount + self-name
-            if is_self and LAKH <= amount <= 10 * LAKH:
+            # Keep if valid transfer amount (self-name or lakh-step)
+            if (is_self or is_lakh_step) and LAKH <= amount <= 10 * LAKH:
                 continue
             # Otherwise it's a misclassified transfer
             txn["type"]    = "Expense"
