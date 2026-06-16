@@ -262,14 +262,14 @@ def api_mis():
         "Groceries":"Household","Staff Salary":"Household","Electricity & Gas":"Household",
         "Misc":"Household","Cash":"Household",
         "Alcohol":"Personal","Wellness":"Personal",
-        "Clothes":"Family","Gifts":"Family","Medical":"Family",
+        "Clothes":"Family","Gifts":"Family","Gift":"Family","Medical":"Family",
         "Amma":"Family","Ketki":"Family","Children Education":"Family",
         "Charity":"Giving","Uspaar":"Giving",
         "Holiday":"Lifestyle","Eating Out":"Lifestyle","Entertainment":"Lifestyle",
         "Malhar":"Property","Maintenance Expense":"Property","Home office":"Property",
         "One Time Charge":"Property","Kalpataru Maintenance":"Property",
-        "Financial Expense / OD Interest":"Financial","Insurance":"Financial",
-        "Home Loan":"Financial","Tax":"Financial",
+        "Financial Expense":"Financial","Financial Expense / OD Interest":"Financial",
+        "Insurance":"Financial","Home Loan":"Financial","Tax":"Financial",
     }
     SUPER_ORDER = ["Household","Personal","Family","Giving","Lifestyle","Property","Financial"]
 
@@ -317,7 +317,7 @@ def api_mis():
             fy27_actual[heading] = fy27_actual.get(heading, 0) + amt
 
     # ── Build grouped rows ────────────────────────────────────────────────────
-    all_headings = set(budget_annual.keys()) | set(FY26_MONTHLY.keys())
+    all_headings = set(budget_annual.keys()) | set(FY26_MONTHLY.keys()) | set(fy27_actual.keys())
     by_super: dict = {s: [] for s in SUPER_ORDER}
 
     for heading in sorted(all_headings):
