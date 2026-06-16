@@ -786,6 +786,39 @@ def api_ledger_sync_status():
     })
 
 
+@app.route("/api/master-ledger/fix-7281", methods=["POST"])
+@login_required
+def api_fix_7281():
+    """Directly reclassify all non-manual ICICI-7281 entries by description keywords."""
+    INTEREST_KW = ["int.coll", "int coll", "renewal", "sgst", "cgst", "interest", "bank charge", "processing fee"]
+    TRANSFER_KW = ["inft", "neft", "imps", "rtgs", "upi", "transfer", "self", "inf/"]
+
+    ledger = _ml_load_json(LEDGER_PATH)
+    fixed = 0
+    for txn in ledger:
+        if txn.get("account") != "ICICI-7281":
+            continue
+        if txn.get("confidence") == "manual":
+            continue
+        desc = (txn.get("raw_description") or "").lower()
+
+        if any(k in desc for k in INTEREST_KW):
+            txn["type"] = "Expense"
+            txn["heading"] = "Financial Expense"
+            txn["uncertain"] = False
+            fixed += 1
+        elif any(k in desc for k in TRANSFER_KW) or not desc:
+            # Empty description on 7281 = OD transfer (user confirmed most are transfers)
+            txn["type"] = "Transfer"
+            txn["heading"] = "Interbank"
+            txn["uncertain"] = not desc  # uncertain if no description
+            fixed += 1
+
+    if fixed:
+        _ml_save_json(LEDGER_PATH, ledger)
+    return jsonify({"status": "ok", "fixed": fixed})
+
+
 @app.route("/api/master-ledger/bulk-classify", methods=["POST"])
 @login_required
 def api_bulk_classify():
