@@ -1344,6 +1344,19 @@ def repair_pdf_descriptions() -> int:
             txn["uncertain"] = True
             small_fixed += 1
 
+    # Debit/credit swap fix: SMP/BIL/EMI/NACH are always debits — correct any misclassified entries
+    ALWAYS_DEBIT_PREFIXES = ("smp/", "bil/", "emi/", "nach/", "mandate/")
+    swap_fixed = 0
+    for txn in ledger:
+        desc = (txn.get("raw_description") or txn.get("description") or "").lower()
+        if any(desc.startswith(p) for p in ALWAYS_DEBIT_PREFIXES):
+            credit = float(txn.get("credit") or 0)
+            debit  = float(txn.get("debit") or 0)
+            if credit > 0 and debit == 0:
+                txn["debit"]  = credit
+                txn["credit"] = 0
+                swap_fixed += 1
+
     # Final pass: Transfer/Income/Investment entries should never be uncertain
     for txn in ledger:
         if txn.get("type", "").lower() in ("transfer", "income", "investment", "official"):
@@ -1352,9 +1365,9 @@ def repair_pdf_descriptions() -> int:
     # Assign permanent seq numbers to any new entries
     seq_changed = _assign_seq(ledger)
 
-    if repaired or reclassified or named_fixed or det_fixed or round_fixed or small_fixed or seq_changed:
+    if repaired or reclassified or named_fixed or det_fixed or round_fixed or small_fixed or swap_fixed or seq_changed:
         _save_json(LEDGER_PATH, ledger)
-    return repaired + reclassified + named_fixed + det_fixed + round_fixed + small_fixed
+    return repaired + reclassified + named_fixed + det_fixed + round_fixed + small_fixed + swap_fixed
 
 
 def load_ledger() -> list:

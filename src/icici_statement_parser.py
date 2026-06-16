@@ -305,6 +305,11 @@ def _parse_savings_statement_text(text: str) -> list:
         # Use full_desc as description; paid_to as short payee
         description = full_desc or paid_to
 
+        # Override: these transaction types are always debits regardless of balance delta
+        ALWAYS_DEBIT_PREFIXES = ("smp/", "bil/", "emi/", "nach/", "mandate/")
+        if any(description.lower().startswith(p) or paid_to.lower().startswith(p) for p in ALWAYS_DEBIT_PREFIXES):
+            direction = "debit"
+
         key = f"{date_str}|{description[:40]}|{amount}|{balance_str}"
         if key in seen:
             continue
