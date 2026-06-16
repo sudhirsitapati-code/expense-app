@@ -936,17 +936,20 @@ def api_fix_7631():
     """Remove all 7631 entries from master ledger + icici_transactions, unmark CC emails for reprocessing."""
     from src import db as _db
 
-    # 1. Remove from master ledger
+    def _is_cc_acct(acct):
+        return "7631" in str(acct) or "7009" in str(acct)
+
+    # 1. Remove from master ledger (7631 or 7009 CC entries from pdf_import)
     ledger = load_ledger()
     before_ledger = len(ledger)
-    ledger = [t for t in ledger if "7631" not in str(t.get("account", ""))]
+    ledger = [t for t in ledger if not (_is_cc_acct(t.get("account", "")) and t.get("source") in ("pdf_import", "icici_statement"))]
     from src.master_ledger import _load_json, _save_json, LEDGER_PATH
     _save_json(LEDGER_PATH, ledger)
 
-    # 2. Remove from icici_transactions
+    # 2. Remove from icici_transactions (7631 or 7009)
     icici = _db.load("icici_transactions") or []
     before_icici = len(icici)
-    icici = [t for t in icici if "7631" not in str(t.get("account", ""))]
+    icici = [t for t in icici if not _is_cc_acct(t.get("account", ""))]
     _db.save("icici_transactions", icici)
 
     # 3. Unmark CC statement emails so they get re-parsed by Sync PDF
