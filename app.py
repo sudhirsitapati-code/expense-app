@@ -930,6 +930,30 @@ def api_debug_search_ledger():
     ]})
 
 
+@app.route("/api/account-status", methods=["GET"])
+@login_required
+def api_account_status():
+    """Latest transaction date and count per account."""
+    from src.master_ledger import _parse_date as _ml_parse_date
+    ledger = load_ledger()
+    accounts = {}
+    for txn in ledger:
+        acct = txn.get("account") or "Unknown"
+        dt = _ml_parse_date(txn.get("date", ""))
+        if not dt:
+            continue
+        if acct not in accounts:
+            accounts[acct] = {"account": acct, "bank": txn.get("bank",""), "account_type": txn.get("account_type",""), "latest_dt": dt, "latest_date": txn.get("date",""), "count": 0}
+        if dt > accounts[acct]["latest_dt"]:
+            accounts[acct]["latest_dt"] = dt
+            accounts[acct]["latest_date"] = txn.get("date","")
+        accounts[acct]["count"] += 1
+    result = sorted(accounts.values(), key=lambda x: x["latest_dt"], reverse=True)
+    for r in result:
+        del r["latest_dt"]
+    return jsonify(result)
+
+
 @app.route("/api/debug/mis-actuals", methods=["GET"])
 @login_required
 def api_debug_mis_actuals():
