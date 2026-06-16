@@ -129,10 +129,11 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             account = _extract_account_from_text(full_text)
 
             # Detect format and use the right text parser
-            cc_txns = _parse_cc_statement_text(full_text)  # CC "VIEW CURRENT STATEMENT" format
-            savings_txns = _parse_savings_statement_text(full_text)
-            od_txns = _parse_from_text(full_text)
-            best_text = max([cc_txns, savings_txns, od_txns], key=len)
+            cc_txns      = _parse_cc_statement_text(full_text)   # CC "VIEW CURRENT STATEMENT"
+            savings_txns = _parse_savings_statement_text(full_text)  # savings 1331-style
+            od_sav_txns  = _parse_od_savings_text(full_text)     # OD savings 9175/7281-style
+            od_txns      = _parse_from_text(full_text)           # legacy OD e-statement
+            best_text = max([cc_txns, savings_txns, od_sav_txns, od_txns], key=len)
             if best_text and len(best_text) > len(transactions):
                 transactions = best_text
 
@@ -190,6 +191,88 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             t.pop("paid_to_hint", None)
 
     return enriched
+
+
+def _parse_od_savings_text(text: str) -> list:
+    """
+    Parse ICICI OD/home-loan savings account statements (e.g. 9175, 7281).
+    Each transaction spans 3 lines:
+      Line A: PAID_TO  -BALANCE_PARTIAL   (e.g. 'Debit trxn -57503233.')
+      Line B: S_NO DD.MM.YYYY AMOUNT      (e.g. '1 02.04.2026 396679.00')
+      Line C: DESCRIPTION  BALANCE_REST   (e.g. '102205009175:...  10')
+    Direction is inferred from line A keyword or balance delta.
+    """
+    lines = text.split("\n")
+    row_pat = re.compile(r"^(\d{1,3})\s+(\d{2}\.\d{2}\.\d{4})\s+([\d,]+\.\d{2})\s*$")
+    bal_partial_pat = re.compile(r"(-?[\d,]+\.?\d*)\s*$")
+
+    transactions = []
+    seen = set()
+    prev_balance = None
+
+    i = 0
+    while i < len(lines):
+        ln = lines[i].strip()
+        m_row = row_pat.match(ln)
+        if m_row:
+            _, date_dot, amount_str = m_row.groups()
+            amount = float(amount_str.replace(",", ""))
+            d, mo, yr = date_dot.split(".")
+            date_str = f"{d}/{mo}/{yr}"
+
+            # Line A is the line BEFORE the row line (paid_to + partial balance)
+            line_a = lines[i - 1].strip() if i > 0 else ""
+            # Line C is the line AFTER the row line (description + balance remainder)
+            line_c = lines[i + 1].strip() if i + 1 < len(lines) else ""
+
+            # Reconstruct balance from partial on line A + remainder on line C
+            balance = None
+            m_bal = bal_partial_pat.search(line_a)
+            if m_bal:
+                parts_c = line_c.rsplit(None, 1)
+                remainder = parts_c[-1] if len(parts_c) > 1 else ""
+                try:
+                    balance = float((m_bal.group(1) + remainder).replace(",", ""))
+                except ValueError:
+                    pass
+
+            # Direction from line A keyword, fallback to balance delta
+            line_a_lower = line_a.lower()
+            if "credit trxn" in line_a_lower:
+                direction = "credit"
+            elif "debit trxn" in line_a_lower:
+                direction = "debit"
+            elif balance is not None and prev_balance is not None:
+                direction = "credit" if balance > prev_balance else "debit"
+            else:
+                direction = "debit"
+
+            # Description from line C (strip balance remainder)
+            parts_c = line_c.rsplit(None, 1) if line_c else []
+            desc = parts_c[0].strip() if len(parts_c) > 1 else line_c
+
+            # paid_to from line A (strip partial balance)
+            paid_to = bal_partial_pat.sub("", line_a).strip()
+
+            if balance is not None:
+                prev_balance = balance
+
+            key = f"{date_str}|{amount}"
+            if key not in seen and amount >= 1:
+                seen.add(key)
+                transactions.append({
+                    "date": date_str,
+                    "description": desc or paid_to,
+                    "paid_to_hint": paid_to,
+                    "amount": amount,
+                    "txn_direction": direction,
+                    "balance": balance,
+                })
+            i += 2  # skip line C
+        else:
+            i += 1
+
+    return transactions
 
 
 def _parse_cc_statement_text(text: str) -> list:
