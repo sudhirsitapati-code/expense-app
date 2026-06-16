@@ -802,16 +802,21 @@ def api_fix_7281():
             continue
         desc = (txn.get("raw_description") or "").lower()
 
+        # Normalise date format while we're here
+        if txn.get("date") and "-" in txn.get("date", ""):
+            dt = _ml_parse_date(txn["date"])
+            if dt:
+                txn["date"] = dt.strftime("%d/%m/%Y")
+
         if any(k in desc for k in INTEREST_KW):
             txn["type"] = "Expense"
             txn["heading"] = "Financial Expense"
             txn["uncertain"] = False
             fixed += 1
-        elif any(k in desc for k in TRANSFER_KW) or not desc:
-            # Empty description on 7281 = OD transfer (user confirmed most are transfers)
+        elif any(k in desc for k in TRANSFER_KW) or not desc or txn.get("heading") in (None, "", "null"):
             txn["type"] = "Transfer"
             txn["heading"] = "Interbank"
-            txn["uncertain"] = not desc  # uncertain if no description
+            txn["uncertain"] = not desc
             fixed += 1
 
     if fixed:
