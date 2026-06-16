@@ -885,6 +885,8 @@ def get_cc_balance() -> dict:
 def deduplicate_ledger() -> int:
     """Remove duplicate transactions caused by same txn appearing in Gmail alert + PDF.
     Groups by (date, account, debit, credit). Keeps the richest entry, merges fields.
+    Also deduplicates known salary payees by (year-month, amount) since PDF and Gmail
+    alerts may record the same payment on slightly different dates.
     Returns number of duplicates removed.
     """
     from collections import defaultdict
@@ -932,8 +934,45 @@ def deduplicate_ledger() -> int:
 
     if to_remove:
         ledger = [t for t in ledger if t["txn_id"] not in to_remove]
+
+    # Second dedup: known salary/recurring payees — same year-month + amount = duplicate
+    # Catches cases where Gmail alert and PDF record the payment on different dates (e.g. 27th vs 28th)
+    SALARY_KEYWORDS = ["vincent fe", "vincent fern", "ketkisitap", "ketki sitapati",
+                       "gcplsalary", "cms/ gcplsalary"]
+    salary_groups = defaultdict(list)
+    for txn in ledger:
+        if txn.get("confidence") == "manual":
+            continue
+        desc = (txn.get("raw_description") or "").lower()
+        matched_kw = next((kw for kw in SALARY_KEYWORDS if kw in desc), None)
+        if not matched_kw:
+            continue
+        date_str = txn.get("date", "")
+        # Extract year-month from DD/MM/YYYY
+        try:
+            parts = date_str.split("/")
+            ym = f"{parts[2]}-{parts[1]}"  # YYYY-MM
+        except Exception:
+            continue
+        amount = round(float(txn.get("debit") or txn.get("credit") or 0), 2)
+        key = (matched_kw, ym, amount)
+        salary_groups[key].append(txn)
+
+    salary_removed = set()
+    for key, txns in salary_groups.items():
+        if len(txns) <= 1:
+            continue
+        txns.sort(key=_score, reverse=True)
+        for loser in txns[1:]:
+            salary_removed.add(loser["txn_id"])
+
+    if salary_removed:
+        ledger = [t for t in ledger if t["txn_id"] not in salary_removed]
+
+    total_removed = len(to_remove) + len(salary_removed)
+    if total_removed:
         _save_json(LEDGER_PATH, ledger)
-    return len(to_remove)
+    return total_removed
 
 
 def import_from_icici_transactions() -> int:
