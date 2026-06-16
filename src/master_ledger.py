@@ -1205,24 +1205,28 @@ def repair_pdf_descriptions() -> int:
                     named_fixed += 1
                 break
 
-    # Third pass: round-thousand unclassified amounts + sudhir sitapati payee = Transfer
-    # Only applies when heading is still bad (Unknown/Misc/empty) to avoid overriding
-    # known categories like Staff Salary, Home Loan, Charity which are also round numbers.
+    # Third pass: self-transfers (sudhir/sitapati in paid_to or desc) + large round amounts
+    # Sudhir/sitapati applies at any amount. Round-thousand rule only above Rs. 10,000
+    # (small round amounts like Rs. 1000/2000 are common expenses — restaurants, etc.)
+    SELF_NAMES = ["sudhir sitapati", "sudhirsitapati", "s sitapati",
+                  "sudhir s", "sitapati"]
     round_fixed = 0
     for txn in ledger:
         if txn.get("confidence") == "manual":
             continue
+        if txn.get("type") in ("Transfer", "Income", "Investment", "Official"):
+            continue
         paid_to = (txn.get("paid_to") or "").lower()
         desc    = (txn.get("raw_description") or "").lower()
-        is_self = "sudhir sitapati" in paid_to or "sudhir sitapati" in desc or "sudhirsitapati" in desc
+        haystack = paid_to + " " + desc
+        is_self = any(name in haystack for name in SELF_NAMES)
         debit   = float(txn.get("debit") or 0)
         credit  = float(txn.get("credit") or 0)
         amount  = debit or credit
-        is_round_k = amount >= 1000 and amount % 1000 == 0
         heading = txn.get("heading") or ""
         is_bad  = heading in BAD_HEADINGS
-        if txn.get("type") in ("Transfer", "Income", "Investment", "Official"):
-            continue
+        # Round-thousand rule: only for amounts > Rs. 10,000 to avoid catching small expenses
+        is_round_k = amount > 10_000 and amount % 1000 == 0
         if is_self or (is_round_k and is_bad):
             if amount <= 1_000_000:  # up to 10 lakhs → Transfer
                 txn["type"]    = "Transfer"

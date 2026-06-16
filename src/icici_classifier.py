@@ -116,7 +116,7 @@ RULES = [
     # ── SELF-TRANSFER / INTERBANK ─────────────────────────────────────────────
     # INF/INFT and NF/INFT = ICICI internet funds transfer between own accounts
     # "sudhir sitapati" as payee = transfer to self
-    (["sudhir sitapati", "sudhirsitapati"],
+    (["sudhir sitapati", "sudhirsitapati", "s sitapati", "sitapati"],
      "Transfer", "Interbank"),
 
     (["inf/inft", "nf/inft", "/inft/", "inft/", "net banking inf",
