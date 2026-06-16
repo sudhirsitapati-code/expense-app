@@ -421,7 +421,7 @@ function typeBadge(t) {
   const cls = {
     expense:'badge-expense', income:'badge-income',
     investment:'badge-investment', transfer:'badge-transfer', official:'badge-official'
-  }[t] || 'bg-secondary text-white';
+  }[(t||'').toLowerCase()] || 'bg-secondary text-white';
   return `<span class="badge ${cls}">${t||'—'}</span>`;
 }
 
