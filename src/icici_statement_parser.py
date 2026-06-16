@@ -137,6 +137,8 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             winner = "cc" if best_text is cc_txns else "savings" if best_text is savings_txns else "od_savings" if best_text is od_sav_txns else "od"
             print(f"[parser] acct={account} cc={len(cc_txns)} savings={len(savings_txns)} od_sav={len(od_sav_txns)} od={len(od_txns)} winner={winner}")
             print(f"[parser] text_sample={repr(full_text[:300])}")
+            for i, t in enumerate(best_text[:5]):
+                print(f"[parser] txn[{i}] {t}")
             if best_text and len(best_text) > len(transactions):
                 transactions = best_text
 
