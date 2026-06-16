@@ -208,8 +208,10 @@ def _classify_type(desc: str, account_type: str, paid_to: str) -> tuple[str, boo
 
 def _classify_heading(desc: str, txn_type: str) -> tuple[Optional[str], bool]:
     """Returns (heading, certain)."""
-    if txn_type in ("income", "transfer", "official"):
-        return None, True           # No heading needed for these types
+    if txn_type == "transfer":
+        return "Interbank", True
+    if txn_type in ("income", "official"):
+        return None, True
 
     if txn_type == "investment":
         d = desc.lower()
@@ -1119,10 +1121,11 @@ def repair_pdf_descriptions() -> int:
         classified = classify_transaction(dict(txn))
         new_type    = classified.get("type", "")
         new_heading = classified.get("heading", "")
-        if new_type and new_heading and new_heading not in BAD_HEADINGS:
+        if new_type and new_heading not in BAD_HEADINGS:
             txn["type"]    = new_type
-            txn["heading"] = new_heading
+            txn["heading"] = new_heading or ""
             txn["paid_to"] = txn.get("paid_to") or classified.get("paid_to", "")
+            txn["uncertain"] = not classified.get("uncertain", True)
             reclassified += 1
 
     if repaired or reclassified:
