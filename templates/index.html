@@ -224,7 +224,7 @@
       </select>
     </div>
     <div class="col-sm-2">
-      <select class="form-select form-select-sm" id="ledgerType" onchange="filterLedger()">
+      <select class="form-select form-select-sm" id="ledgerType" onchange="refreshLedgerHeadings();filterLedger()">
         <option value="">All Types</option>
         <option value="expense">Expense</option>
         <option value="transfer">Transfer</option>
@@ -597,6 +597,15 @@ async function loadLedger() {
 
   renderLedger(d.transactions);
   renderNotSure(d.transactions.filter(t => t.uncertain));
+}
+
+function refreshLedgerHeadings() {
+  const type = document.getElementById('ledgerType').value;
+  const sel  = document.getElementById('ledgerHeading');
+  const cur  = sel.value;
+  const list = type ? (HEADINGS_BY_TYPE[type] || HEADINGS) : HEADINGS;
+  sel.innerHTML = '<option value="">All Headings</option>' +
+    list.map(h => `<option value="${h}" ${cur===h?'selected':''}>${h}</option>`).join('');
 }
 
 function filterLedger() { loadLedger(); }
