@@ -1128,9 +1128,31 @@ def repair_pdf_descriptions() -> int:
             txn["uncertain"] = not classified.get("uncertain", True)
             reclassified += 1
 
-    if repaired or reclassified:
+    # Third pass: round-thousand unclassified amounts + sudhir sitapati payee = Transfer
+    # Only applies when heading is still bad (Unknown/Misc/empty) to avoid overriding
+    # known categories like Staff Salary, Home Loan, Charity which are also round numbers.
+    round_fixed = 0
+    for txn in ledger:
+        if txn.get("confidence") == "manual":
+            continue
+        paid_to = (txn.get("paid_to") or "").lower()
+        desc    = (txn.get("raw_description") or "").lower()
+        is_self = "sudhir sitapati" in paid_to or "sudhir sitapati" in desc or "sudhirsitapati" in desc
+        debit   = float(txn.get("debit") or 0)
+        credit  = float(txn.get("credit") or 0)
+        amount  = debit or credit
+        is_round_k = amount >= 1000 and amount % 1000 == 0
+        heading = txn.get("heading") or ""
+        is_bad  = heading in BAD_HEADINGS
+        if (is_self or (is_round_k and is_bad)) and txn.get("type") not in ("Transfer", "Income", "Investment", "Official"):
+            txn["type"]    = "Transfer"
+            txn["heading"] = "Interbank"
+            txn["uncertain"] = False
+            round_fixed += 1
+
+    if repaired or reclassified or round_fixed:
         _save_json(LEDGER_PATH, ledger)
-    return repaired + reclassified
+    return repaired + reclassified + round_fixed
 
 
 def load_ledger() -> list:
