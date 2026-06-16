@@ -1144,9 +1144,15 @@ def repair_pdf_descriptions() -> int:
         is_round_k = amount >= 1000 and amount % 1000 == 0
         heading = txn.get("heading") or ""
         is_bad  = heading in BAD_HEADINGS
-        if (is_self or (is_round_k and is_bad)) and txn.get("type") not in ("Transfer", "Income", "Investment", "Official"):
-            txn["type"]    = "Transfer"
-            txn["heading"] = "Interbank"
+        if txn.get("type") in ("Transfer", "Income", "Investment", "Official"):
+            continue
+        if is_self or (is_round_k and is_bad):
+            if amount <= 1_000_000:  # up to 10 lakhs → Transfer
+                txn["type"]    = "Transfer"
+                txn["heading"] = "Interbank"
+            else:                    # above 10 lakhs → Investment
+                txn["type"]    = "Investment"
+                txn["heading"] = "Unknown"
             txn["uncertain"] = False
             round_fixed += 1
 
