@@ -139,7 +139,7 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             print(f"[parser] text_sample={repr(full_text[:300])}")
             for i, t in enumerate(best_text[:5]):
                 print(f"[parser] txn[{i}] {t}")
-            if best_text and len(best_text) > len(transactions):
+            if best_text and len(best_text) >= len(transactions):
                 transactions = best_text
 
     except Exception as e:
@@ -335,7 +335,8 @@ def _parse_transaction_row(row: list) -> Optional[dict]:
         cell_clean = cell.replace(",", "").replace("Dr", "").replace("Cr", "").strip()
         try:
             val = float(cell_clean)
-            if val > 0:
+            # Skip ref numbers (10+ digits) and zero
+            if val > 0 and len(cell_clean.split(".")[0]) < 10:
                 amount = val
                 break
         except ValueError:
