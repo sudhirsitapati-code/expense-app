@@ -1116,6 +1116,28 @@ def api_ledger_update(txn_id):
     return jsonify({"status": "ok"}) if ok else (jsonify({"error": "not found"}), 404)
 
 
+@app.route("/api/admin/bulk-holiday-7009", methods=["GET"])
+@login_required
+def api_bulk_holiday_7009():
+    """Set all ICICI-7009 transactions between 23-May and 1-Jun to expense/Holiday."""
+    from src.master_ledger import _parse_date as _ml_parse_date, _save_json, LEDGER_PATH
+    from datetime import datetime
+    date_from = datetime(2026, 5, 23)
+    date_to   = datetime(2026, 6, 1)
+    ledger = load_ledger()
+    updated = 0
+    for txn in ledger:
+        if (txn.get("account") or "").endswith("7009"):
+            dt = _ml_parse_date(txn.get("date", ""))
+            if dt and date_from <= dt <= date_to:
+                txn["type"]    = "Expense"
+                txn["heading"] = "Holiday"
+                txn["confidence"] = "manual"
+                updated += 1
+    _save_json(LEDGER_PATH, ledger)
+    return jsonify({"updated": updated, "message": f"Set {updated} ICICI-7009 txns (23-May to 1-Jun) to Expense/Holiday"})
+
+
 @app.route("/api/cc-balance", methods=["GET"])
 @login_required
 def api_cc_balance():
