@@ -1067,6 +1067,7 @@ def import_from_icici_transactions() -> int:
             "ai_saving_tip":   None,
             "saving_agreed":   None,
             "reconciled_with": None,
+            "balance":         t.get("balance"),
             "created_at":      datetime.now().isoformat(),
         }
 

@@ -1004,6 +1004,8 @@ async function loadAcctStatus() {
       `<th class="text-center" style="min-width:52px;font-size:11px">${monthLabel(ym)}</th>`
     ).join('');
 
+    const fmtBal = n => n == null ? '—' : '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits:0});
+
     const rows = accounts.map(a => {
       const cells = fy_months.map((ym, i) => {
         const cnt = a.month_counts[i];
@@ -1016,6 +1018,8 @@ async function loadAcctStatus() {
         <td class="fw-semibold" style="white-space:nowrap">${a.account}</td>
         <td class="text-muted" style="font-size:11px">${a.bank||'—'}</td>
         <td class="text-muted" style="font-size:11px">${a.account_type||'—'}</td>
+        <td class="text-end" style="font-size:11px;white-space:nowrap">${a.latest_date||'—'}</td>
+        <td class="text-end fw-semibold" style="font-size:11px;white-space:nowrap;color:#1e3a5f">${fmtBal(a.latest_balance)}</td>
         ${cells}
       </tr>`;
     }).join('');
@@ -1028,6 +1032,8 @@ async function loadAcctStatus() {
             <th style="min-width:110px">Account</th>
             <th style="min-width:50px">Bank</th>
             <th style="min-width:60px">Type</th>
+            <th class="text-end" style="min-width:90px">Last Date</th>
+            <th class="text-end" style="min-width:100px">Balance</th>
             ${headerCells}
           </tr>
         </thead>

@@ -173,6 +173,7 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             "source": "icici_statement",
             "amount": t["amount"],
             "type": t.get("txn_direction", "debit"),
+            "balance": t.get("balance"),
         })
 
     # AI + rule-based classification
@@ -321,6 +322,7 @@ def _parse_savings_statement_text(text: str) -> list:
             "paid_to_hint": paid_to,   # passed through for enrichment
             "amount": amount,
             "txn_direction": direction,
+            "balance": balance,
         })
 
     return transactions
@@ -398,6 +400,7 @@ def _parse_from_text(text: str) -> list:
             "description": desc,
             "amount": amount,
             "txn_direction": direction,
+            "balance": balance,
         })
 
     if transactions:

@@ -946,7 +946,7 @@ def api_account_status():
             mo, yr = 1, yr + 1
 
     ledger = load_ledger()
-    accounts = {}  # acct -> {meta, months: {ym: count}}
+    accounts = {}  # acct -> {meta, months: {ym: count}, latest_dt, latest_date, latest_balance}
     for txn in ledger:
         acct = txn.get("account") or "Unknown"
         dt = _ml_parse_date(txn.get("date", ""))
@@ -958,15 +958,24 @@ def api_account_status():
                 "account": acct,
                 "bank": txn.get("bank", ""),
                 "account_type": txn.get("account_type", ""),
-                "months": {}
+                "months": {},
+                "latest_dt": dt,
+                "latest_date": txn.get("date", ""),
+                "latest_balance": txn.get("balance"),
             }
         accounts[acct]["months"][ym] = accounts[acct]["months"].get(ym, 0) + 1
+        if dt >= accounts[acct]["latest_dt"]:
+            accounts[acct]["latest_dt"] = dt
+            accounts[acct]["latest_date"] = txn.get("date", "")
+            if txn.get("balance") is not None:
+                accounts[acct]["latest_balance"] = txn.get("balance")
 
     result = sorted(accounts.values(), key=lambda x: x["account"])
     for r in result:
         r["fy_months"] = fy_months
         r["month_counts"] = [r["months"].get(ym, 0) for ym in fy_months]
         del r["months"]
+        del r["latest_dt"]
     return jsonify({"accounts": result, "fy_months": fy_months})
 
 
