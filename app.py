@@ -296,18 +296,25 @@ def api_mis():
         annual = budget_annual.get(heading, 0)
         return annual if period == "ytd" else round(annual / 12 * n_months)
 
-    # ── FY27 actual from approval log ─────────────────────────────────────────
+    # ── FY27 actual from master ledger ────────────────────────────────────────
+    from src.master_ledger import _parse_date as _ml_parse_date
     fy27_actual: dict = {}
-    for e in log:
-        if e.get("action") not in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER"):
+    _fy27_start = datetime(2026, 4, 1)
+    for txn in load_ledger():
+        if txn.get("type") not in ("Expense", "Official"):
             continue
-        # Use response_timestamp (when approved) for approved entries, fall back to submission timestamp
-        ts = e.get("response_timestamp") or e.get("timestamp") or ""
-        if ts[:7] not in period_months:
+        if txn.get("uncertain"):
             continue
-        heading = APP_TO_HEADING.get(e.get("category","miscellaneous"), "Misc")
-        amt = e.get("approved_amount") or e.get("amount", 0)
-        fy27_actual[heading] = fy27_actual.get(heading, 0) + amt
+        dt = _ml_parse_date(txn.get("date", ""))
+        if not dt or dt < _fy27_start:
+            continue
+        ym = dt.strftime("%Y-%m")
+        if ym not in period_months:
+            continue
+        heading = txn.get("heading", "Misc") or "Misc"
+        amt = float(txn.get("debit", 0) or 0)
+        if amt > 0:
+            fy27_actual[heading] = fy27_actual.get(heading, 0) + amt
 
     # ── Build grouped rows ────────────────────────────────────────────────────
     all_headings = set(budget_annual.keys()) | set(FY26_MONTHLY.keys())
