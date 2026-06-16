@@ -241,6 +241,9 @@
     <div class="col-sm-2">
       <input type="month" class="form-control form-control-sm" id="ledgerMonth" onchange="filterLedger()">
     </div>
+    <div class="col-sm-2">
+      <input class="form-control form-control-sm" id="ledgerAmount" placeholder="Exact amount…" oninput="filterLedger()">
+    </div>
     <div class="col-sm-2 d-flex gap-2 align-items-center">
       <button class="btn btn-sm btn-primary" onclick="syncLedger()"><i class="bi bi-cloud-download me-1"></i>Sync Gmail</button>
       <button class="btn btn-sm btn-outline-secondary" id="btnSyncPDF" onclick="syncPDFs(false)"><i class="bi bi-file-earmark-pdf me-1"></i>Sync PDFs</button>
@@ -260,7 +263,9 @@
   <table class="table table-hover mb-0">
     <thead><tr>
       <th>#</th><th>Date</th><th>Account</th><th>Description</th>
-      <th>Paid To</th><th class="text-end">Debit</th><th class="text-end">Credit</th>
+      <th>Paid To</th>
+      <th class="text-end" style="cursor:pointer;user-select:none" onclick="cycleSort('debit')" id="hdrDebit">Debit ↕</th>
+      <th class="text-end" style="cursor:pointer;user-select:none" onclick="cycleSort('credit')" id="hdrCredit">Credit ↕</th>
       <th>Type</th><th>Heading</th><th>Remarks</th><th>💡</th>
     </tr></thead>
     <tbody id="ledgerBody"></tbody>
@@ -595,7 +600,17 @@ async function loadLedger() {
   window._ledgerSerials = {};
   d.transactions.forEach(t => { if (t.seq) window._ledgerSerials[t.txn_id] = t.seq; });
 
-  renderLedger(d.transactions);
+  // Store full list for client-side sort; apply any active sort
+  // Apply exact amount filter client-side
+  const amtStr = document.getElementById('ledgerAmount')?.value.trim().replace(/,/g, '');
+  const amtFilter = amtStr ? parseFloat(amtStr) : null;
+  const filtered = amtFilter
+    ? d.transactions.filter(t => parseFloat(t.debit||0) === amtFilter || parseFloat(t.credit||0) === amtFilter)
+    : d.transactions;
+
+  window._ledgerAll = filtered;
+  const sorted = sortedLedger(filtered);
+  renderLedger(sorted);
   renderNotSure(d.transactions.filter(t => t.uncertain));
 }
 
@@ -608,7 +623,31 @@ function refreshLedgerHeadings() {
     list.map(h => `<option value="${h}" ${cur===h?'selected':''}>${h}</option>`).join('');
 }
 
-function filterLedger() { loadLedger(); }
+let _sortCol = null, _sortDir = 0; // 0=none,1=asc,-1=desc
+
+function sortedLedger(txns) {
+  if (!_sortCol) return txns;
+  return [...txns].sort((a, b) => {
+    const av = parseFloat(a[_sortCol]) || 0;
+    const bv = parseFloat(b[_sortCol]) || 0;
+    return _sortDir * (av - bv);
+  });
+}
+
+function cycleSort(col) {
+  if (_sortCol !== col) { _sortCol = col; _sortDir = 1; }
+  else if (_sortDir === 1) _sortDir = -1;
+  else { _sortCol = null; _sortDir = 0; }
+  const icons = { null: '↕', 1: '↑', '-1': '↓' };
+  document.getElementById('hdrDebit').textContent  = 'Debit '  + (col === 'debit'  || _sortCol !== 'credit' && _sortCol !== 'debit' ? icons[String(_sortCol === 'debit'  ? _sortDir : 0)] : '↕');
+  document.getElementById('hdrCredit').textContent = 'Credit ' + (col === 'credit' || _sortCol !== 'credit' && _sortCol !== 'debit' ? icons[String(_sortCol === 'credit' ? _sortDir : 0)] : '↕');
+  // Reset both then set correct one
+  document.getElementById('hdrDebit').textContent  = 'Debit '  + (_sortCol === 'debit'  ? (_sortDir === 1 ? '↑' : '↓') : '↕');
+  document.getElementById('hdrCredit').textContent = 'Credit ' + (_sortCol === 'credit' ? (_sortDir === 1 ? '↑' : '↓') : '↕');
+  if (window._ledgerAll) renderLedger(sortedLedger(window._ledgerAll));
+}
+
+function filterLedger() { _sortCol = null; _sortDir = 0; loadLedger(); }
 
 function renderLedger(txns) {
   const tbody = document.getElementById('ledgerBody');
