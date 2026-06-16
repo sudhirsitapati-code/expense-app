@@ -134,6 +134,9 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             od_sav_txns  = _parse_od_savings_text(full_text)     # OD savings 9175/7281-style
             od_txns      = _parse_from_text(full_text)           # legacy OD e-statement
             best_text = max([cc_txns, savings_txns, od_sav_txns, od_txns], key=len)
+            winner = "cc" if best_text is cc_txns else "savings" if best_text is savings_txns else "od_savings" if best_text is od_sav_txns else "od"
+            print(f"[parser] acct={account} cc={len(cc_txns)} savings={len(savings_txns)} od_sav={len(od_sav_txns)} od={len(od_txns)} winner={winner}")
+            print(f"[parser] text_sample={repr(full_text[:300])}")
             if best_text and len(best_text) > len(transactions):
                 transactions = best_text
 
