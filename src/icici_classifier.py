@@ -67,7 +67,7 @@ RULES = [
 
     # ── HOME LOAN INTEREST (account 9175) — must be before generic int.coll rule ─
     (["9175:int", "102205009175:int", "9175:int.coll", "102205009175:int.coll"],
-     "Investment", "Home Loan"),
+     "Expense", "Home Loan"),
 
     # ── OD INTEREST (account 7281) — must be before generic int.coll rule ──────
     (["7281:int", "123105007281:int", "7281:int.coll", "123105007281:int.coll"],
@@ -80,8 +80,7 @@ RULES = [
      "Expense", "Financial Expense"),
 
     # ── HOME LOAN ─────────────────────────────────────────────────────────────
-    # 003801011331:Int.Pd is interest EARNED on savings (credit), not home loan
-    (["bil/home loan", "home loan xx", "emi sudhir",
+    (["home loan", "bil/home loan", "home loan xx", "emi sudhir",
       "xx99508", "xx00382", "xx42596",
       "102205009175", "tbmum0000749", "tbmum0000750", "smp/tbmum",
       "cms/ tbmum"],
