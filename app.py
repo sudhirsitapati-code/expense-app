@@ -889,6 +889,21 @@ def api_debug_ledger_accounts():
     })
 
 
+@app.route("/api/debug/seq-lookup", methods=["GET"])
+@login_required
+def api_debug_seq_lookup():
+    """Look up transactions by seq numbers. ?seqs=1,2,6,8"""
+    seqs = [int(s.strip()) for s in (request.args.get("seqs") or "").split(",") if s.strip().isdigit()]
+    if not seqs:
+        return jsonify({"error": "provide ?seqs=1,2,3"}), 400
+    ledger = _ml_load_json(LEDGER_PATH)
+    hits = {t["seq"]: t for t in ledger if t.get("seq") in seqs}
+    return jsonify({"results": [
+        {k: hits[s].get(k) for k in ("seq","txn_id","date","account","debit","credit","type","heading","source","confidence","raw_description","paid_to")}
+        for s in seqs if s in hits
+    ]})
+
+
 @app.route("/api/debug/search-ledger", methods=["GET"])
 @login_required
 def api_debug_search_ledger():

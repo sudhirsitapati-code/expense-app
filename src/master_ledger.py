@@ -1222,68 +1222,60 @@ def repair_pdf_descriptions() -> int:
                 break
 
     # Third pass: self-transfers (sudhir/sitapati in paid_to or desc) + large round amounts
-    # Sudhir/sitapati applies at any amount. Round-thousand rule only above Rs. 10,000
-    # (small round amounts like Rs. 1000/2000 are common expenses — restaurants, etc.)
-    # Self-name tokens — any of these in paid_to OR description = transfer to self
-    SELF_TOKENS = ["sudhir", "sitapati", "sudhirsitapati"]
-    round_fixed = 0
+    # ── Amount-based classification pass ─────────────────────────────────────
+    # Rules (applied to all non-manual entries not already well-classified):
+    #   Transfer  : 1L ≤ amount ≤ 10L  AND  sudhir/sitapati in paid_to or desc → certain
+    #   Investment: amount > 10L                                                  → uncertain
+    #   Expense   : amount < 1L  OR  amount not a multiple of 1L                → uncertain
+    #   Existing Transfer with wrong amount/no name: flip back to Expense/uncertain
+    SELF_TOKENS   = ["sudhir", "sitapati", "sudhirsitapati"]
+    LAKH          = 100_000
+    HARD_TRANSFER = ["inft", "neft", "rtgs", "imps", "inf/", "/inf/",
+                     "credit card", "bil/001", "bill pay", "trfr to"]
+    round_fixed = small_fixed = 0
+
     for txn in ledger:
         if txn.get("confidence") == "manual":
             continue
-        if txn.get("type") in ("Transfer", "Income", "Investment", "Official"):
-            continue
-        paid_to = (txn.get("paid_to") or "").lower()
-        desc    = (txn.get("raw_description") or "").lower()
-        debit   = float(txn.get("debit") or 0)
-        credit  = float(txn.get("credit") or 0)
-        amount  = debit or credit
-        # For large amounts (≥ Rs. 10,000) check paid_to for self-name tokens
-        # For small amounts only match full "sudhir sitapati" to avoid false positives
-        if amount >= 10_000:
-            is_self = any(tok in paid_to for tok in SELF_TOKENS) or \
-                      any(tok in desc for tok in SELF_TOKENS)
-        else:
-            is_self = "sudhir sitapati" in paid_to or "sudhirsitapati" in paid_to or \
-                      "sudhir sitapati" in desc or "sudhirsitapati" in desc
-        heading = txn.get("heading") or ""
-        is_bad  = heading in BAD_HEADINGS
-        # Round-thousand rule: only for amounts > Rs. 10,000 to avoid catching small expenses
-        is_round_k = amount > 10_000 and amount % 1000 == 0
-        if is_self or (is_round_k and is_bad):
-            if amount <= 1_000_000:  # up to 10 lakhs → Transfer
-                txn["type"]    = "Transfer"
-                txn["heading"] = "Interbank"
-            else:                    # above 10 lakhs → Investment
-                txn["type"]    = "Investment"
-                txn["heading"] = "Unknown"
+        paid_to  = (txn.get("paid_to") or "").lower()
+        desc     = (txn.get("raw_description") or "").lower()
+        debit    = float(txn.get("debit") or 0)
+        credit   = float(txn.get("credit") or 0)
+        amount   = debit or credit
+        cur_type = (txn.get("type") or "").lower()
+        is_self  = any(tok in paid_to or tok in desc for tok in SELF_TOKENS)
+        is_lakh_step = amount >= LAKH and amount % LAKH == 0
+
+        # Rule 1: sudhir/sitapati + 1L–10L → Transfer (certain, never uncertain)
+        if is_self and LAKH <= amount <= 10 * LAKH:
+            txn["type"]    = "Transfer"
+            txn["heading"] = "Interbank"
             txn["uncertain"] = False
             round_fixed += 1
+            continue
 
-    # Fourth pass: undo Transfer misclassification on small amounts (< Rs. 10,000)
-    # Small spends are almost never interbank transfers — reclassify as Expense/Unknown
-    # so they surface in the uncertain queue for manual review.
-    HARD_TRANSFER_KW = ["inft", "neft", "rtgs", "imps", "inf/", "/inf/",
-                        "credit card", "bil/001", "bill pay", "trfr to",
-                        "sudhir", "sitapati"]
-    small_fixed = 0
-    for txn in ledger:
-        if txn.get("confidence") == "manual":
+        # Rule 2: above 10L → Investment (uncertain — needs manual heading)
+        if amount > 10 * LAKH and cur_type not in ("income", "official"):
+            if cur_type != "investment":
+                txn["type"]    = "Investment"
+                txn["heading"] = "Unknown"
+                txn["uncertain"] = True
+                round_fixed += 1
             continue
-        if txn.get("type", "").lower() != "transfer":
-            continue
-        debit  = float(txn.get("debit") or 0)
-        credit = float(txn.get("credit") or 0)
-        amount = debit or credit
-        if amount >= 10_000:
-            continue
-        desc = (txn.get("raw_description") or "").lower()
-        paid = (txn.get("paid_to") or "").lower()
-        if any(kw in desc or kw in paid for kw in HARD_TRANSFER_KW):
-            continue  # genuine transfer keyword present — leave it
-        txn["type"]    = "Expense"
-        txn["heading"] = "Unknown"
-        txn["uncertain"] = True
-        small_fixed += 1
+
+        # Rule 3: existing Transfer but doesn't meet Transfer criteria → flip to Expense
+        if cur_type == "transfer":
+            # Keep if genuine transfer keyword in description
+            if any(kw in desc or kw in paid_to for kw in HARD_TRANSFER):
+                continue
+            # Keep if valid transfer amount + self-name
+            if is_self and LAKH <= amount <= 10 * LAKH:
+                continue
+            # Otherwise it's a misclassified transfer
+            txn["type"]    = "Expense"
+            txn["heading"] = "Unknown"
+            txn["uncertain"] = True
+            small_fixed += 1
 
     # Final pass: Transfer/Income/Investment entries should never be uncertain
     for txn in ledger:
