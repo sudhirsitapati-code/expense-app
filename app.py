@@ -301,7 +301,7 @@ def api_mis():
     fy27_actual: dict = {}
     _fy27_start = datetime(2026, 4, 1)
     for txn in load_ledger():
-        if txn.get("type") not in ("Expense", "Official"):
+        if (txn.get("type") or "").lower() not in ("expense", "official"):
             continue
         if txn.get("uncertain"):
             continue
@@ -944,7 +944,7 @@ def api_debug_mis_actuals():
         if not dt or dt < _fy27_start:
             continue
         reason = None
-        if txn.get("type") not in ("Expense", "Official"):
+        if (txn.get("type") or "").lower() not in ("expense", "official"):
             reason = f"type={txn.get('type')}"
         elif txn.get("uncertain"):
             reason = "uncertain=True"
