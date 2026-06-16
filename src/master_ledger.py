@@ -1237,9 +1237,35 @@ def repair_pdf_descriptions() -> int:
             txn["uncertain"] = False
             round_fixed += 1
 
-    if repaired or reclassified or named_fixed or round_fixed:
+    # Fourth pass: undo Transfer misclassification on small amounts (< Rs. 10,000)
+    # Small spends are almost never interbank transfers — reclassify as Expense/Unknown
+    # so they surface in the uncertain queue for manual review.
+    HARD_TRANSFER_KW = ["inft", "neft", "rtgs", "imps", "inf/", "/inf/",
+                        "credit card", "bil/001", "bill pay", "trfr to",
+                        "sudhir sitapati", "sudhirsitapati", "sitapati"]
+    small_fixed = 0
+    for txn in ledger:
+        if txn.get("confidence") == "manual":
+            continue
+        if txn.get("type", "").lower() != "transfer":
+            continue
+        debit  = float(txn.get("debit") or 0)
+        credit = float(txn.get("credit") or 0)
+        amount = debit or credit
+        if amount >= 10_000:
+            continue
+        desc = (txn.get("raw_description") or "").lower()
+        paid = (txn.get("paid_to") or "").lower()
+        if any(kw in desc or kw in paid for kw in HARD_TRANSFER_KW):
+            continue  # genuine transfer keyword present — leave it
+        txn["type"]    = "Expense"
+        txn["heading"] = "Unknown"
+        txn["uncertain"] = True
+        small_fixed += 1
+
+    if repaired or reclassified or named_fixed or round_fixed or small_fixed:
         _save_json(LEDGER_PATH, ledger)
-    return repaired + reclassified + named_fixed + round_fixed
+    return repaired + reclassified + named_fixed + round_fixed + small_fixed
 
 
 def load_ledger() -> list:
