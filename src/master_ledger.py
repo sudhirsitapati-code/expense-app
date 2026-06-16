@@ -374,7 +374,7 @@ Only output JSON, no explanation."""
 
         try:
             resp = client.chat.completions.create(
-                model=deployment, max_tokens=1500,
+                model=deployment, max_completion_tokens=1500,
                 messages=[
                     {"role":"system","content":"Reply only with JSON."},
                     {"role":"user","content":prompt},

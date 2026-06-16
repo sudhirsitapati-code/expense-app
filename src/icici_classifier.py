@@ -310,7 +310,7 @@ paid_to: short payee name if identifiable, else null."""
     try:
         response = client.chat.completions.create(
             model=deployment,
-            max_tokens=600,
+            max_completion_tokens=600,
             messages=[
                 {"role": "system", "content": "Reply only with a JSON array. No markdown."},
                 {"role": "user", "content": prompt}

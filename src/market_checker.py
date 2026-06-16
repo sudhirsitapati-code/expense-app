@@ -101,7 +101,7 @@ Reply ONLY with JSON."""
         try:
             response = self.client.chat.completions.create(
                 model=self.deployment,
-                max_tokens=200,
+                max_completion_tokens=200,
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant that replies only with JSON."},
                     {"role": "user", "content": prompt}
