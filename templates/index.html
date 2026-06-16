@@ -333,7 +333,7 @@
         <input type="hidden" id="editTxnId">
         <div class="mb-2">
           <label class="form-label small fw-semibold">Type</label>
-          <select class="form-select form-select-sm" id="editType">
+          <select class="form-select form-select-sm" id="editType" onchange="refreshEditHeadings(this.value)">
             <option value="expense">Expense</option>
             <option value="income">Income</option>
             <option value="investment">Investment</option>
@@ -343,24 +343,7 @@
         </div>
         <div class="mb-2">
           <label class="form-label small fw-semibold">Heading</label>
-          <select class="form-select form-select-sm" id="editHeading">
-            <option value="">— None —</option>
-            <option>Groceries</option><option>Staff Salary</option>
-            <option>Electricity &amp; Gas</option><option>Misc</option>
-            <option>Cash</option><option>Alcohol</option><option>Wellness</option>
-            <option>Clothes</option><option>Gifts</option><option>Medical</option>
-            <option>Amma</option><option>Ketki</option>
-            <option>Children Education</option><option>Charity</option>
-            <option>Uspaar</option><option>Holiday</option>
-            <option>Eating Out</option><option>Entertainment</option>
-            <option>Malhar</option><option>Maintenance Expense</option>
-            <option>Home office</option><option>One Time Charge</option>
-            <option>Kalpataru Maintenance</option>
-            <option>Financial Expense / OD Interest</option>
-            <option>Insurance</option><option>Home Loan</option><option>Tax</option>
-            <option>Short Term Advance</option>
-            <option>Credit Card Loan</option><option>Investment</option>
-          </select>
+          <select class="form-select form-select-sm" id="editHeading"></select>
         </div>
         <div class="mb-2">
           <label class="form-label small fw-semibold">Paid To</label>
@@ -722,13 +705,19 @@ async function saveNotSure(txnId) {
   cnt.textContent = Math.max(0, parseInt(cnt.textContent||'0') - 1);
 }
 
+function refreshEditHeadings(type, current) {
+  const sel = document.getElementById('editHeading');
+  const cur = current !== undefined ? current : sel.value;
+  sel.innerHTML = headingOpts(type, cur);
+}
+
 function openEdit(txnId, txnEncoded) {
   const t = JSON.parse(decodeURIComponent(txnEncoded));
-  document.getElementById('editTxnId').value    = txnId;
-  document.getElementById('editType').value     = t.type || 'expense';
-  document.getElementById('editHeading').value  = t.heading || '';
-  document.getElementById('editPaidTo').value   = t.paid_to || '';
-  document.getElementById('editRemarks').value  = t.remarks || '';
+  document.getElementById('editTxnId').value  = txnId;
+  document.getElementById('editType').value   = (t.type || 'expense').toLowerCase();
+  refreshEditHeadings(t.type, t.heading || '');
+  document.getElementById('editPaidTo').value  = t.paid_to || '';
+  document.getElementById('editRemarks').value = t.remarks || '';
   editModal.show();
 }
 
