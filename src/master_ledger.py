@@ -169,6 +169,11 @@ def _parse_date(s: str) -> Optional[datetime]:
     return None
 
 
+def _norm_date(s: str) -> str:
+    dt = _parse_date(s)
+    return dt.strftime("%d/%m/%Y") if dt else s
+
+
 def _fy_info(dt: datetime) -> dict:
     return {
         "fy_month_no":   CAL_TO_FY_NO[dt.month],
@@ -901,6 +906,10 @@ def deduplicate_ledger() -> int:
         if t.get("heading") and t["heading"] not in ("Unknown", "Misc", "", None): s += 5
         if t.get("source") == "pdf_import":   s += 2
         return s
+
+    # Normalise dates in-memory before grouping so DD-MM-YYYY == DD/MM/YYYY
+    for txn in ledger:
+        txn["date"] = _norm_date(txn.get("date", ""))
 
     groups = defaultdict(list)
     for txn in ledger:
