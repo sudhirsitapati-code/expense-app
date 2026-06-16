@@ -160,6 +160,22 @@ def _txn_id(date: str, account: str, description: str, amount: float) -> str:
     return hashlib.sha1(raw.encode()).hexdigest()[:16]
 
 
+def _assign_seq(ledger: list) -> bool:
+    """Assign permanent seq numbers to any transactions that don't have one.
+    Sorts by date asc then txn_id for stability. Returns True if any were assigned."""
+    existing_seqs = {t["seq"] for t in ledger if t.get("seq")}
+    next_seq = max(existing_seqs, default=0) + 1
+    changed = False
+    # Assign to unseen entries sorted by date so older transactions get lower numbers
+    unseen = [t for t in ledger if not t.get("seq")]
+    unseen.sort(key=lambda t: (t.get("date", ""), t.get("txn_id", "")))
+    for t in unseen:
+        t["seq"] = next_seq
+        next_seq += 1
+        changed = True
+    return changed
+
+
 def _parse_date(s: str) -> Optional[datetime]:
     for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y", "%Y-%m-%d"):
         try:
@@ -1274,7 +1290,10 @@ def repair_pdf_descriptions() -> int:
         if txn.get("type", "").lower() in ("transfer", "income", "investment", "official"):
             txn["uncertain"] = False
 
-    if repaired or reclassified or named_fixed or round_fixed or small_fixed:
+    # Assign permanent seq numbers to any new entries
+    seq_changed = _assign_seq(ledger)
+
+    if repaired or reclassified or named_fixed or round_fixed or small_fixed or seq_changed:
         _save_json(LEDGER_PATH, ledger)
     return repaired + reclassified + named_fixed + round_fixed + small_fixed
 

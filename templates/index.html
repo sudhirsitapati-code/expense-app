@@ -608,9 +608,9 @@ async function loadLedger() {
     HEADINGS.forEach(h => heSel.add(new Option(h, h)));
   }
 
-  // Build global serial-number map keyed by txn_id so both views share the same numbers
+  // Build serial map from permanent seq field stored in DB
   window._ledgerSerials = {};
-  d.transactions.forEach((t, i) => { window._ledgerSerials[t.txn_id] = i + 1; });
+  d.transactions.forEach(t => { if (t.seq) window._ledgerSerials[t.txn_id] = t.seq; });
 
   renderLedger(d.transactions);
   renderNotSure(d.transactions.filter(t => t.uncertain));
