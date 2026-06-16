@@ -1232,6 +1232,9 @@ def repair_pdf_descriptions() -> int:
     LAKH          = 100_000
     HARD_TRANSFER = ["inft", "neft", "rtgs", "imps", "inf/", "/inf/",
                      "credit card", "bil/001", "bill pay", "trfr to"]
+    # Patterns that are never transfers even if they contain self-name or round amounts
+    NOT_TRANSFER  = ["home loan", "tbmum", "xx99508", "xx00382", "xx42596",
+                     "102205009175", "insurance", "lic ", "int.coll", "int coll"]
     round_fixed = small_fixed = 0
 
     for txn in ledger:
@@ -1245,6 +1248,16 @@ def repair_pdf_descriptions() -> int:
         cur_type = (txn.get("type") or "").lower()
         is_self  = any(tok in paid_to or tok in desc for tok in SELF_TOKENS)
         is_lakh_step = amount >= LAKH and amount % LAKH == 0
+
+        # Skip entries that are definitively not transfers regardless of name/amount
+        if any(kw in desc or kw in paid_to for kw in NOT_TRANSFER):
+            # Re-classify as Home Loan if currently wrongly Transfer
+            if cur_type == "transfer" and "home loan" in desc or "tbmum" in desc:
+                txn["type"]    = "Expense"
+                txn["heading"] = "Home Loan"
+                txn["uncertain"] = False
+                small_fixed += 1
+            continue
 
         # Rule 1: sudhir/sitapati OR 1L–10L lakh-step → Transfer (certain, never uncertain)
         if (is_self or is_lakh_step) and LAKH <= amount <= 10 * LAKH:
