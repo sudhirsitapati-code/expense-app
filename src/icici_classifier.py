@@ -65,6 +65,14 @@ RULES = [
       "advance tax", "income tax"],
      "Expense", "Tax"),
 
+    # ── HOME LOAN INTEREST (account 9175) — must be before generic int.coll rule ─
+    (["9175:int", "102205009175:int", "9175:int.coll", "102205009175:int.coll"],
+     "Investment", "Home Loan"),
+
+    # ── OD INTEREST (account 7281) — must be before generic int.coll rule ──────
+    (["7281:int", "123105007281:int", "7281:int.coll", "123105007281:int.coll"],
+     "Expense", "Financial Expense"),
+
     # ── OD / BANK INTEREST & CHARGES ─────────────────────────────────────────
     (["int.coll", "int coll", "interest collected", "renewal fees",
       "sgst", "cgst", "bank charges", "service charge", "processing fee",
@@ -189,14 +197,16 @@ RULES = [
       "vps/semolina", "vps/madras crea", "vps/carnatic",
       "vps/manis cafe", "vps/mansuri cat",
       "vps/bombay coff", "vps/tata starbu", "vps/c254 costa",
+      "vps/china house", "vps/the table", "vps/bastian",
       "swiggy", "zomato", "lin/m s profili", "vyapar.17140743",
-      "restaurant", "cafe", "pizza", "mcdonalds", "kfc", "dining"],
+      "food", "restaurant", "cafe", "pizza", "mcdonalds", "kfc", "dining",
+      "bistro", "eatery", "kitchen", "grill", "dhaba"],
      "Expense", "Eating Out"),
 
     # ── ENTERTAINMENT ─────────────────────────────────────────────────────────
-    (["netflixupi", "netflix", "vps/pvr limited", "vps/kitab",
-      "vps/april moon", "bookmyshow", "amazon prime", "spotify",
-      "hotstar", "inox", "jioworld", "kedar.teny",
+    (["netflixupi", "netflix", "prime video", "primevideo", "amazon prime",
+      "vps/pvr limited", "vps/kitab", "vps/april moon", "bookmyshow",
+      "spotify", "hotstar", "inox", "jioworld", "kedar.teny",
       "apple medi", "appleservices", "applamp", "entertainment"],
      "Expense", "Entertainment"),
 
