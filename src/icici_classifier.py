@@ -44,11 +44,11 @@ HEADINGS = [
 RULES = [
     # ── INCOME ────────────────────────────────────────────────────────────────
     (["gcplsalary", "godrej consumer products ltd sal", "godrej consumer salary",
-      "cms/gcpl", "salary credit", "sal/cr"],
+      "cms/gcpl", "cms/gcplsalary", "salary credit", "sal/cr"],
      "Income", "Salary"),
 
     (["interim dividend", "gcpl interim", "dividend"],
-     "Income", "Salary"),           # treat dividends under Income; heading flexible
+     "Income", "Salary"),
 
     # ── OFFICIAL ──────────────────────────────────────────────────────────────
     (["neft-hsbcn", "gcpl reimburs", "official reimburs", "boss petrol bill",
@@ -66,9 +66,9 @@ RULES = [
       "processing fee", "transfer int"],
      "Expense", "Financial Expense"),
 
-    # ── HOME LOAN / OD INTEREST ───────────────────────────────────────────────
+    # ── HOME LOAN ─────────────────────────────────────────────────────────────
     (["bil/home loan", "home loan xx", "emi sudhir", "xx99508", "xx00382",
-      "smp/tbmum", "102205009175"],
+      "xx42596", "smp/tbmum", "102205009175"],
      "Expense", "Home Loan"),
 
     # ── INSURANCE ─────────────────────────────────────────────────────────────
@@ -94,6 +94,10 @@ RULES = [
     (["uspaar"],
      "Investment", "Uspaar"),
 
+    # ── SELF-TRANSFER (INF/INFT = internet funds transfer between own accounts) ─
+    (["inf/inft", "/inft/", "inft/", "net banking inf"],
+     "Transfer", "Interbank"),
+
     # ── TRANSFER (credit card / interbank) ────────────────────────────────────
     (["icici bank credit ca", "bil/001", "credit card", "552418",
       "credit ca/", "interbank"],
@@ -101,14 +105,38 @@ RULES = [
 
     (["trfr to", "transfer to icici", "transfer to hdfc", "transfer to sbi",
       "neft/", "rtgs/", "imps/", ":transfer ", "007281:", "011331:",
-      "upi/", "upi-", "@okaxis", "@oksbi", "@okicici", "@ybl", "@ibl",
-      "fund transfer", "bil/neft", "bil/imps",
-      "inft/", "/inft/", "net banking inf", "/inf/"],
+      "@okaxis", "@oksbi", "@okicici", "@ybl", "@ibl",
+      "fund transfer", "bil/neft", "bil/imps", "/inf/"],
      "Transfer", "Interbank"),
+
+    # ── WELLNESS — named instructors/gyms (before generic wellness rule) ───────
+    (["susan.9510", "sue.j.walker", "susan jane", "bombay gymkhaana", "gymkhana",
+      "gym", "yoga", "wellness", "fitness", "spa", "pilates"],
+     "Expense", "Wellness"),
+
+    # ── STAFF SALARY ──────────────────────────────────────────────────────────
+    (["vincent fe", "vincent fern", "vincent salary", "santosh", "mary",
+      "shiloj", "mohammad", "mohamad", "staff salary", "maid salary",
+      "cook salary", "driver salary"],
+     "Expense", "Staff Salary"),
+
+    # ── KETKI (daughter) ──────────────────────────────────────────────────────
+    (["ketkisitap", "ketki sitapati", "ketki", "kiran sitapati"],
+     "Expense", "Ketki"),
+
+    # ── AMMA ──────────────────────────────────────────────────────────────────
+    (["amma", "kamala sitapati"],
+     "Expense", "Amma"),
+
+    # ── CHILDREN EDUCATION ────────────────────────────────────────────────────
+    (["oberoi school", "oberoi internat", "tridha school", "school fees",
+      "sahaana", "kabir", "tuition", "dhirubhai ambani", "das",
+      "komon classes", "roshini teacher"],
+     "Expense", "Children Education"),
 
     # ── KALPATARU MAINTENANCE ─────────────────────────────────────────────────
     (["bmc/ici", "kalpataru maint", "society maintenance", "hsg soc",
-      "kalpataru soc"],
+      "kalpataru soc", "kalpataru"],
      "Expense", "Kalpataru Maintenance"),
 
     # ── CHARITY ───────────────────────────────────────────────────────────────
@@ -116,39 +144,24 @@ RULES = [
       "donation", "charity"],
      "Expense", "Charity"),
 
-    # ── STAFF SALARY ─────────────────────────────────────────────────────────
-    (["vincent fe", "vincent salary", "santosh", "mary", "shiloj", "mohammad",
-      "staff salary", "maid salary", "cook salary", "driver salary",
-      "transfer mary", "transfer vincent", "neft.*vincent"],
-     "Expense", "Staff Salary"),
-
-    # ── CHILDREN EDUCATION ────────────────────────────────────────────────────
-    (["oberoi school", "oberoi internat", "tridha school", "school fees",
-      "sahaana", "kabir", "tuition", "dhirubhai ambani", "das"],
-     "Expense", "Children Education"),
-
-    # ── AMMA ──────────────────────────────────────────────────────────────────
-    (["amma", "kamala sitapati"],
-     "Expense", "Amma"),
-
-    # ── KETKI ─────────────────────────────────────────────────────────────────
-    (["ketki", "kiran sitapati"],
-     "Expense", "Ketki"),
-
-    # ── HOLIDAY ───────────────────────────────────────────────────────────────
-    (["thomas cook", "makemytrip", "irctc", "holiday", "air india",
-      "indigo", "vistara", "goair", "spicejet", "hotel", "resort",
-      "abi saad", "vps/abi"],
+    # ── HOLIDAY — VPS foreign merchants & travel ──────────────────────────────
+    (["vps/yatt", "ips/mumbai trav", "makemytrip", "mmt/imps", "thomas cook",
+      "irctc", "air india", "indigo", "vistara", "goair", "spicejet",
+      "hotel", "resort", "abi saad", "vps/abi", "airport tax",
+      "wallwood ga", "vivanta", "neemrana", "alibaug",
+      "zurich", "singapore", "luzern", "jbeil", "coonoor", "coimbator",
+      "confiserie", "smiggle", "bukhor", "tashkent", "uzbek",
+      "yatt sadyko", "yatt tulaye", "gabbars bus"],
      "Expense", "Holiday"),
 
-    # ── WELLNESS ──────────────────────────────────────────────────────────────
-    (["bombay gymkhaana", "gymkhana", "gym", "yoga", "wellness",
-      "fitness", "spa"],
-     "Expense", "Wellness"),
-
-    # ── EATING OUT ────────────────────────────────────────────────────────────
-    (["swiggy", "zomato", "restaurant", "cafe", "pizza", "mcdonalds",
-      "kfc", "starbucks", "dining"],
+    # ── EATING OUT — known Mumbai restaurants ─────────────────────────────────
+    (["swiggy", "zomato", "bkc saz", "forty two", "gravity",
+      "jap restaur", "mansuri cat", "nmacc food", "semolina",
+      "shree thake", "shree ukhs", "smaaash mum", "status rest",
+      "taj lands e", "westin mumb", "buono pizze", "eih limited",
+      "itc grand", "madras crea", "bombay coff", "costa", "starbucks",
+      "manis cafe", "carnatic", "restaurant", "cafe", "pizza",
+      "mcdonalds", "kfc", "dining"],
      "Expense", "Eating Out"),
 
     # ── ENTERTAINMENT ─────────────────────────────────────────────────────────
@@ -158,7 +171,7 @@ RULES = [
 
     # ── ELECTRICITY & GAS ─────────────────────────────────────────────────────
     (["tata power", "msedcl", "best electricity", "mahanagar gas", "mgl",
-      "electricity", "gas bill", "transfer tata power"],
+      "electricity", "gas bill"],
      "Expense", "Electricity & Gas"),
 
     # ── GROCERIES ─────────────────────────────────────────────────────────────
@@ -177,16 +190,16 @@ RULES = [
       "nykaa fashion", "clothes", "clothing", "tailoring"],
      "Expense", "Clothes"),
 
-    # ── GIFTS ─────────────────────────────────────────────────────────────────
-    (["gift", "present", "amazon.*gift", "flipkart.*gift"],
+    # ── GIFTS — toy stores and gift merchants ─────────────────────────────────
+    (["hamleys", "smiggle", "gift", "present"],
      "Expense", "Gifts"),
 
     # ── ALCOHOL ───────────────────────────────────────────────────────────────
     (["wine", "beer", "liquor", "alcohol", "spirits", "whisky", "hilife",
-      "wb's", "living liquidz"],
+      "wb's", "living liquidz", "tasmac"],
      "Expense", "Alcohol"),
 
-    # ── MALHAR (farm/second property) ─────────────────────────────────────────
+    # ── MALHAR ────────────────────────────────────────────────────────────────
     (["malhar", "satoshi", "farm"],
      "Expense", "Malhar"),
 
@@ -200,9 +213,14 @@ RULES = [
       "repair", "maintenance", "ac service", "deep clean"],
      "Expense", "Maintenance Expense"),
 
-    # ── MISC / CASH ATM ───────────────────────────────────────────────────────
+    # ── CASH ATM ──────────────────────────────────────────────────────────────
     (["atm cash", "atm withdrawal", "cash withdrawal"],
      "Expense", "Cash"),
+
+    # ── TAX ───────────────────────────────────────────────────────────────────
+    (["income tax", "advance tax", "tcs"],
+     "Expense", "Tax"),
+
 ]
 
 
