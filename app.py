@@ -752,6 +752,12 @@ def _run_statement_sync(force: bool):
         pdf_result = fetch_and_parse_statements(force_reprocess=force)
         result["pdf_statements"] = pdf_result.get("statements", 0)
         result["pdf_new"]        = pdf_result.get("new", 0)
+
+        from src.sbi_statement_parser import fetch_and_parse_sbi_statements
+        sbi_result = fetch_and_parse_sbi_statements(force_reprocess=force)
+        result["sbi_statements"] = sbi_result.get("statements", 0)
+        result["sbi_new"]        = sbi_result.get("new", 0)
+
         result["pdf_imported"]   = import_from_icici_transactions()
         result["pdf_repaired"]   = repair_pdf_descriptions()
         result["deduped"]        = deduplicate_ledger()
