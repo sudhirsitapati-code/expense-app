@@ -1679,11 +1679,15 @@ def api_transfer_recon():
         }
 
     # ── Section 1: match transfer debits ↔ credits ───────────────────────────
-    # Same amount (±max(₹500, 0.5%)), date within ±7 days.
-    # Same account allowed — e.g. reversal or round-trip within one account.
+    # At least one side must be typed "transfer"; counterpart can be any type.
+    # Tolerances: amount ±max(₹1000, 1%), date ±14 days.
     transfers = [t for t in ledger if (t.get("type") or "").lower() == "transfer"]
     t_debits  = [t for t in transfers if float(t.get("debit")  or 0) > 0]
     t_credits = [t for t in transfers if float(t.get("credit") or 0) > 0]
+
+    # Full-ledger pools for counterpart search
+    all_debits_pool  = [t for t in ledger if float(t.get("debit")  or 0) > 0]
+    all_credits_pool = [t for t in ledger if float(t.get("credit") or 0) > 0]
 
     matched_d = set()
     matched_c = set()
@@ -1697,17 +1701,19 @@ def api_transfer_recon():
         if not d_date:
             continue
         best_c, best_days = None, 999
-        for c in t_credits:
+        for c in all_credits_pool:
             if c["txn_id"] in matched_c:
+                continue
+            if c["txn_id"] == d["txn_id"]:
                 continue
             c_amt  = float(c.get("credit", 0))
             c_date = _ml_pd(c.get("date", ""))
             if not c_date:
                 continue
-            if abs(d_amt - c_amt) > max(500, d_amt * 0.005):
+            if abs(d_amt - c_amt) > max(1000, d_amt * 0.01):
                 continue
             days = abs((d_date - c_date).days)
-            if days > 7:
+            if days > 14:
                 continue
             if days < best_days:
                 best_c, best_days = c, days
@@ -1725,6 +1731,47 @@ def api_transfer_recon():
                 "to_account":   best_c.get("account"),
                 "from_desc":    (d.get("raw_description") or d.get("transaction_details") or "").strip(),
                 "to_desc":      (best_c.get("raw_description") or best_c.get("transaction_details") or "").strip(),
+            })
+
+    # Also try credit-typed transfers whose counterpart debit may be any type
+    for c in sorted(t_credits, key=lambda x: x.get("date", "")):
+        if c["txn_id"] in matched_c:
+            continue
+        c_amt  = float(c.get("credit", 0))
+        c_date = _ml_pd(c.get("date", ""))
+        if not c_date:
+            continue
+        best_d, best_days = None, 999
+        for d in all_debits_pool:
+            if d["txn_id"] in matched_d:
+                continue
+            if d["txn_id"] == c["txn_id"]:
+                continue
+            d_amt  = float(d.get("debit", 0))
+            d_date = _ml_pd(d.get("date", ""))
+            if not d_date:
+                continue
+            if abs(c_amt - d_amt) > max(1000, c_amt * 0.01):
+                continue
+            days = abs((c_date - d_date).days)
+            if days > 14:
+                continue
+            if days < best_days:
+                best_d, best_days = d, days
+        if best_d:
+            matched_c.add(c["txn_id"])
+            matched_d.add(best_d["txn_id"])
+            pairs.append({
+                "debit_seq":    best_d.get("seq"),
+                "credit_seq":   c.get("seq"),
+                "debit_date":   best_d.get("date"),
+                "credit_date":  c.get("date"),
+                "days_gap":     best_days,
+                "amount":       c_amt,
+                "from_account": best_d.get("account"),
+                "to_account":   c.get("account"),
+                "from_desc":    (best_d.get("raw_description") or best_d.get("transaction_details") or "").strip(),
+                "to_desc":      (c.get("raw_description") or c.get("transaction_details") or "").strip(),
             })
 
     transfer_debits  = [_row(t) for t in t_debits  if t["txn_id"] not in matched_d]
