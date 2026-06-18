@@ -513,6 +513,14 @@ def _approval_to_ledger_entry(e: dict) -> dict:
     raw = f"{date_str}|approval|{e.get('vendor','')}|{amount:.2f}"
     txn_id = hashlib.sha1(raw.encode()).hexdigest()[:16]
 
+    _CANONICAL_HEADINGS = {
+        "Groceries","Staff Salary","Electricity & Gas","Misc","Cash","Alcohol",
+        "Wellness","Clothes","Gifts","Medical","Amma","Ketki","Children Education",
+        "Charity","Uspaar","Holiday","Eating Out","Entertainment","Malhar",
+        "Maintenance Expense","Home office","One Time Charge","Kalpataru Maintenance",
+        "Financial Expense / OD Interest","Insurance","Home Loan","Tax",
+        "Short Term Advance","Credit Card Loan","Investment",
+    }
     APP_TO_HEADING = {
         "groceries":"Groceries","staff":"Staff Salary","utilities":"Electricity & Gas",
         "miscellaneous":"Misc","personal_care":"Wellness","clothing":"Clothes",
@@ -520,7 +528,9 @@ def _approval_to_ledger_entry(e: dict) -> dict:
         "dining":"Eating Out","entertainment":"Entertainment","transport":"Holiday",
         "maintenance":"Maintenance Expense","home_repair":"One Time Charge",
     }
-    heading = APP_TO_HEADING.get(e.get("category",""), "Misc")
+    cat = e.get("category", "")
+    # If the form already sent a canonical heading name, use it directly
+    heading = cat if cat in _CANONICAL_HEADINGS else APP_TO_HEADING.get(cat, "Misc")
 
     txn = {
         "txn_id":          txn_id,
