@@ -1283,6 +1283,118 @@ def api_repair_sbi():
     })
 
 
+@app.route("/api/admin/merge-approval-to-sbi", methods=["GET"])
+@login_required
+def api_merge_approval_to_sbi():
+    """
+    For every approval_log entry in the master ledger find its matching SBI statement
+    entry, enrich the SBI entry with the approval's vendor/heading/description, and
+    remove the approval_log duplicate.
+
+    Match rules:
+      sbi3152 payment → SBI non-ATM debit, amount ±₹100, date ±7 days
+      cash payment    → SBI ATM debit, amount ≥ 90 % of approval, date ±30 days
+    Unmatched approval entries are left untouched.
+    """
+    from src.master_ledger import _parse_date as _ml_pd, _save_json, LEDGER_PATH, _APP_TO_HEADING
+    from datetime import datetime as _dt
+
+    _SBI_CASH_KW = ["atm", "cash withdrawal", "atw", "cash wthdl", "atm wtdl"]
+
+    ledger = load_ledger()
+
+    approval_entries = [t for t in ledger if t.get("source") == "approval_log"]
+    sbi_entries      = [t for t in ledger if (t.get("account") or "").find("3152") >= 0
+                        and t.get("source") == "sbi_statement"]
+
+    to_remove_ids = set()
+    merged = 0
+
+    for appr in approval_entries:
+        pm = (appr.get("account_type") or appr.get("payment_method") or "").lower()
+        log_amt = float(appr.get("debit") or appr.get("amount") or 0)
+        if log_amt == 0:
+            continue
+        try:
+            log_date = _ml_pd(appr.get("date", "")) or _dt.fromisoformat(
+                (appr.get("created_at") or "")[:10])
+        except Exception:
+            continue
+        if not log_date:
+            continue
+
+        is_cash = pm == "cash"
+        best = None
+        best_score = 999
+
+        for sbi in sbi_entries:
+            if sbi.get("merged_from_approval"):
+                pass  # already merged but still matchable for idempotency guard below
+            sbi_amt  = float(sbi.get("debit") or 0)
+            if sbi_amt == 0:
+                continue
+            sbi_date = _ml_pd(sbi.get("date", ""))
+            if not sbi_date:
+                continue
+            days_diff = abs((sbi_date - log_date).days)
+            raw = (sbi.get("raw_description") or sbi.get("transaction_details") or "").lower()
+            is_atm = any(kw in raw for kw in _SBI_CASH_KW)
+
+            if is_cash:
+                if not is_atm:
+                    continue
+                if sbi_amt < log_amt * 0.9:
+                    continue
+                if days_diff > 30:
+                    continue
+            else:
+                if is_atm:
+                    continue
+                if abs(sbi_amt - log_amt) > 100:
+                    continue
+                if days_diff > 7:
+                    continue
+
+            if days_diff < best_score:
+                best = sbi
+                best_score = days_diff
+
+        if best:
+            # Skip if already merged from this approval
+            if best.get("merged_from_approval") == appr.get("txn_id"):
+                to_remove_ids.add(appr["txn_id"])
+                continue
+
+            # Enrich SBI entry with approval data
+            cat     = appr.get("category") or appr.get("account_type") or "miscellaneous"
+            heading = _APP_TO_HEADING.get(cat, best.get("heading", "Misc"))
+            if not best.get("paid_to") or best.get("confidence") != "manual":
+                best["paid_to"]    = appr.get("paid_to") or appr.get("vendor") or best.get("paid_to")
+            best["heading"]            = heading
+            best["approval_vendor"]    = appr.get("paid_to") or appr.get("vendor")
+            best["approval_desc"]      = appr.get("raw_description") or appr.get("description")
+            best["reconciled_with"]    = appr.get("reconciled_with") or appr.get("txn_id")
+            best["merged_from_approval"] = appr.get("txn_id")
+            best["uncertain"]          = False
+            best["uncertain_fields"]   = []
+            best["confidence"]         = "merged"
+
+            to_remove_ids.add(appr["txn_id"])
+            merged += 1
+
+    if to_remove_ids:
+        ledger = [t for t in ledger if t.get("txn_id") not in to_remove_ids]
+        _save_json(LEDGER_PATH, ledger)
+
+    unmatched = len(approval_entries) - merged
+    return jsonify({
+        "merged": merged,
+        "approval_entries_removed": len(to_remove_ids),
+        "unmatched_approvals_kept": unmatched,
+        "total_sbi": len(sbi_entries),
+    })
+
+
 @app.route("/api/admin/bulk-holiday-7009", methods=["GET"])
 @login_required
 def api_bulk_holiday_7009():
