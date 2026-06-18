@@ -267,6 +267,9 @@
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('mis',this)"><i class="bi bi-bar-chart me-1"></i>Budget Tracker</a></li>
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('insights',this)"><i class="bi bi-lightbulb me-1"></i>Insights</a></li>
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('acct-status',this)"><i class="bi bi-bank me-1"></i>Account Status</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('transfer-recon',this)"><i class="bi bi-arrow-left-right me-1"></i>Transfer Recon
+    <span id="unreconBadge" class="badge bg-danger ms-1 d-none">0</span>
+  </a></li>
 </ul>
 
 <!-- ── Master Ledger ── -->
@@ -391,6 +394,48 @@
   <div id="acctStatusBody"><div class="text-muted small">Loading…</div></div>
 </div>
 
+<!-- ── Transfer Recon ── -->
+<div id="rp-transfer-recon" class="d-none">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="mb-0 fw-bold text-primary"><i class="bi bi-arrow-left-right me-2"></i>Transfer Reconciliation</h6>
+    <button class="btn btn-sm btn-outline-primary" onclick="loadTransferRecon()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+  </div>
+
+  <!-- Summary pills -->
+  <div class="d-flex gap-3 mb-4" id="transferReconSummary"></div>
+
+  <!-- Unreconciled -->
+  <h6 class="fw-semibold text-danger mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Unreconciled Transfers</h6>
+  <p class="text-muted small mb-2">These transfers have no matching counterpart — a debit with no corresponding credit (or vice versa) within 3 days on a different account.</p>
+  <div class="table-wrap mb-4">
+  <table class="table table-hover table-sm mb-0">
+    <thead><tr>
+      <th>Date</th><th>Account</th><th>Direction</th>
+      <th class="text-end">Amount</th><th>Description</th><th>Paid To</th>
+    </tr></thead>
+    <tbody id="unreconciledBody">
+      <tr><td colspan="6" class="text-muted text-center py-3">Loading…</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <!-- Reconciled pairs -->
+  <details>
+    <summary class="fw-semibold text-success mb-2" style="cursor:pointer">
+      <i class="bi bi-check-circle me-1"></i>Reconciled Pairs <span id="reconciledCount" class="text-muted fw-normal"></span>
+    </summary>
+    <div class="table-wrap mt-2">
+    <table class="table table-sm mb-0">
+      <thead><tr>
+        <th>Debit Date</th><th>From Account</th><th>Credit Date</th><th>To Account</th>
+        <th class="text-end">Amount</th><th>Gap</th>
+      </tr></thead>
+      <tbody id="reconciledBody"></tbody>
+    </table>
+    </div>
+  </details>
+</div>
+
 </div><!-- /tab-reports -->
 </div><!-- /container -->
 
@@ -462,12 +507,13 @@ function switchApproval(name, el) {
 function switchReport(name, el) {
   document.querySelectorAll('#reportTabs .nav-link').forEach(l => l.classList.remove('active'));
   el.classList.add('active');
-  ['ledger','notsure','mis','insights','acct-status'].forEach(n =>
+  ['ledger','notsure','mis','insights','acct-status','transfer-recon'].forEach(n =>
     document.getElementById('rp-' + n).classList.toggle('d-none', n !== name));
   if (name === 'ledger' || name === 'notsure') loadLedger();
-  if (name === 'mis')         loadMIS('ytd', document.getElementById('misBtnYtd'));
-  if (name === 'insights')    { loadInsights(); loadCCBalance(); }
-  if (name === 'acct-status') loadAcctStatus();
+  if (name === 'mis')             loadMIS('ytd', document.getElementById('misBtnYtd'));
+  if (name === 'insights')        { loadInsights(); loadCCBalance(); }
+  if (name === 'acct-status')     loadAcctStatus();
+  if (name === 'transfer-recon')  loadTransferRecon();
   return false;
 }
 
@@ -1256,6 +1302,63 @@ async function loadAcctStatus() {
       </div>`;
   } catch(e) {
     el.innerHTML = '<div class="text-danger small">Error loading account status.</div>';
+  }
+}
+
+// ── Transfer Recon ─────────────────────────────────────────────────────────
+async function loadTransferRecon() {
+  document.getElementById('unreconciledBody').innerHTML =
+    '<tr><td colspan="6" class="text-muted text-center py-3">Loading…</td></tr>';
+  try {
+    const r = await fetch('/api/transfer-recon');
+    const d = await r.json();
+
+    // Summary pills
+    document.getElementById('transferReconSummary').innerHTML = `
+      <span class="badge fs-6 bg-danger bg-opacity-10 text-danger border border-danger px-3 py-2">
+        <i class="bi bi-exclamation-triangle me-1"></i>${d.unreconciled} Unreconciled
+      </span>
+      <span class="badge fs-6 bg-success bg-opacity-10 text-success border border-success px-3 py-2">
+        <i class="bi bi-check-circle me-1"></i>${d.reconciled} Reconciled
+      </span>`;
+
+    // Badge on tab
+    const badge = document.getElementById('unreconBadge');
+    if (d.unreconciled > 0) { badge.textContent = d.unreconciled; badge.classList.remove('d-none'); }
+    else badge.classList.add('d-none');
+
+    // Unreconciled table
+    const fmt = n => '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits:0});
+    if (!d.unreconciled_list?.length) {
+      document.getElementById('unreconciledBody').innerHTML =
+        '<tr><td colspan="6" class="text-success text-center py-3">✓ All transfers reconciled</td></tr>';
+    } else {
+      document.getElementById('unreconciledBody').innerHTML = d.unreconciled_list.map(t => `
+        <tr class="${t.direction === 'debit' ? 'table-warning' : 'table-info'}">
+          <td>${t.date || '—'}</td>
+          <td><small>${t.account}</small></td>
+          <td><span class="badge ${t.direction === 'debit' ? 'bg-danger' : 'bg-primary'}">${t.direction}</span></td>
+          <td class="text-end fw-semibold">${fmt(t.amount)}</td>
+          <td><small class="text-muted">${(t.description||'').slice(0,50)}</small></td>
+          <td><small>${t.paid_to||'—'}</small></td>
+        </tr>`).join('');
+    }
+
+    // Reconciled pairs
+    document.getElementById('reconciledCount').textContent = `(${d.reconciled})`;
+    document.getElementById('reconciledBody').innerHTML = (d.pairs || []).map(p => `
+      <tr>
+        <td>${p.debit_date}</td>
+        <td><small>${p.from_account}</small></td>
+        <td>${p.credit_date}</td>
+        <td><small>${p.to_account}</small></td>
+        <td class="text-end">${fmt(p.amount)}</td>
+        <td class="text-center"><span class="badge bg-secondary">${p.days_gap}d</span></td>
+      </tr>`).join('');
+
+  } catch(e) {
+    document.getElementById('unreconciledBody').innerHTML =
+      `<tr><td colspan="6" class="text-danger text-center py-3">Error loading: ${e}</td></tr>`;
   }
 }
 

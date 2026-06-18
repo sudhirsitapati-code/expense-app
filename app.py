@@ -1649,6 +1649,100 @@ def api_photos_upload():
     })
 
 
+@app.route("/api/transfer-recon", methods=["GET"])
+@login_required
+def api_transfer_recon():
+    """
+    Match transfer debits to transfer credits across accounts.
+    Same amount (±₹500), date within 2 days, different accounts.
+    Returns reconciled pairs and unreconciled singles.
+    """
+    from src.master_ledger import _parse_date as _ml_pd
+    ledger = load_ledger()
+
+    transfers = [
+        t for t in ledger
+        if (t.get("type") or "").lower() == "transfer"
+        and t.get("confidence") != "manual"
+    ]
+
+    debits  = [t for t in transfers if float(t.get("debit")  or 0) > 0]
+    credits = [t for t in transfers if float(t.get("credit") or 0) > 0]
+
+    matched_debit_ids  = set()
+    matched_credit_ids = set()
+    pairs = []
+
+    for d in sorted(debits, key=lambda x: x.get("date", "")):
+        d_amt  = float(d.get("debit", 0))
+        d_date = _ml_pd(d.get("date", ""))
+        d_acct = d.get("account", "")
+        if not d_date:
+            continue
+
+        best_c = None
+        best_days = 999
+        for c in credits:
+            if c["txn_id"] in matched_credit_ids:
+                continue
+            c_amt  = float(c.get("credit", 0))
+            c_date = _ml_pd(c.get("date", ""))
+            c_acct = c.get("account", "")
+            if not c_date:
+                continue
+            if abs(d_amt - c_amt) > 500:
+                continue
+            days = (c_date - d_date).days  # credit should be same day or next
+            if days < -1 or days > 3:      # allow debit up to 3 days before credit
+                continue
+            if d_acct == c_acct:
+                continue
+            if abs(days) < best_days:
+                best_c    = c
+                best_days = abs(days)
+
+        if best_c:
+            matched_debit_ids.add(d["txn_id"])
+            matched_credit_ids.add(best_c["txn_id"])
+            pairs.append({
+                "debit_date":    d.get("date"),
+                "credit_date":   best_c.get("date"),
+                "days_gap":      best_days,
+                "amount":        d_amt,
+                "from_account":  d_acct,
+                "to_account":    best_c.get("account"),
+                "from_desc":     d.get("raw_description") or d.get("transaction_details") or d.get("description") or "",
+                "to_desc":       best_c.get("raw_description") or best_c.get("transaction_details") or best_c.get("description") or "",
+                "debit_txn_id":  d["txn_id"],
+                "credit_txn_id": best_c["txn_id"],
+            })
+
+    unreconciled = [
+        {
+            "txn_id":    t["txn_id"],
+            "date":      t.get("date"),
+            "account":   t.get("account"),
+            "direction": "debit"  if float(t.get("debit")  or 0) > 0 else "credit",
+            "amount":    float(t.get("debit") or t.get("credit") or 0),
+            "description": t.get("raw_description") or t.get("transaction_details") or t.get("description") or "",
+            "paid_to":   t.get("paid_to") or "",
+        }
+        for t in transfers
+        if t["txn_id"] not in matched_debit_ids and t["txn_id"] not in matched_credit_ids
+    ]
+
+    # Sort unreconciled: debits first, then by date desc
+    unreconciled.sort(key=lambda x: (x["direction"] != "debit", x.get("date", "")), reverse=False)
+    unreconciled.sort(key=lambda x: x.get("date", ""), reverse=True)
+
+    return jsonify({
+        "reconciled":     len(pairs),
+        "unreconciled":   len(unreconciled),
+        "pairs":          pairs,
+        "unreconciled_list": unreconciled,
+    })
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
