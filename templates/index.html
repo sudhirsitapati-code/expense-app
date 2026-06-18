@@ -171,32 +171,6 @@
 </div>
 </div><!-- /submit-form -->
 
-<!-- Attach Estimate panel -->
-<div id="submit-photos" class="d-none">
-<div class="row g-3 justify-content-center">
-<div class="col-lg-6">
-  <h6 class="fw-bold mb-3 text-primary"><i class="bi bi-images me-2"></i>Attach Estimate to Expense</h6>
-  <div class="mb-3">
-    <label class="form-label fw-semibold small">Select Expense</label>
-    <select class="form-select form-select-sm" id="photoExpenseSelect">
-      <option value="">Loading…</option>
-    </select>
-  </div>
-  <div class="card p-3 mb-3">
-    <div class="fw-semibold small text-secondary mb-2"><i class="bi bi-file-earmark-image me-1"></i>Estimate / Quote Photos</div>
-    <div id="estimatePreviews" class="d-flex flex-wrap gap-2 mb-2"></div>
-    <label class="btn btn-outline-secondary btn-sm w-100">
-      <i class="bi bi-camera me-1"></i>Add Photo
-      <input type="file" id="estimateInput" accept="image/*" capture="environment" multiple class="d-none" onchange="addPhotoPreviews('estimate', this)">
-    </label>
-  </div>
-  <button class="btn btn-primary btn-sm w-100 py-2" onclick="uploadPhotos('estimate')">
-    <i class="bi bi-cloud-upload me-1"></i>Save Estimate Photos
-  </button>
-  <div id="photoResult" class="mt-3 d-none"></div>
-</div>
-</div>
-</div><!-- /submit-photos -->
 
 <!-- Load Bills panel -->
 <div id="submit-bills" class="d-none">
