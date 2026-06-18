@@ -1653,69 +1653,91 @@ def api_photos_upload():
 @login_required
 def api_transfer_recon():
     """
-    Match transfer debits to transfer credits across accounts.
-    Same amount (±₹500), date within 2 days, different accounts.
-    Returns reconciled pairs and unreconciled singles.
+    Match transfer debits to ANY matching credit (and vice versa) across different
+    account numbers.  One side classified as transfer is enough — the counterpart
+    may be classified differently (income, expense, etc.) but will still match.
+
+    Match criteria:
+      - Different account numbers
+      - Same amount within max(₹500, 0.5% of amount)
+      - Date within ±7 days either direction
     """
     from src.master_ledger import _parse_date as _ml_pd
     ledger = load_ledger()
 
-    transfers = [
-        t for t in ledger
-        if (t.get("type") or "").lower() == "transfer"
-        and t.get("confidence") != "manual"
-    ]
+    # All transfer-typed entries are candidates — include manual too (they're
+    # already confirmed; we just want to find their counterpart)
+    transfers = [t for t in ledger if (t.get("type") or "").lower() == "transfer"]
 
-    debits  = [t for t in transfers if float(t.get("debit")  or 0) > 0]
-    credits = [t for t in transfers if float(t.get("credit") or 0) > 0]
+    # ALL ledger entries are eligible as counterparts
+    all_debits  = [t for t in ledger if float(t.get("debit")  or 0) > 0]
+    all_credits = [t for t in ledger if float(t.get("credit") or 0) > 0]
+
+    transfer_debits  = [t for t in transfers if float(t.get("debit")  or 0) > 0]
+    transfer_credits = [t for t in transfers if float(t.get("credit") or 0) > 0]
 
     matched_debit_ids  = set()
     matched_credit_ids = set()
     pairs = []
 
-    for d in sorted(debits, key=lambda x: x.get("date", "")):
-        d_amt  = float(d.get("debit", 0))
-        d_date = _ml_pd(d.get("date", ""))
-        d_acct = d.get("account", "")
-        if not d_date:
-            continue
+    def _amt_ok(a, b):
+        return abs(a - b) <= max(500, a * 0.005)
 
-        best_c = None
-        best_days = 999
-        for c in credits:
-            if c["txn_id"] in matched_credit_ids:
+    def _find_best(src_txns, pool, src_field, pool_field):
+        for s in sorted(src_txns, key=lambda x: x.get("date", "")):
+            if s["txn_id"] in matched_debit_ids or s["txn_id"] in matched_credit_ids:
                 continue
-            c_amt  = float(c.get("credit", 0))
-            c_date = _ml_pd(c.get("date", ""))
-            c_acct = c.get("account", "")
-            if not c_date:
+            s_amt  = float(s.get(src_field, 0))
+            s_date = _ml_pd(s.get("date", ""))
+            s_acct = s.get("account", "")
+            if not s_date or s_amt == 0:
                 continue
-            if abs(d_amt - c_amt) > 500:
-                continue
-            days = (c_date - d_date).days  # credit should be same day or next
-            if days < -1 or days > 3:      # allow debit up to 3 days before credit
-                continue
-            if d_acct == c_acct:
-                continue
-            if abs(days) < best_days:
-                best_c    = c
-                best_days = abs(days)
+            best_p    = None
+            best_days = 999
+            for p in pool:
+                if p["txn_id"] in matched_debit_ids or p["txn_id"] in matched_credit_ids:
+                    continue
+                if p["txn_id"] == s["txn_id"]:
+                    continue
+                if p.get("account", "") == s_acct:
+                    continue
+                p_amt  = float(p.get(pool_field, 0))
+                p_date = _ml_pd(p.get("date", ""))
+                if not p_date or p_amt == 0:
+                    continue
+                if not _amt_ok(s_amt, p_amt):
+                    continue
+                days = abs((s_date - p_date).days)
+                if days > 7:
+                    continue
+                if days < best_days:
+                    best_p    = p
+                    best_days = days
+            if best_p:
+                debit_t  = s  if src_field == "debit"  else best_p
+                credit_t = best_p if src_field == "debit" else s
+                matched_debit_ids.add(debit_t["txn_id"])
+                matched_credit_ids.add(credit_t["txn_id"])
+                d_amt = float(debit_t.get("debit", 0))
+                pairs.append({
+                    "debit_seq":     debit_t.get("seq"),
+                    "credit_seq":    credit_t.get("seq"),
+                    "debit_date":    debit_t.get("date"),
+                    "credit_date":   credit_t.get("date"),
+                    "days_gap":      best_days,
+                    "amount":        d_amt,
+                    "from_account":  debit_t.get("account"),
+                    "to_account":    credit_t.get("account"),
+                    "from_desc":     debit_t.get("raw_description") or debit_t.get("transaction_details") or "",
+                    "to_desc":       credit_t.get("raw_description") or credit_t.get("transaction_details") or "",
+                    "debit_txn_id":  debit_t["txn_id"],
+                    "credit_txn_id": credit_t["txn_id"],
+                })
 
-        if best_c:
-            matched_debit_ids.add(d["txn_id"])
-            matched_credit_ids.add(best_c["txn_id"])
-            pairs.append({
-                "debit_date":    d.get("date"),
-                "credit_date":   best_c.get("date"),
-                "days_gap":      best_days,
-                "amount":        d_amt,
-                "from_account":  d_acct,
-                "to_account":    best_c.get("account"),
-                "from_desc":     d.get("raw_description") or d.get("transaction_details") or d.get("description") or "",
-                "to_desc":       best_c.get("raw_description") or best_c.get("transaction_details") or best_c.get("description") or "",
-                "debit_txn_id":  d["txn_id"],
-                "credit_txn_id": best_c["txn_id"],
-            })
+    # Match transfer debits → any credit on different account
+    _find_best(transfer_debits,  all_credits, "debit",  "credit")
+    # Match remaining transfer credits → any debit on different account
+    _find_best(transfer_credits, all_debits,  "credit", "debit")
 
     unreconciled = [
         {

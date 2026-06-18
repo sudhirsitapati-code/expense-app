@@ -427,7 +427,7 @@
     <div class="table-wrap mt-2">
     <table class="table table-sm mb-0">
       <thead><tr>
-        <th>Debit Date</th><th>From Account</th><th>Credit Date</th><th>To Account</th>
+        <th>#</th><th>Debit Date</th><th>From Account</th><th>#</th><th>Credit Date</th><th>To Account</th>
         <th class="text-end">Amount</th><th>Gap</th>
       </tr></thead>
       <tbody id="reconciledBody"></tbody>
@@ -1359,8 +1359,10 @@ async function loadTransferRecon() {
     document.getElementById('reconciledCount').textContent = `(${d.reconciled})`;
     document.getElementById('reconciledBody').innerHTML = (d.pairs || []).map(p => `
       <tr>
+        <td class="text-muted small">${p.debit_seq ?? '—'}</td>
         <td>${p.debit_date}</td>
         <td><small>${p.from_account}</small></td>
+        <td class="text-muted small">${p.credit_seq ?? '—'}</td>
         <td>${p.credit_date}</td>
         <td><small>${p.to_account}</small></td>
         <td class="text-end">${fmt(p.amount)}</td>
