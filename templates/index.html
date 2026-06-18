@@ -401,6 +401,20 @@
     <button class="btn btn-sm btn-outline-primary" onclick="loadTransferRecon()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
   </div>
 
+  <!-- Manual pair entry -->
+  <div class="card border-secondary mb-3">
+    <div class="card-body py-2 px-3">
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="fw-semibold text-secondary small me-1"><i class="bi bi-link-45deg me-1"></i>Link a pair manually:</span>
+        <input type="number" id="manualSeq1" class="form-control form-control-sm" style="width:90px" placeholder="Seq #1">
+        <span class="text-muted">↔</span>
+        <input type="number" id="manualSeq2" class="form-control form-control-sm" style="width:90px" placeholder="Seq #2">
+        <button class="btn btn-sm btn-success" onclick="linkManualPair()"><i class="bi bi-check-lg me-1"></i>Link</button>
+        <span id="manualPairMsg" class="small text-muted"></span>
+      </div>
+    </div>
+  </div>
+
   <!-- Suspected transfers -->
   <h6 class="fw-semibold text-danger mb-1"><i class="bi bi-exclamation-triangle me-1"></i>Suspected Transfers
     <span id="suspectedBadge" class="badge bg-danger ms-1">0</span>
@@ -1462,6 +1476,26 @@ async function loadTransferRecon() {
     document.getElementById('suspectedBody').innerHTML =
       `<tr><td colspan="9" class="text-danger text-center py-2">Error: ${e}</td></tr>`;
   }
+}
+
+async function linkManualPair() {
+  const seq1 = document.getElementById('manualSeq1').value.trim();
+  const seq2 = document.getElementById('manualSeq2').value.trim();
+  const msg  = document.getElementById('manualPairMsg');
+  if (!seq1 || !seq2) { msg.textContent = 'Enter both seq numbers.'; msg.className = 'small text-warning'; return; }
+  msg.textContent = 'Linking…'; msg.className = 'small text-muted';
+  try {
+    const r = await fetch('/api/transfer-recon/manual-pair', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ seq1: parseInt(seq1), seq2: parseInt(seq2) })
+    });
+    const d = await r.json();
+    if (!r.ok) { msg.textContent = d.error || 'Failed'; msg.className = 'small text-danger'; return; }
+    msg.textContent = `✓ Linked #${seq1} ↔ #${seq2}`; msg.className = 'small text-success';
+    document.getElementById('manualSeq1').value = '';
+    document.getElementById('manualSeq2').value = '';
+    await loadTransferRecon();
+  } catch(e) { msg.textContent = 'Error: ' + e; msg.className = 'small text-danger'; }
 }
 
 async function reclassifyTransfer(txnId) {

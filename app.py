@@ -1819,12 +1819,77 @@ def api_transfer_recon():
 
     suspected.sort(key=lambda x: x.get("date", ""), reverse=True)
 
+    # ── Section 3: manual pairs ───────────────────────────────────────────────
+    manual_pairs_raw = db.load("manual_transfer_pairs") or []
+    seq_to_txn = {t.get("seq"): t for t in ledger if t.get("seq") is not None}
+    manual_pairs_out = []
+    for mp in manual_pairs_raw:
+        t1 = seq_to_txn.get(mp["seq1"])
+        t2 = seq_to_txn.get(mp["seq2"])
+        if not t1 or not t2:
+            continue
+        # Ensure d=debit side, c=credit side
+        if float(t1.get("debit") or 0) > 0:
+            d, c = t1, t2
+        else:
+            d, c = t2, t1
+        d_amt = float(d.get("debit") or 0)
+        c_amt = float(c.get("credit") or 0)
+        d_date = _ml_pd(d.get("date", ""))
+        c_date = _ml_pd(c.get("date", ""))
+        days = abs((d_date - c_date).days) if d_date and c_date else 0
+        manual_pairs_out.append({
+            "debit_seq":    d.get("seq"),
+            "credit_seq":   c.get("seq"),
+            "debit_date":   d.get("date"),
+            "credit_date":  c.get("date"),
+            "days_gap":     days,
+            "amount":       d_amt or c_amt,
+            "from_account": d.get("account"),
+            "to_account":   c.get("account"),
+            "from_desc":    (d.get("raw_description") or d.get("transaction_details") or "").strip(),
+            "to_desc":      (c.get("raw_description") or c.get("transaction_details") or "").strip(),
+            "manual":       True,
+        })
+        # Remove from unmatched lists if present
+        transfer_debits  = [r for r in transfer_debits  if r.get("seq") not in (d.get("seq"), c.get("seq"))]
+        transfer_credits = [r for r in transfer_credits if r.get("seq") not in (d.get("seq"), c.get("seq"))]
+        suspected        = [r for r in suspected        if r.get("seq") not in (d.get("seq"), c.get("seq"))]
+
     return jsonify({
-        "pairs":            pairs,
+        "pairs":            pairs + manual_pairs_out,
         "transfer_debits":  transfer_debits,
         "transfer_credits": transfer_credits,
         "suspected":        suspected,
     })
+
+
+@app.route("/api/transfer-recon/manual-pair", methods=["POST"])
+@login_required
+def api_transfer_recon_manual_pair():
+    data = request.get_json() or {}
+    seq1 = data.get("seq1")
+    seq2 = data.get("seq2")
+    if seq1 is None or seq2 is None:
+        return jsonify({"error": "seq1 and seq2 required"}), 400
+    if seq1 == seq2:
+        return jsonify({"error": "seq1 and seq2 must be different"}), 400
+
+    ledger = load_ledger()
+    seq_to_txn = {t.get("seq"): t for t in ledger if t.get("seq") is not None}
+    if seq1 not in seq_to_txn:
+        return jsonify({"error": f"Seq #{seq1} not found in ledger"}), 404
+    if seq2 not in seq_to_txn:
+        return jsonify({"error": f"Seq #{seq2} not found in ledger"}), 404
+
+    pairs = db.load("manual_transfer_pairs") or []
+    # Avoid duplicates
+    for p in pairs:
+        if set([p["seq1"], p["seq2"]]) == set([seq1, seq2]):
+            return jsonify({"ok": True, "message": "Already linked"})
+    pairs.append({"seq1": seq1, "seq2": seq2})
+    db.save("manual_transfer_pairs", pairs)
+    return jsonify({"ok": True, "linked": [seq1, seq2]})
 
 
 @app.route("/health", methods=["GET"])
