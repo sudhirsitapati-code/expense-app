@@ -79,7 +79,8 @@
 <!-- Submit sub-tabs -->
 <ul class="nav sub-tabs gap-1 mb-3">
   <li class="nav-item"><a class="nav-link active" href="#" onclick="switchSubmit('form',this)"><i class="bi bi-plus-circle me-1"></i>New Expense</a></li>
-  <li class="nav-item"><a class="nav-link" href="#" onclick="switchSubmit('photos',this)"><i class="bi bi-camera me-1"></i>Attach Photos</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchSubmit('photos',this)"><i class="bi bi-images me-1"></i>Attach Estimate</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchSubmit('bills',this)"><i class="bi bi-receipt me-1"></i>Load Bills</a></li>
 </ul>
 
 <!-- New Expense form -->
@@ -142,6 +143,15 @@
         <label class="form-check-label small" for="postFacto">Already paid (post-facto)</label>
       </div>
     </div>
+    <!-- Inline estimate photo -->
+    <div class="card p-3 mb-3 border-secondary-subtle">
+      <div class="fw-semibold small text-secondary mb-2"><i class="bi bi-file-earmark-image me-1"></i>Estimate / Quote Photo <span class="text-muted">(optional)</span></div>
+      <div id="formEstimatePreviews" class="d-flex flex-wrap gap-2 mb-2"></div>
+      <label class="btn btn-outline-secondary btn-sm w-100">
+        <i class="bi bi-camera me-1"></i>Add Estimate Photo
+        <input type="file" id="formEstimateInput" accept="image/*" capture="environment" multiple class="d-none" onchange="addFormEstimatePreviews(this)">
+      </label>
+    </div>
     <button type="submit" class="btn btn-primary btn-sm w-100 py-2">Submit</button>
   </form>
   <div id="submitResult" class="mt-3 d-none"></div>
@@ -150,46 +160,58 @@
 </div>
 </div><!-- /submit-form -->
 
-<!-- Attach Photos panel -->
+<!-- Attach Estimate panel -->
 <div id="submit-photos" class="d-none">
 <div class="row g-3 justify-content-center">
 <div class="col-lg-6">
-  <h6 class="fw-bold mb-3 text-primary"><i class="bi bi-camera me-2"></i>Attach Photos to Expense</h6>
-
+  <h6 class="fw-bold mb-3 text-primary"><i class="bi bi-images me-2"></i>Attach Estimate to Expense</h6>
   <div class="mb-3">
     <label class="form-label fw-semibold small">Select Expense</label>
     <select class="form-select form-select-sm" id="photoExpenseSelect">
-      <option value="">Loading recent expenses…</option>
+      <option value="">Loading…</option>
     </select>
   </div>
-
-  <!-- Estimate photos -->
   <div class="card p-3 mb-3">
-    <div class="fw-semibold small text-secondary mb-2"><i class="bi bi-file-earmark-text me-1"></i>Estimate / Quote</div>
+    <div class="fw-semibold small text-secondary mb-2"><i class="bi bi-file-earmark-image me-1"></i>Estimate / Quote Photos</div>
     <div id="estimatePreviews" class="d-flex flex-wrap gap-2 mb-2"></div>
     <label class="btn btn-outline-secondary btn-sm w-100">
-      <i class="bi bi-camera me-1"></i>Add Estimate Photo
+      <i class="bi bi-camera me-1"></i>Add Photo
       <input type="file" id="estimateInput" accept="image/*" capture="environment" multiple class="d-none" onchange="addPhotoPreviews('estimate', this)">
     </label>
   </div>
+  <button class="btn btn-primary btn-sm w-100 py-2" onclick="uploadPhotos('estimate')">
+    <i class="bi bi-cloud-upload me-1"></i>Save Estimate Photos
+  </button>
+  <div id="photoResult" class="mt-3 d-none"></div>
+</div>
+</div>
+</div><!-- /submit-photos -->
 
-  <!-- Bill photos -->
+<!-- Load Bills panel -->
+<div id="submit-bills" class="d-none">
+<div class="row g-3 justify-content-center">
+<div class="col-lg-6">
+  <h6 class="fw-bold mb-3 text-primary"><i class="bi bi-receipt me-2"></i>Load Bill for an Expense</h6>
+  <div class="mb-3">
+    <label class="form-label fw-semibold small">Expense Serial / Reference Number</label>
+    <input class="form-control form-control-sm" id="billExpenseRef" placeholder="e.g. 42 or EXP-abc123" oninput="lookupBillExpense()">
+    <div id="billExpenseLookup" class="mt-1 small text-muted"></div>
+  </div>
   <div class="card p-3 mb-3">
-    <div class="fw-semibold small text-secondary mb-2"><i class="bi bi-receipt me-1"></i>Bill / Invoice</div>
+    <div class="fw-semibold small text-secondary mb-2"><i class="bi bi-receipt me-1"></i>Bill / Invoice Photos</div>
     <div id="billPreviews" class="d-flex flex-wrap gap-2 mb-2"></div>
     <label class="btn btn-outline-secondary btn-sm w-100">
       <i class="bi bi-camera me-1"></i>Add Bill Photo
       <input type="file" id="billInput" accept="image/*" capture="environment" multiple class="d-none" onchange="addPhotoPreviews('bill', this)">
     </label>
   </div>
-
-  <button class="btn btn-primary btn-sm w-100 py-2" onclick="uploadPhotos()">
-    <i class="bi bi-cloud-upload me-1"></i>Save Photos
+  <button class="btn btn-primary btn-sm w-100 py-2" onclick="uploadPhotos('bill')">
+    <i class="bi bi-cloud-upload me-1"></i>Save Bill Photos
   </button>
-  <div id="photoResult" class="mt-3 d-none"></div>
+  <div id="billResult" class="mt-3 d-none"></div>
 </div>
 </div>
-</div><!-- /submit-photos -->
+</div><!-- /submit-bills -->
 
 <!-- ═══════════════════════════════════════════════════════
      TAB 2 — APPROVALS
@@ -481,38 +503,40 @@ function switchSubmit(name, el) {
   el.classList.add('active');
   document.getElementById('submit-form').classList.toggle('d-none', name !== 'form');
   document.getElementById('submit-photos').classList.toggle('d-none', name !== 'photos');
+  document.getElementById('submit-bills').classList.toggle('d-none', name !== 'bills');
   if (name === 'photos') loadRecentExpensesForPhotos();
+  if (name === 'bills' && !_allExpenses.length) loadRecentExpensesForPhotos();
   return false;
 }
+
+// ── PHOTO HELPERS ────────────────────────────────────────────────────────────
+let _allExpenses = [];  // cached for bill lookup
 
 async function loadRecentExpensesForPhotos() {
   const sel = document.getElementById('photoExpenseSelect');
   try {
     const r = await fetch('/api/recent-expenses');
     const data = await r.json();
+    _allExpenses = data.expenses || [];
     sel.innerHTML = '<option value="">— select expense —</option>' +
-      data.map(e => `<option value="${e.id}">${e.date} · ${e.vendor} · ₹${e.amount}</option>`).join('');
+      _allExpenses.map(e => `<option value="${e.id}">${e.date} · ${e.vendor} · ₹${e.amount}</option>`).join('');
   } catch { sel.innerHTML = '<option value="">Failed to load</option>'; }
 }
 
 // photo staging: {estimate: [{file, dataUrl}], bill: [{file, dataUrl}]}
 const _stagedPhotos = { estimate: [], bill: [] };
+let _formEstimatePhotos = [];  // staged on the New Expense form
 
-function addPhotoPreviews(type, input) {
-  const container = document.getElementById(type + 'Previews');
+function _stagePhotos(type, input, container, store) {
   Array.from(input.files).forEach(file => {
     const reader = new FileReader();
     reader.onload = ev => {
-      _stagedPhotos[type].push({ file, dataUrl: ev.target.result });
+      store.push(ev.target.result);
       const img = document.createElement('img');
       img.src = ev.target.result;
       img.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #ddd;cursor:pointer';
       img.title = 'Click to remove';
-      img.onclick = () => {
-        const idx = _stagedPhotos[type].findIndex(p => p.dataUrl === ev.target.result);
-        if (idx >= 0) _stagedPhotos[type].splice(idx, 1);
-        img.remove();
-      };
+      img.onclick = () => { store.splice(store.indexOf(ev.target.result), 1); img.remove(); };
       container.appendChild(img);
     };
     reader.readAsDataURL(file);
@@ -520,32 +544,87 @@ function addPhotoPreviews(type, input) {
   input.value = '';
 }
 
-async function uploadPhotos() {
-  const expenseId = document.getElementById('photoExpenseSelect').value;
-  const result = document.getElementById('photoResult');
-  if (!expenseId) { result.className='mt-3 alert alert-warning py-2'; result.textContent='Please select an expense first.'; return; }
-  if (!_stagedPhotos.estimate.length && !_stagedPhotos.bill.length) {
-    result.className='mt-3 alert alert-warning py-2'; result.textContent='No photos selected.'; return;
+function addPhotoPreviews(type, input) {
+  _stagePhotos(type, input, document.getElementById(type + 'Previews'), _stagedPhotos[type]);
+}
+
+function addFormEstimatePreviews(input) {
+  _stagePhotos('formEstimate', input, document.getElementById('formEstimatePreviews'), _formEstimatePhotos);
+}
+
+// look up expense in Load Bills tab by serial number or ref
+function lookupBillExpense() {
+  const q = document.getElementById('billExpenseRef').value.trim().toLowerCase();
+  const info = document.getElementById('billExpenseLookup');
+  if (!q) { info.textContent = ''; return; }
+  if (!_allExpenses.length) {
+    fetch('/api/recent-expenses').then(r => r.json()).then(d => {
+      _allExpenses = d.expenses || [];
+      lookupBillExpense();
+    });
+    return;
   }
-  result.className='mt-3 alert alert-info py-2'; result.textContent='Uploading…';
+  // match by seq number (position in list), request_id prefix, or vendor substring
+  const match = _allExpenses.find((e, i) =>
+    String(i + 1) === q ||
+    (e.id || '').toLowerCase().includes(q) ||
+    (e.vendor || '').toLowerCase().includes(q)
+  );
+  if (match) {
+    info.innerHTML = `<span class="text-success fw-semibold">✓ ${match.date} · ${match.vendor} · ₹${match.amount}</span>`;
+    info.dataset.expenseId = match.id;
+  } else {
+    info.innerHTML = '<span class="text-danger">No matching expense found</span>';
+    info.dataset.expenseId = '';
+  }
+}
+
+async function uploadPhotos(mode) {
+  // mode = 'estimate' (Attach Estimate tab) or 'bill' (Load Bills tab)
+  const isBill = mode === 'bill';
+  const resultEl = document.getElementById(isBill ? 'billResult' : 'photoResult');
+  resultEl.classList.remove('d-none');
+
+  let expenseId, photos;
+  if (isBill) {
+    expenseId = document.getElementById('billExpenseLookup').dataset.expenseId || '';
+    photos = _stagedPhotos.bill;
+    if (!expenseId) { resultEl.className='mt-3 alert alert-warning py-2'; resultEl.textContent='Enter a valid expense reference first.'; return; }
+    if (!photos.length) { resultEl.className='mt-3 alert alert-warning py-2'; resultEl.textContent='No bill photos selected.'; return; }
+  } else {
+    expenseId = document.getElementById('photoExpenseSelect').value;
+    photos = _stagedPhotos.estimate;
+    if (!expenseId) { resultEl.className='mt-3 alert alert-warning py-2'; resultEl.textContent='Please select an expense first.'; return; }
+    if (!photos.length) { resultEl.className='mt-3 alert alert-warning py-2'; resultEl.textContent='No estimate photos selected.'; return; }
+  }
+
+  resultEl.className='mt-3 alert alert-info py-2'; resultEl.textContent='Uploading…';
   const payload = {
     expense_id: expenseId,
-    estimates: _stagedPhotos.estimate.map(p => p.dataUrl),
-    bills:     _stagedPhotos.bill.map(p => p.dataUrl),
+    estimates: isBill ? [] : photos,
+    bills:     isBill ? photos : [],
   };
   try {
     const r = await fetch('/api/photos/upload', {
       method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
     });
     const data = await r.json();
-    result.className = 'mt-3 alert alert-success py-2';
-    result.textContent = `Saved ${data.estimates} estimate(s) and ${data.bills} bill(s).`;
-    _stagedPhotos.estimate = []; _stagedPhotos.bill = [];
-    document.getElementById('estimatePreviews').innerHTML = '';
-    document.getElementById('billPreviews').innerHTML = '';
+    resultEl.className = 'mt-3 alert alert-success py-2';
+    resultEl.textContent = isBill
+      ? `Saved ${data.bills} bill photo(s).`
+      : `Saved ${data.estimates} estimate photo(s).`;
+    if (isBill) {
+      _stagedPhotos.bill = [];
+      document.getElementById('billPreviews').innerHTML = '';
+      document.getElementById('billExpenseRef').value = '';
+      document.getElementById('billExpenseLookup').textContent = '';
+    } else {
+      _stagedPhotos.estimate = [];
+      document.getElementById('estimatePreviews').innerHTML = '';
+    }
   } catch(err) {
-    result.className = 'mt-3 alert alert-danger py-2';
-    result.textContent = 'Upload failed: ' + err;
+    resultEl.className = 'mt-3 alert alert-danger py-2';
+    resultEl.textContent = 'Upload failed: ' + err;
   }
 }
 
@@ -564,12 +643,23 @@ async function submitExpense(e) {
   const div = document.getElementById('submitResult');
   div.classList.remove('d-none');
 
-  if (r.action === 'AUTO_APPROVE') {
-    div.innerHTML = `<div class="alert alert-success py-2">✅ Auto-approved! Ref: ${r.request_id}</div>`;
+  if (r.action === 'AUTO_APPROVE' || r.action === 'ESCALATE') {
+    const icon = r.action === 'AUTO_APPROVE' ? '✅ Auto-approved!' : '📤 Sent to Sudhir for approval.';
+    div.innerHTML = `<div class="alert alert-success py-2">${icon} Ref: ${r.request_id}</div>`;
     e.target.reset();
-  } else if (r.action === 'ESCALATE') {
-    div.innerHTML = `<div class="alert alert-warning py-2">📤 Sent to Sudhir for approval. Ref: ${r.request_id}</div>`;
-    e.target.reset();
+    // Upload staged estimate photos if any
+    if (_formEstimatePhotos.length) {
+      div.innerHTML += `<div class="alert alert-info py-2 small mt-1">Uploading estimate photo…</div>`;
+      try {
+        await fetch('/api/photos/upload', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ expense_id: r.request_id, estimates: [..._formEstimatePhotos], bills: [] })
+        });
+        div.innerHTML += `<div class="alert alert-success py-2 small mt-1">Estimate photo saved.</div>`;
+      } catch { div.innerHTML += `<div class="alert alert-warning py-2 small mt-1">Expense submitted but photo upload failed.</div>`; }
+      _formEstimatePhotos = [];
+      document.getElementById('formEstimatePreviews').innerHTML = '';
+    }
   } else {
     div.innerHTML = `<div class="alert alert-info py-2 small">${JSON.stringify(r)}</div>`;
   }
