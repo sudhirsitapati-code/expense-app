@@ -1205,29 +1205,38 @@ def api_repair_sbi():
     for i, txn in enumerate(sbi_txns):
         changed = False
 
-        # ── Direction fix via balance delta ──────────────────────────────────
-        bal = txn.get("balance")
-        if bal is not None:
-            acct = txn.get("account")
-            prev_bal = None
-            for j in range(i - 1, -1, -1):
-                if sbi_txns[j].get("account") == acct and sbi_txns[j].get("balance") is not None:
-                    prev_bal = sbi_txns[j]["balance"]
-                    break
+        amount = float(txn.get("debit") or txn.get("credit") or txn.get("amount") or 0)
+        if amount == 0:
+            continue
 
-            if prev_bal is not None:
-                delta = float(bal) - float(prev_bal)
-                correct = "debit" if delta < 0 else "credit"
-                amount  = float(txn.get("debit") or txn.get("credit") or txn.get("amount") or 0)
-                cur_d   = float(txn.get("debit") or 0)
-                cur_c   = float(txn.get("credit") or 0)
-                is_wrong = (correct == "debit"  and cur_d == 0 and cur_c > 0) or \
-                           (correct == "credit" and cur_c == 0 and cur_d > 0)
-                if is_wrong and amount > 0:
-                    txn["debit"]  = amount if correct == "debit"  else 0
-                    txn["credit"] = amount if correct == "credit" else 0
-                    txn["type"]   = correct
-                    changed = True
+        # ── Direction fix — primary: description prefix (100% reliable) ──────
+        # SBI always prefixes WDL TFR (withdrawal=debit) or DEP TFR (deposit=credit)
+        raw_for_dir = (txn.get("raw_description") or "").strip().upper()
+        if raw_for_dir.startswith("WDL"):
+            correct_dir = "debit"
+        elif raw_for_dir.startswith("DEP"):
+            correct_dir = "credit"
+        else:
+            # Fallback: balance delta (unreliable for same-day; only use when confident)
+            correct_dir = None
+            bal = txn.get("balance")
+            if bal is not None:
+                acct = txn.get("account")
+                for j in range(i - 1, -1, -1):
+                    if sbi_txns[j].get("account") == acct and sbi_txns[j].get("balance") is not None:
+                        delta = float(bal) - float(sbi_txns[j]["balance"])
+                        correct_dir = "debit" if delta < 0 else "credit"
+                        break
+
+        if correct_dir:
+            cur_d = float(txn.get("debit") or 0)
+            cur_c = float(txn.get("credit") or 0)
+            is_wrong = (correct_dir == "debit"  and cur_d == 0 and cur_c > 0) or \
+                       (correct_dir == "credit" and cur_c == 0 and cur_d > 0)
+            if is_wrong:
+                txn["debit"]  = amount if correct_dir == "debit"  else 0
+                txn["credit"] = amount if correct_dir == "credit" else 0
+                changed = True
 
         # ── Description cleaning (raw_description is the field SBI entries use) ─
         raw_desc   = txn.get("raw_description") or txn.get("transaction_details") or txn.get("description") or ""
