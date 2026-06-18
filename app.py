@@ -1890,6 +1890,90 @@ def api_transfer_recon_manual_pair():
     return jsonify({"ok": True, "linked": [seq1, seq2]})
 
 
+@app.route("/api/year-summary", methods=["GET"])
+@login_required
+def api_year_summary():
+    import os, calendar
+    from datetime import date as _date
+    fy = request.args.get("fy", "FY27")
+
+    GROUPS = [
+        ("HOUSEHOLD",   ["Misc","Cash","Electricity & Gas","Groceries","Staff Salary"]),
+        ("PERSONAL",    ["Alcohol","Wellness"]),
+        ("FAMILY",      ["Clothes","Gifts","Medical","Amma","Ketki","Children Education"]),
+        ("GIVING",      ["Charity","Uspaar"]),
+        ("LIFESTYLE",   ["Holiday","Eating Out","Entertainment"]),
+        ("PROPERTY",    ["Malhar","Maintenance Expense","Home office","One Time Charge","Kalpataru Maintenance"]),
+        ("FINANCIAL",   ["Financial Expense / OD Interest","Insurance","Home Loan","Tax"]),
+    ]
+    MONTHS = ["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar"]
+
+    # Multi-year annual totals from ExpenseSummary sheet (FY23-FY26)
+    multi_year = {}
+    try:
+        import openpyxl
+        _xl = os.path.join(os.path.dirname(__file__), "data", "ACC26ver5_MASTER.xlsx")
+        wb  = openpyxl.load_workbook(_xl, data_only=True)
+        ws  = wb["ExpenseSummary"]
+        FY_COLS = {"FY23": 1, "FY24": 2, "FY25": 3, "FY26": 4}
+        for row in ws.iter_rows(min_row=3, max_row=ws.max_row, values_only=True):
+            cat = row[0]
+            if not cat or not isinstance(cat, str):
+                continue
+            cat = cat.strip()
+            vals = {}
+            for fyname, col in FY_COLS.items():
+                v = row[col]
+                vals[fyname] = round(float(v) * 100000) if isinstance(v, (int, float)) and v == v else 0
+            multi_year[cat] = vals
+    except Exception:
+        pass
+
+    if fy == "FY26":
+        _path = os.path.join(os.path.dirname(__file__), "data", "fy26_monthly.json")
+        monthly = _load_json(_path) if os.path.exists(_path) else {}
+        ann = _load_json(os.path.join(os.path.dirname(__file__), "data", "fy26_actuals.json")) or {}
+        categories = {}
+        for cat, mv in monthly.items():
+            annual = ann.get(cat) or sum(mv.values())
+            categories[cat] = {"monthly": mv, "annual": annual,
+                                "prior": {k: v.get(cat, 0) for k, v in
+                                          {f: {c: multi_year.get(c, {}).get(f, 0) for c in multi_year}
+                                           for f in ["FY23","FY24","FY25"]}.items()}}
+    elif fy == "FY27":
+        # Derive from live master ledger (Apr 2026–Mar 2027)
+        from src.master_ledger import _parse_date as _ml_pd
+        ledger  = load_ledger()
+        FY_START = _date(2026, 4, 1)
+        FY_END   = _date(2027, 3, 31)
+        monthly_raw = {m: {} for m in MONTHS}
+        MONTH_MAP = {4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",
+                     10:"Oct",11:"Nov",12:"Dec",1:"Jan",2:"Feb",3:"Mar"}
+        for txn in ledger:
+            if (txn.get("type") or "").lower() not in ("expense","official"):
+                continue
+            d = _ml_pd(txn.get("date",""))
+            if not d or not (FY_START <= d <= FY_END):
+                continue
+            heading = txn.get("heading") or "Misc"
+            amt = float(txn.get("debit") or 0)
+            mname = MONTH_MAP.get(d.month, "")
+            if mname:
+                monthly_raw[mname][heading] = monthly_raw[mname].get(heading, 0) + amt
+        # Transpose to {heading: {month: amt}}
+        all_cats = set(h for m in monthly_raw.values() for h in m)
+        categories = {}
+        for cat in all_cats:
+            mv = {m: monthly_raw[m].get(cat, 0) for m in MONTHS}
+            categories[cat] = {"monthly": mv, "annual": sum(mv.values()),
+                                "prior": {f: multi_year.get(cat, {}).get(f, 0) for f in ["FY24","FY25","FY26"]}}
+    else:
+        categories = {}
+
+    return jsonify({"fy": fy, "groups": GROUPS, "months": MONTHS,
+                    "categories": categories, "multi_year": multi_year})
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})

@@ -270,6 +270,7 @@
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('transfer-recon',this)"><i class="bi bi-arrow-left-right me-1"></i>Transfer Recon
     <span id="unreconBadge" class="badge bg-danger ms-1 d-none">0</span>
   </a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('year',this)"><i class="bi bi-calendar3 me-1"></i>Year</a></li>
 </ul>
 
 <!-- ── Master Ledger ── -->
@@ -491,6 +492,65 @@
   </details>
 </div>
 
+<!-- ── Year Summary ── -->
+<div id="rp-year" class="d-none">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="mb-0 fw-bold text-primary"><i class="bi bi-calendar3 me-2"></i>Year Summary</h6>
+    <div class="d-flex gap-2 align-items-center">
+      <div class="btn-group btn-group-sm" role="group">
+        <button id="fyBtn25" class="btn btn-outline-secondary" onclick="loadYear('FY25',this)">FY25</button>
+        <button id="fyBtn26" class="btn btn-outline-secondary" onclick="loadYear('FY26',this)">FY26</button>
+        <button id="fyBtn27" class="btn btn-outline-primary active" onclick="loadYear('FY27',this)">FY27</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary tiles -->
+  <div class="row g-2 mb-3" id="yearTiles">
+    <div class="col-6 col-md-3"><div class="card border-0 bg-light h-100"><div class="card-body py-2 px-3">
+      <div class="text-muted small">Operational</div>
+      <div class="fw-bold fs-6" id="ytOperational">—</div>
+    </div></div></div>
+    <div class="col-6 col-md-3"><div class="card border-0 bg-light h-100"><div class="card-body py-2 px-3">
+      <div class="text-muted small">Financial</div>
+      <div class="fw-bold fs-6" id="ytFinancial">—</div>
+    </div></div></div>
+    <div class="col-6 col-md-3"><div class="card border-0 bg-light h-100"><div class="card-body py-2 px-3">
+      <div class="text-muted small">Grand Total</div>
+      <div class="fw-bold fs-6" id="ytGrandTotal">—</div>
+    </div></div></div>
+    <div class="col-6 col-md-3"><div class="card border-0 bg-light h-100"><div class="card-body py-2 px-3">
+      <div class="text-muted small">Monthly Avg (Ops)</div>
+      <div class="fw-bold fs-6" id="ytMonthlyAvg">—</div>
+    </div></div></div>
+  </div>
+
+  <!-- Monthly chart -->
+  <div class="card border-0 bg-light mb-3">
+    <div class="card-body py-2 px-3">
+      <div class="fw-semibold small text-secondary mb-2">Monthly Spend</div>
+      <canvas id="yearMonthChart" height="80"></canvas>
+    </div>
+  </div>
+
+  <!-- Category table -->
+  <div class="table-wrap">
+  <table class="table table-hover table-sm mb-0" id="yearCatTable">
+    <thead>
+      <tr id="yearTableHead">
+        <th>Group</th><th>Category</th>
+        <th class="text-end">FY23</th><th class="text-end">FY24</th>
+        <th class="text-end">FY25</th><th class="text-end" id="yrCurCol">FY26</th>
+        <th class="text-end">vs Prior</th>
+      </tr>
+    </thead>
+    <tbody id="yearCatBody">
+      <tr><td colspan="7" class="text-muted text-center py-3">Select a year above</td></tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
 </div><!-- /tab-reports -->
 </div><!-- /container -->
 
@@ -536,6 +596,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
 const editModal = new bootstrap.Modal(document.getElementById('editModal'));
@@ -562,13 +623,14 @@ function switchApproval(name, el) {
 function switchReport(name, el) {
   document.querySelectorAll('#reportTabs .nav-link').forEach(l => l.classList.remove('active'));
   el.classList.add('active');
-  ['ledger','notsure','mis','insights','acct-status','transfer-recon'].forEach(n =>
+  ['ledger','notsure','mis','insights','acct-status','transfer-recon','year'].forEach(n =>
     document.getElementById('rp-' + n).classList.toggle('d-none', n !== name));
   if (name === 'ledger' || name === 'notsure') loadLedger();
   if (name === 'mis')             loadMIS('ytd', document.getElementById('misBtnYtd'));
   if (name === 'insights')        { loadInsights(); loadCCBalance(); }
   if (name === 'acct-status')     loadAcctStatus();
   if (name === 'transfer-recon')  loadTransferRecon();
+  if (name === 'year')            loadYear('FY27', document.getElementById('fyBtn27'));
   return false;
 }
 
@@ -1523,6 +1585,139 @@ async function reclassifyTransfer(txnId) {
       }
     } else { sel.disabled = false; alert('Save failed'); }
   } catch(e) { sel.disabled = false; alert('Error: ' + e); }
+}
+
+// ── Year Summary ───────────────────────────────────────────────────────────
+let _yearChart = null;
+const FINANCIAL_CATS = new Set(['Financial Expense / OD Interest','Insurance','Home Loan','Tax']);
+const FMT_L = v => v >= 100000 ? `₹${(v/100000).toFixed(1)}L` : `₹${Math.round(v/1000)}k`;
+
+async function loadYear(fy, btn) {
+  document.querySelectorAll('.btn-group .btn[id^="fyBtn"]').forEach(b => {
+    b.classList.toggle('active', b === btn);
+    b.classList.toggle('btn-outline-primary', b === btn);
+    b.classList.toggle('btn-outline-secondary', b !== btn);
+  });
+  document.getElementById('yearCatBody').innerHTML =
+    '<tr><td colspan="7" class="text-muted text-center py-3">Loading…</td></tr>';
+  try {
+    const r = await fetch('/api/year-summary?fy=' + fy);
+    const d = await r.json();
+    renderYear(d);
+  } catch(e) {
+    document.getElementById('yearCatBody').innerHTML =
+      `<tr><td colspan="7" class="text-danger py-2">${e}</td></tr>`;
+  }
+}
+
+function renderYear(d) {
+  const {fy, groups, months, categories, multi_year} = d;
+  const MONTHS = months || ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+  const isFY27 = fy === 'FY27';
+  const isFY25 = fy === 'FY25';
+
+  // Prior year label for "vs Prior" column
+  const priorFY = fy === 'FY27' ? 'FY26' : fy === 'FY26' ? 'FY25' : 'FY24';
+
+  // Monthly totals (operational only)
+  const monthlyTotals = {};
+  MONTHS.forEach(m => monthlyTotals[m] = 0);
+  Object.entries(categories).forEach(([cat, info]) => {
+    if (FINANCIAL_CATS.has(cat)) return;
+    MONTHS.forEach(m => { monthlyTotals[m] += (info.monthly || {})[m] || 0; });
+  });
+
+  // Tiles
+  let opsTotal = 0, finTotal = 0;
+  Object.entries(categories).forEach(([cat, info]) => {
+    const v = info.annual || 0;
+    if (FINANCIAL_CATS.has(cat)) finTotal += v; else opsTotal += v;
+  });
+  document.getElementById('ytOperational').textContent = FMT_L(opsTotal);
+  document.getElementById('ytFinancial').textContent   = FMT_L(finTotal);
+  document.getElementById('ytGrandTotal').textContent  = FMT_L(opsTotal + finTotal);
+  const activeMths = MONTHS.filter(m => monthlyTotals[m] > 0).length || 1;
+  document.getElementById('ytMonthlyAvg').textContent  = FMT_L(opsTotal / activeMths);
+
+  // Chart
+  const ctx = document.getElementById('yearMonthChart').getContext('2d');
+  if (_yearChart) _yearChart.destroy();
+  _yearChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: MONTHS,
+      datasets: [{
+        label: 'Monthly Spend',
+        data: MONTHS.map(m => Math.round(monthlyTotals[m] / 1000)),
+        backgroundColor: 'rgba(13,110,253,0.6)',
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: ctx => `₹${ctx.parsed.y}k` } } },
+      scales: { y: { ticks: { callback: v => `₹${v}k` } } },
+      responsive: true, maintainAspectRatio: true,
+    }
+  });
+
+  // Column header
+  document.getElementById('yrCurCol').textContent = fy;
+
+  // For FY25 / static years use multi_year for prior data; for FY27 use prior field
+  const getAnnual = (cat, fyName) => {
+    if (multi_year && multi_year[cat] && multi_year[cat][fyName] !== undefined)
+      return multi_year[cat][fyName];
+    const info = categories[cat];
+    if (!info) return 0;
+    return (info.prior || {})[fyName] || 0;
+  };
+
+  // Table
+  const rows = [];
+  (groups || []).forEach(([grpName, cats]) => {
+    let grpTotal = {FY23:0, FY24:0, FY25:0, FY26:0, FY27:0, cur:0, prior:0};
+    const catRows = [];
+    cats.forEach(cat => {
+      const info = categories[cat] || {};
+      const cur   = info.annual || 0;
+      const fy23  = getAnnual(cat, 'FY23');
+      const fy24  = getAnnual(cat, 'FY24');
+      const fy25  = getAnnual(cat, 'FY25');
+      const fy26  = getAnnual(cat, 'FY26');
+      const prior = isFY27 ? fy26 : fy === 'FY26' ? fy25 : fy24;
+      const delta = prior > 0 ? ((cur - prior) / prior * 100) : null;
+      const dStr  = delta === null ? '—' :
+        `<span class="${delta > 15 ? 'text-danger' : delta < -10 ? 'text-success' : 'text-muted'}">${delta > 0 ? '+' : ''}${delta.toFixed(0)}%</span>`;
+      grpTotal.cur += cur; grpTotal.prior += prior;
+      grpTotal.FY23 += fy23; grpTotal.FY24 += fy24; grpTotal.FY25 += fy25; grpTotal.FY26 += fy26;
+      if (cur === 0 && prior === 0 && fy25 === 0 && fy24 === 0) return; // skip zero rows
+      catRows.push(`<tr>
+        <td class="text-muted small"></td>
+        <td class="small">${cat}</td>
+        <td class="text-end small text-muted">${fy23 ? FMT_L(fy23) : '—'}</td>
+        <td class="text-end small text-muted">${fy24 ? FMT_L(fy24) : '—'}</td>
+        <td class="text-end small">${fy25 ? FMT_L(fy25) : '—'}</td>
+        <td class="text-end fw-semibold">${cur ? FMT_L(cur) : '—'}</td>
+        <td class="text-end">${dStr}</td>
+      </tr>`);
+    });
+    if (!catRows.length) return;
+    const grpDelta = grpTotal.prior > 0 ? ((grpTotal.cur - grpTotal.prior) / grpTotal.prior * 100) : null;
+    const grpDStr  = grpDelta === null ? '—' :
+      `<span class="${grpDelta > 15 ? 'text-danger' : grpDelta < -10 ? 'text-success' : ''}">${grpDelta > 0 ? '+' : ''}${grpDelta.toFixed(0)}%</span>`;
+    rows.push(`<tr class="table-secondary fw-semibold">
+      <td colspan="2"><small>${grpName}</small></td>
+      <td class="text-end small">${FMT_L(grpTotal.FY23)}</td>
+      <td class="text-end small">${FMT_L(grpTotal.FY24)}</td>
+      <td class="text-end small">${FMT_L(grpTotal.FY25)}</td>
+      <td class="text-end">${FMT_L(grpTotal.cur)}</td>
+      <td class="text-end">${grpDStr}</td>
+    </tr>`);
+    rows.push(...catRows);
+  });
+  document.getElementById('yearCatBody').innerHTML = rows.join('') ||
+    '<tr><td colspan="7" class="text-muted text-center py-2">No data</td></tr>';
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
