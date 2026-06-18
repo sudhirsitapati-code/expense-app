@@ -1245,16 +1245,26 @@ def api_repair_sbi():
         # ── Normalise invalid type values left by old repair runs ────────────
         cur_type = (txn.get("type") or "").lower()
         if cur_type in ("debit", "credit", ""):
-            # WDL = expense, DEP credit = transfer/income
             raw_up = (txn.get("raw_description") or "").strip().upper()
-            if raw_up.startswith("WDL"):
+            _ATM_TYPE_KW = ["ATM", "CASH WD", "ATW ", "CASH WTHDL", "ATM WTDL", "CASH WITHDRAWAL"]
+            is_atm_entry = any(k in raw_up for k in _ATM_TYPE_KW)
+            if is_atm_entry:
+                # ATM withdrawals are short-term advances to Vincent until he logs cash spends
+                new_type = "investment"
+                new_head = "Loans"
+            elif raw_up.startswith("WDL"):
                 new_type = "expense"
+                new_head = None
             elif raw_up.startswith("DEP"):
                 new_type = "transfer"
+                new_head = None
             else:
                 new_type = "expense" if float(txn.get("debit") or 0) > 0 else "transfer"
+                new_head = None
             if new_type != cur_type:
                 txn["type"] = new_type
+                if new_head:
+                    txn["heading"] = new_head
                 changed = True
 
         # ── Description cleaning (raw_description is the field SBI entries use) ─
