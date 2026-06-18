@@ -240,6 +240,72 @@ def _parse_sbi_statement_text(text: str) -> list:
     return transactions
 
 
+def _parse_sbi_tables(pdf) -> list:
+    """
+    Extract SBI transactions from PDF tables.
+    SBI e-statement table columns: Txn Date | Value Date | Description | Ref/Cheque | Debit | Credit | Balance
+    """
+    transactions = []
+    seen = set()
+    for page in pdf.pages:
+        tables = page.extract_tables()
+        for table in tables:
+            for row in table:
+                if not row or len(row) < 5:
+                    continue
+                row_clean = [str(c or "").strip() for c in row]
+                # Try to parse first cell as a date
+                dt = _parse_date(row_clean[0])
+                if not dt:
+                    continue
+                # Find description — usually col 2
+                desc = row_clean[2] if len(row_clean) > 2 else ""
+                if not desc or desc.lower() in ("description", "particulars", "narration"):
+                    continue
+                # Find debit/credit amounts — scan right to left for numeric cells
+                # SBI format: [..., debit, credit, balance]
+                amounts = []
+                for cell in row_clean[3:]:
+                    c = cell.replace(",", "").replace(" ", "")
+                    try:
+                        v = float(c)
+                        amounts.append(v)
+                    except ValueError:
+                        amounts.append(None)
+                # Last non-None is balance, then credit, then debit
+                non_none = [(i, v) for i, v in enumerate(amounts) if v is not None]
+                if len(non_none) < 2:
+                    continue
+                balance = non_none[-1][1]
+                # Second-to-last non-None amount is credit, third-to-last is debit
+                credit = non_none[-2][1] if len(non_none) >= 2 else 0
+                debit  = non_none[-3][1] if len(non_none) >= 3 else 0
+                # Direction from which of debit/credit is non-zero
+                if debit > 0 and credit == 0:
+                    amount, direction = debit, "debit"
+                elif credit > 0 and debit == 0:
+                    amount, direction = credit, "credit"
+                elif debit > 0:
+                    amount, direction = debit, "debit"
+                else:
+                    continue
+                if amount < 1:
+                    continue
+                date_str = dt.strftime("%d/%m/%Y")
+                key = f"{date_str}|{desc[:40]}|{amount}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                transactions.append({
+                    "date": date_str,
+                    "description": desc,
+                    "amount": amount,
+                    "txn_direction": direction,
+                    "balance": balance,
+                })
+    return transactions
+
+
 def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
     transactions = []
     account = "SBI-????"
@@ -250,9 +316,13 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             for page in pdf.pages:
                 full_text += (page.extract_text() or "") + "\n"
 
+            # Try table extraction first (SBI uses table layout)
+            table_txns = _parse_sbi_tables(pdf)
+
         account = _extract_account_from_text(full_text)
-        transactions = _parse_sbi_statement_text(full_text)
-        print(f"[sbi_parser] acct={account} txns={len(transactions)}")
+        text_txns = _parse_sbi_statement_text(full_text)
+        transactions = table_txns if len(table_txns) >= len(text_txns) else text_txns
+        print(f"[sbi_parser] acct={account} table={len(table_txns)} text={len(text_txns)} using={'table' if transactions is table_txns else 'text'}")
         print(f"[sbi_parser] text_sample={repr(full_text[:300])}")
         for i, t in enumerate(transactions[:3]):
             print(f"[sbi_parser] txn[{i}] {t}")
