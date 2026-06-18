@@ -202,7 +202,7 @@ Reply ONLY with JSON."""
         return decision
 
     def _build_escalation_message(self, req: ExpenseRequest, extra_note: str = "") -> str:
-        payment_tag = "💵 Cash" if req.payment_method == "cash" else "🏦 Bank/UPI"
+        payment_tag = "💵 Cash" if req.payment_method == "cash" else "🏦 SBI-3152"
         post_tag = " [POST-FACTO]" if req.is_post_facto else ""
         return (
             f"💰 *Expense Approval Required{post_tag}*\n"

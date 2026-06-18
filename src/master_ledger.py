@@ -1358,6 +1358,29 @@ def repair_pdf_descriptions() -> int:
                 txn["credit"] = 0
                 swap_fixed += 1
 
+    # SBI-3152 rules (non-manual entries only):
+    # 1. Cash withdrawals (ATM) → loan until Vincent approves in approvals
+    # 2. Credits ≥ ₹50,000 → transfer
+    SBI3152_CASH_KW = ["atm", "cash withdrawal", "atw", "cash wthdl", "atm wtdl"]
+    sbi_fixed = 0
+    for txn in ledger:
+        if (txn.get("account") or "").endswith("3152") and txn.get("confidence") != "manual":
+            desc = (txn.get("raw_description") or txn.get("description") or "").lower()
+            credit = float(txn.get("credit") or 0)
+            # Large credits are transfers (salary, reimbursements, etc.)
+            if credit >= 50000 and txn.get("type", "").lower() != "transfer":
+                txn["type"]    = "transfer"
+                txn["heading"] = "Transfer"
+                txn["uncertain"] = False
+                sbi_fixed += 1
+            # Cash withdrawals treated as loans (not expense) until Vincent approves
+            elif any(kw in desc for kw in SBI3152_CASH_KW):
+                if txn.get("type", "").lower() not in ("investment", "transfer"):
+                    txn["type"]    = "investment"
+                    txn["heading"] = "Loans"
+                    txn["uncertain"] = True
+                    sbi_fixed += 1
+
     # Final pass: Transfer/Income/Investment entries should never be uncertain
     for txn in ledger:
         if txn.get("type", "").lower() in ("transfer", "income", "investment", "official"):
