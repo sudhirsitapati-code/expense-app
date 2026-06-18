@@ -1323,6 +1323,48 @@ def export():
     return jsonify({"status": "exported", "file": path})
 
 
+@app.route("/api/recent-expenses", methods=["GET"])
+def api_recent_expenses():
+    """Return last 20 approval log entries for the photo upload dropdown."""
+    try:
+        log = _db.load("approval_log") or []
+        recent = sorted(log, key=lambda e: e.get("timestamp", ""), reverse=True)[:20]
+        items = [
+            {
+                "id": e.get("request_id", ""),
+                "vendor": e.get("vendor", ""),
+                "amount": e.get("amount", 0),
+                "date": (e.get("timestamp", "")[:10]),
+                "category": e.get("category", ""),
+            }
+            for e in recent
+        ]
+        return jsonify({"expenses": items})
+    except Exception as e:
+        return jsonify({"expenses": [], "error": str(e)})
+
+
+@app.route("/api/photos/upload", methods=["POST"])
+def api_photos_upload():
+    """Store estimate and bill photos (base64) for an expense."""
+    data = request.get_json()
+    expense_id = data.get("expense_id", "").strip()
+    if not expense_id:
+        return jsonify({"error": "expense_id required"}), 400
+    estimates = data.get("estimates", [])
+    bills = data.get("bills", [])
+    existing = _db.load(f"photos_{expense_id}") or {"estimates": [], "bills": []}
+    existing["estimates"] = existing.get("estimates", []) + estimates
+    existing["bills"] = existing.get("bills", []) + bills
+    _db.save(f"photos_{expense_id}", existing)
+    return jsonify({
+        "ok": True,
+        "expense_id": expense_id,
+        "estimates": len(existing["estimates"]),
+        "bills": len(existing["bills"]),
+    })
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
