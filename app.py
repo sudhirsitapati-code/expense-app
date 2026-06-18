@@ -1170,7 +1170,22 @@ def api_repair_sbi():
     from src.sbi_statement_parser import _parse_paid_to
     import re as _re
 
+    _SBI_BF_KEYWORDS = ("brought forward", "opening bal", "closing bal", "b/f balance", "b/f")
+
     ledger = _load_json(LEDGER_PATH)
+
+    # Remove Brought Forward / summary entries
+    before_len = len(ledger)
+    ledger = [
+        t for t in ledger
+        if not (
+            str(t.get("account", "")).startswith("SBI")
+            and t.get("confidence") != "manual"
+            and any(kw in (t.get("transaction_details") or t.get("description") or "").lower()
+                    for kw in _SBI_BF_KEYWORDS)
+        )
+    ]
+    removed = before_len - len(ledger)
 
     # Group SBI transactions by account, sorted by date
     sbi_txns = [t for t in ledger if str(t.get("account", "")).startswith("SBI") and t.get("confidence") != "manual"]
@@ -1204,7 +1219,7 @@ def api_repair_sbi():
         is_wrong = (correct_direction == "debit" and current_debit == 0 and current_credit > 0) or \
                    (correct_direction == "credit" and current_credit == 0 and current_debit > 0)
 
-        # Clean description and parse paid_to
+        # Clean description and parse paid_to (always refresh paid_to with improved parser)
         raw_desc = txn.get("transaction_details") or txn.get("description") or ""
         clean_desc = _re.sub(r"\s+", " ", raw_desc).strip()
         paid_to = _parse_paid_to(clean_desc) if clean_desc else None
@@ -1224,17 +1239,17 @@ def api_repair_sbi():
         if clean_desc and clean_desc != raw_desc:
             txn["transaction_details"] = clean_desc
             changed = True
-        if paid_to and not txn.get("paid_to"):
+        if paid_to and paid_to != txn.get("paid_to"):  # always refresh
             txn["paid_to"] = paid_to
             changed = True
 
         if changed:
             fixed += 1
 
-    if fixed:
+    if fixed or removed:
         _save_json(LEDGER_PATH, ledger)
 
-    return jsonify({"fixed": fixed, "total_sbi": len(sbi_txns)})
+    return jsonify({"fixed": fixed, "bf_removed": removed, "total_sbi": len(sbi_txns)})
 
 
 @app.route("/api/admin/bulk-holiday-7009", methods=["GET"])

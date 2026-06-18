@@ -263,49 +263,76 @@ def _parse_paid_to(desc: str) -> Optional[str]:
     """
     Extract a clean vendor/payee name from an SBI transaction description.
 
-    Common SBI description formats:
-      UPI/DR/123456789012/VENDOR NAME/ICICI/...
-      UPI/CR/123456789012/SENDER NAME/HDFC/...
-      NEFT/NNNNNNNNNNN/VENDOR NAME
-      IMPS/123456789012/VENDOR NAME/HDFC
-      ATW/123456/SBI ATM LOCATION
-      TO TRANSFER-VENDOR NAME
-      BY TRANSFER-VENDOR NAME
-      SI/123/VENDOR NAME
+    Real SBI formats (post newline-cleaning):
+      WDL TFR UPI/DR/<ref>/<NAME_TRUNCATED>/<BANK>/<vpa>/...
+      WDL TFR IMPS/<ref>/<BANK>-xx<digits>-<NAME>/Bill Pay ...
+      WDL TFR SBIY<ref>/M/ Bill Payment ... OF Mr./Mrs. <FULL NAME> AT <digits>
+      DEP TFR RTGS UTR NO: <ref> ...
+      WDL TFR UPI/DR/<ref>/<NAME>/<BANK>/<vpa>/UPI
     """
-    d = desc.strip()
+    # Normalise: strip WDL TFR / DEP TFR prefix and extra whitespace
+    d = re.sub(r"^(?:WDL|DEP)\s+TFR\s*", "", desc.strip(), flags=re.IGNORECASE)
+    d = re.sub(r"\s+", " ", d).strip()
 
-    # UPI: take the segment after the 12-digit reference number
-    m = re.match(r"UPI/(?:DR|CR)/\d+/([^/]+)", d, re.IGNORECASE)
+    # SBIY bill payments: "OF Mr./Mrs./Ms. FULL NAME AT <digits>"
+    # Most accurate — SBI writes the full untruncated name here
+    m = re.search(r"\bOF\s+(?:Mr\.?|Mrs\.?|Ms\.?|Dr\.?)\s+([A-Z][A-Z ]{2,40})\s+AT\s+\d", d, re.IGNORECASE)
     if m:
         return m.group(1).strip().title()
 
-    # NEFT / IMPS: third segment
-    m = re.match(r"(?:NEFT|IMPS)[- /][\w]+[/ -](.+?)(?:/|$)", d, re.IGNORECASE)
+    # UPI: UPI/DR/<12digits>/<NAME>/<4-letterBANK>/<vpa>/...
+    # SBI truncates NAME mid-word (~8 chars); use first word of name when clean,
+    # otherwise fall back to VPA (strip trailing digits = phone numbers)
+    m = re.match(r"UPI/(?:DR|CR)/\d+/([^/]{1,20})/([A-Z]{4})/([^/\s]+)", d, re.IGNORECASE)
+    if m:
+        name_raw  = m.group(1).strip()
+        vpa       = re.sub(r"\d+$", "", m.group(3).split("@")[0])  # clean VPA
+
+        name_words = name_raw.split()
+        last_short = name_words and len(name_words[-1]) <= 2
+
+        if last_short:
+            # Name was split mid-word — use just the first word (e.g. "ZOMATO" not "ZOMATO L")
+            best = name_words[0]
+        else:
+            best = name_raw
+
+        # If best name is too short/noisy and VPA looks useful, prefer VPA
+        best = best if len(best) > 3 else (vpa if len(vpa) > 3 else best)
+        best = re.sub(r"[._\-]", " ", best).strip()
+        return best.title() if best else None
+
+    # IMPS to individual: IMPS/<ref>/<BANK>-[xx]<digits>-<NAME>/...  (space after dash allowed)
+    m = re.match(r"IMPS/\d+/[A-Z]+-\s*(?:xx)?\d+-\s*([^/]+)", d, re.IGNORECASE)
     if m:
         return m.group(1).strip().title()
 
-    # TO TRANSFER- / BY TRANSFER-
-    m = re.match(r"(?:TO|BY)\s+TRANSFER[-\s]+(.+)", d, re.IGNORECASE)
+    # IMPS generic third segment
+    m = re.match(r"IMPS/\d+/(.+?)(?:/|$)", d, re.IGNORECASE)
     if m:
-        return m.group(1).strip().title()
+        name = m.group(1).strip()
+        if name and not name.isdigit():
+            return name.title()
 
-    # ATW / ATM — return location
-    m = re.match(r"(?:ATW|ATM)[/ -][\d]+[/ -](.+?)(?:/|$)", d, re.IGNORECASE)
+    # NEFT
+    m = re.match(r"NEFT[/ -]\S+[/ -](.+?)(?:/|-ACC/|$)", d, re.IGNORECASE)
     if m:
-        return m.group(1).strip().title()
+        name = m.group(1).strip()
+        if name and not name.isdigit():
+            return name.title()
 
-    # SI (standing instruction)
+    # RTGS
+    if re.search(r"\bRTGS\b", d, re.IGNORECASE):
+        return "RTGS Transfer"
+
+    # ATM / ATW withdrawal
+    if re.match(r"(?:ATW|ATM)", d, re.IGNORECASE):
+        return "ATM Withdrawal"
+
+    # Standing instruction
     m = re.match(r"SI/\d+/(.+?)(?:/|$)", d, re.IGNORECASE)
     if m:
         return m.group(1).strip().title()
-
-    # Generic: return first meaningful segment (skip short prefix codes)
-    parts = re.split(r"[/\-]", d)
-    for part in parts:
-        part = part.strip()
-        if len(part) > 3 and not part.isdigit():
-            return part.title()
 
     return None
 
