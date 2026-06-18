@@ -1158,6 +1158,85 @@ def api_reset_sbi():
     return jsonify({"message": "Pass ?confirm=yes to clear all processed statement IDs", "sbi_txns_removed": before - len(icici)})
 
 
+@app.route("/api/admin/repair-sbi", methods=["GET"])
+@login_required
+def api_repair_sbi():
+    """
+    Fix debit/credit direction on existing SBI transactions using stored balance sequence.
+    Also parses paid_to from description and cleans newlines.
+    No re-import needed — operates on master ledger in-place.
+    """
+    from src.master_ledger import _load_json, _save_json, LEDGER_PATH, _parse_date
+    from src.sbi_statement_parser import _parse_paid_to
+    import re as _re
+
+    ledger = _load_json(LEDGER_PATH)
+
+    # Group SBI transactions by account, sorted by date
+    sbi_txns = [t for t in ledger if str(t.get("account", "")).startswith("SBI") and t.get("confidence") != "manual"]
+    sbi_txns.sort(key=lambda t: (_parse_date(t.get("date", "")) or datetime.min))
+
+    fixed = 0
+    for i, txn in enumerate(sbi_txns):
+        bal = txn.get("balance")
+        if bal is None:
+            continue
+
+        # Find previous transaction for same account
+        acct = txn.get("account")
+        prev_bal = None
+        for j in range(i - 1, -1, -1):
+            if sbi_txns[j].get("account") == acct and sbi_txns[j].get("balance") is not None:
+                prev_bal = sbi_txns[j]["balance"]
+                break
+
+        if prev_bal is None:
+            continue
+
+        delta = float(bal) - float(prev_bal)
+        correct_direction = "debit" if delta < 0 else "credit"
+        amount = float(txn.get("debit") or txn.get("credit") or txn.get("amount") or 0)
+        if amount == 0:
+            continue
+
+        current_debit  = float(txn.get("debit") or 0)
+        current_credit = float(txn.get("credit") or 0)
+        is_wrong = (correct_direction == "debit" and current_debit == 0 and current_credit > 0) or \
+                   (correct_direction == "credit" and current_credit == 0 and current_debit > 0)
+
+        # Clean description and parse paid_to
+        raw_desc = txn.get("transaction_details") or txn.get("description") or ""
+        clean_desc = _re.sub(r"\s+", " ", raw_desc).strip()
+        paid_to = _parse_paid_to(clean_desc) if clean_desc else None
+
+        changed = False
+        if is_wrong:
+            if correct_direction == "debit":
+                txn["debit"]  = amount
+                txn["credit"] = 0
+                txn["type"]   = "debit"
+            else:
+                txn["credit"] = amount
+                txn["debit"]  = 0
+                txn["type"]   = "credit"
+            changed = True
+
+        if clean_desc and clean_desc != raw_desc:
+            txn["transaction_details"] = clean_desc
+            changed = True
+        if paid_to and not txn.get("paid_to"):
+            txn["paid_to"] = paid_to
+            changed = True
+
+        if changed:
+            fixed += 1
+
+    if fixed:
+        _save_json(LEDGER_PATH, ledger)
+
+    return jsonify({"fixed": fixed, "total_sbi": len(sbi_txns)})
+
+
 @app.route("/api/admin/bulk-holiday-7009", methods=["GET"])
 @login_required
 def api_bulk_holiday_7009():

@@ -347,8 +347,8 @@ def _parse_sbi_tables(pdf) -> list:
                         prev_balance = balance
                     continue
 
-                # Col 2: description — skip summary / header rows
-                desc = row_clean[2] if n > 2 else ""
+                # Col 2: description — clean newlines, skip summary / header rows
+                desc = re.sub(r"\s+", " ", row_clean[2]).strip() if n > 2 else ""
                 desc_low = desc.lower().strip()
                 if not desc or desc_low in _SBI_SKIP_DESCS:
                     if balance is not None:
