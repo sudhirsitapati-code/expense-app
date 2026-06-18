@@ -811,63 +811,148 @@ def sync_from_gmail(days_back: int = 90, force: bool = False) -> dict:
 
 # ── Reconcile with approval log ───────────────────────────────────────────────
 
+_APP_TO_HEADING = {
+    "groceries":    "Groceries",
+    "staff":        "Staff Salary",
+    "utilities":    "Electricity & Gas",
+    "miscellaneous":"Misc",
+    "personal_care":"Wellness",
+    "clothing":     "Clothes",
+    "gifts":        "Gifts",
+    "medical":      "Medical",
+    "education":    "Children Education",
+    "dining":       "Eating Out",
+    "entertainment":"Entertainment",
+    "transport":    "Holiday",
+    "maintenance":  "Maintenance Expense",
+    "home_repair":  "One Time Charge",
+}
+
+_SBI_CASH_KW = ["atm", "cash withdrawal", "atw", "cash wthdl", "atm wtdl"]
+
+
+def _enrich_from_approval(txn: dict, entry: dict):
+    """Stamp approval data onto a matched ledger transaction."""
+    cat     = entry.get("category", "miscellaneous")
+    heading = _APP_TO_HEADING.get(cat, txn.get("heading", "Misc"))
+    txn["heading"]          = heading
+    txn["vendor"]           = entry.get("vendor") or txn.get("vendor")
+    txn["description"]      = entry.get("description") or txn.get("description")
+    txn["reconciled_with"]  = entry["request_id"]
+    txn["uncertain"]        = False
+    txn["uncertain_fields"] = []
+    txn["confidence"]       = "reconciled"
+    entry["reconciled_to"]  = txn["txn_id"]
+
+
 def reconcile_with_approvals(approval_log: list) -> int:
     """
-    Match SBI debits in master ledger to Vincent's approved expenses.
-    Uses heading from approval log when matched. Returns count of new matches.
+    Match SBI-3152 debits in master ledger to Vincent's approved expenses.
+
+    Two match modes:
+    1. UPI / direct-debit: approval payment_method == "sbi3152".
+       Match by amount (±₹100) and date (±7 days).
+    2. Cash: approval payment_method == "cash".
+       The cash came from an SBI-3152 ATM withdrawal. Match the nearest ATM
+       withdrawal within 30 days (before or after) whose amount ≥ approval amount.
+       The withdrawal becomes the expense; the approval entry names it.
+
+    In both cases the ledger transaction is enriched with vendor/category/description
+    from the approval log, marked confident, and reconciled.
     """
-    ledger = _load_json(LEDGER_PATH)
+    ledger  = _load_json(LEDGER_PATH)
     matched = 0
 
+    # Split approvals by payment type
+    sbi_approvals  = []  # paid directly from SBI-3152 (UPI/NEFT/etc.)
+    cash_approvals = []  # cash expenses (funded by ATM withdrawal from SBI-3152)
+    for entry in approval_log:
+        if entry.get("action") not in ("AUTO_APPROVE", "APPROVED", "APPROVED_LOWER"):
+            continue
+        if entry.get("reconciled_to"):
+            continue
+        pm = (entry.get("payment_method") or "").lower()
+        if pm in ("sbi3152", "sbi-3152", "sbi"):
+            sbi_approvals.append(entry)
+        elif pm == "cash":
+            cash_approvals.append(entry)
+
+    # ── Mode 1: UPI / direct SBI-3152 debits ─────────────────────────────────
     for txn in ledger:
-        if txn.get("reconciled_with") or txn.get("bank") != "SBI":
+        if txn.get("reconciled_with"):
             continue
-        if txn.get("account_type") == "credit_card":
+        if (txn.get("account") or "").find("3152") < 0:
+            continue
+        if not txn.get("debit"):
+            continue
+        txn_date = _parse_date(txn.get("date", ""))
+        if not txn_date:
+            continue
+        desc = (txn.get("transaction_details") or txn.get("description") or "").lower()
+        # Skip pure ATM withdrawals here — handled by Mode 2
+        if any(kw in desc for kw in _SBI_CASH_KW):
             continue
 
-        txn_date = _parse_date(txn["date"])
-        txn_amt  = txn["debit"]
-        if not txn_date or not txn_amt:
-            continue
-
-        for entry in approval_log:
-            if entry.get("action") not in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER"):
-                continue
+        txn_amt = float(txn["debit"])
+        for entry in sbi_approvals:
             if entry.get("reconciled_to"):
                 continue
-
-            log_amt = entry.get("approved_amount") or entry.get("amount", 0)
+            log_amt = float(entry.get("approved_amount") or entry.get("amount", 0))
             if abs(txn_amt - log_amt) > 100:
                 continue
-
             try:
                 log_date = datetime.fromisoformat(entry["timestamp"])
             except Exception:
                 continue
-
             if abs((txn_date - log_date).days) > 7:
                 continue
-
-            # Match found — pull heading from approval log
-            from src.approval_engine import ApprovalEngine
-            APP_TO_HEADING = {
-                "groceries":"Groceries","staff":"Staff Salary","utilities":"Electricity & Gas",
-                "miscellaneous":"Misc","personal_care":"Wellness","clothing":"Clothes",
-                "gifts":"Gifts","medical":"Medical","education":"Children Education",
-                "dining":"Eating Out","entertainment":"Entertainment","transport":"Holiday",
-                "maintenance":"Maintenance Expense","home_repair":"One Time Charge",
-            }
-            cat = entry.get("category","miscellaneous")
-            heading = APP_TO_HEADING.get(cat, txn.get("heading","Misc"))
-
-            txn["heading"]         = heading
-            txn["reconciled_with"] = entry["request_id"]
-            txn["uncertain"]       = False
-            txn["uncertain_fields"]= []
-            txn["confidence"]      = "reconciled"
-            entry["reconciled_to"] = txn["txn_id"]
+            _enrich_from_approval(txn, entry)
             matched += 1
             break
+
+    # ── Mode 2: Cash expenses — link to ATM withdrawals ───────────────────────
+    # Collect all unreconciled ATM withdrawals from SBI-3152
+    atm_txns = [
+        t for t in ledger
+        if (t.get("account") or "").find("3152") >= 0
+        and float(t.get("debit") or 0) > 0
+        and not t.get("reconciled_with")
+        and any(kw in (t.get("transaction_details") or t.get("description") or "").lower()
+                for kw in _SBI_CASH_KW)
+    ]
+
+    for entry in cash_approvals:
+        if entry.get("reconciled_to"):
+            continue
+        log_amt = float(entry.get("approved_amount") or entry.get("amount", 0))
+        try:
+            log_date = datetime.fromisoformat(entry["timestamp"])
+        except Exception:
+            continue
+
+        # Find the closest ATM withdrawal that could fund this cash expense:
+        # withdrawal must be >= expense amount and within 30 days
+        best = None
+        best_days = 999
+        for atm in atm_txns:
+            if atm.get("reconciled_with"):
+                continue
+            atm_amt  = float(atm.get("debit", 0))
+            atm_date = _parse_date(atm.get("date", ""))
+            if not atm_date:
+                continue
+            days_diff = abs((atm_date - log_date).days)
+            if atm_amt < log_amt * 0.9:  # withdrawal must be at least 90% of spend
+                continue
+            if days_diff > 30:
+                continue
+            if days_diff < best_days:
+                best      = atm
+                best_days = days_diff
+
+        if best:
+            _enrich_from_approval(best, entry)
+            matched += 1
 
     if matched:
         _save_json(LEDGER_PATH, ledger)
