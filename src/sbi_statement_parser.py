@@ -259,16 +259,25 @@ def _parse_sbi_tables(pdf) -> list:
     """
     Extract SBI transactions from PDF tables.
     SBI e-statement columns: Txn Date | Value Date | Description | Ref/Cheque | Debit | Credit | Balance
+
+    pdfplumber sometimes drops empty cells, so a 7-col debit row becomes 6 cols
+    with the debit amount landing at position n-2 (normally Credit).
+    We use balance delta as the primary direction signal to avoid misclassification.
     """
     transactions = []
     seen = set()
     for page in pdf.pages:
         tables = page.extract_tables()
         for table in tables:
-            for row in table:
+            prev_balance: Optional[float] = None
+            for row_idx, row in enumerate(table):
                 if not row or len(row) < 5:
                     continue
                 row_clean = [str(c or "").strip() for c in row]
+
+                # Log first 5 rows per table to diagnose column layout
+                if row_idx < 5:
+                    print(f"[sbi_table] row({len(row_clean)}): {row_clean}")
 
                 # Col 0: transaction date
                 dt = _parse_date(row_clean[0])
@@ -282,19 +291,37 @@ def _parse_sbi_tables(pdf) -> list:
                 if any(skip in desc.lower() for skip in ("brought forward", "opening bal", "closing bal")):
                     continue
 
-                # Cols -3, -2, -1 = Debit, Credit, Balance (positional from right)
-                # Works for both 7-col and 6-col variants
                 n = len(row_clean)
                 balance = _to_float(row_clean[n - 1])
-                credit  = _to_float(row_clean[n - 2])
-                debit   = _to_float(row_clean[n - 3]) if n >= 7 else None
+                # Read both candidate amount columns; one will be empty (None)
+                col_minus2 = _to_float(row_clean[n - 2])  # Credit in 7-col, or amount in 6-col
+                col_minus3 = _to_float(row_clean[n - 3]) if n >= 7 else None  # Debit in 7-col
 
-                if debit and debit > 0:
-                    amount, direction = debit, "debit"
-                elif credit and credit > 0:
-                    amount, direction = credit, "credit"
+                # Primary: use balance delta to determine direction
+                # This handles pdfplumber dropping empty cells (6-col vs 7-col rows)
+                if balance is not None and prev_balance is not None:
+                    delta = balance - prev_balance
+                    # Pick the non-None amount value
+                    amount = None
+                    for candidate in [col_minus3, col_minus2]:
+                        if candidate and candidate > 0:
+                            amount = candidate
+                            break
+                    if not amount:
+                        prev_balance = balance
+                        continue
+                    direction = "debit" if delta < 0 else "credit"
                 else:
-                    continue
+                    # Fallback: positional — only reliable when we know column count is 7
+                    if col_minus3 and col_minus3 > 0:
+                        amount, direction = col_minus3, "debit"
+                    elif col_minus2 and col_minus2 > 0:
+                        amount, direction = col_minus2, "credit"
+                    else:
+                        prev_balance = balance
+                        continue
+
+                prev_balance = balance
 
                 if amount < 1:
                     continue
