@@ -763,6 +763,7 @@ def _run_statement_sync(force: bool):
         result["deduped"]        = deduplicate_ledger()
         log = _load_json(APPROVAL_LOG)
         result["reconciled"]     = reconcile_with_approvals(log)
+        result["merged"]         = _merge_approval_to_sbi_internal()
         result["status"] = "ok"
     except Exception as e:
         result["status"] = "error"
@@ -1211,8 +1212,11 @@ def api_repair_sbi():
 
         # ── Direction fix — primary: description prefix (100% reliable) ──────
         # SBI always prefixes WDL TFR (withdrawal=debit) or DEP TFR (deposit=credit)
+        # ATM withdrawals are always debits regardless of prefix
         raw_for_dir = (txn.get("raw_description") or "").strip().upper()
-        if raw_for_dir.startswith("WDL"):
+        _ATM_KW = ["ATM", "CASH WD", "ATW ", "CASH WTHDL", "ATM WTDL", "CASH WITHDRAWAL"]
+        if raw_for_dir.startswith("WDL") or any(raw_for_dir.startswith(k) for k in _ATM_KW) \
+                or any(k in raw_for_dir for k in _ATM_KW):
             correct_dir = "debit"
         elif raw_for_dir.startswith("DEP"):
             correct_dir = "credit"
@@ -1283,13 +1287,11 @@ def api_repair_sbi():
     })
 
 
-@app.route("/api/admin/merge-approval-to-sbi", methods=["GET"])
-@login_required
-def api_merge_approval_to_sbi():
+def _merge_approval_to_sbi_internal() -> dict:
     """
-    For every approval_log entry in the master ledger find its matching SBI statement
-    entry, enrich the SBI entry with the approval's vendor/heading/description, and
-    remove the approval_log duplicate.
+    For every approval_log entry in the master ledger find its matching SBI-3152
+    statement entry, enrich the SBI entry with the approval's vendor/heading/description,
+    and remove the approval_log duplicate.  Called automatically on every SBI sync.
 
     Match rules:
       sbi3152 payment → SBI non-ATM debit, amount ±₹100, date ±7 days
@@ -1328,8 +1330,6 @@ def api_merge_approval_to_sbi():
         best_score = 999
 
         for sbi in sbi_entries:
-            if sbi.get("merged_from_approval"):
-                pass  # already merged but still matchable for idempotency guard below
             sbi_amt  = float(sbi.get("debit") or 0)
             if sbi_amt == 0:
                 continue
@@ -1360,24 +1360,23 @@ def api_merge_approval_to_sbi():
                 best_score = days_diff
 
         if best:
-            # Skip if already merged from this approval
+            # Idempotent — already merged from this exact approval
             if best.get("merged_from_approval") == appr.get("txn_id"):
                 to_remove_ids.add(appr["txn_id"])
                 continue
 
-            # Enrich SBI entry with approval data
             cat     = appr.get("category") or appr.get("account_type") or "miscellaneous"
             heading = _APP_TO_HEADING.get(cat, best.get("heading", "Misc"))
             if not best.get("paid_to") or best.get("confidence") != "manual":
                 best["paid_to"]    = appr.get("paid_to") or appr.get("vendor") or best.get("paid_to")
-            best["heading"]            = heading
-            best["approval_vendor"]    = appr.get("paid_to") or appr.get("vendor")
-            best["approval_desc"]      = appr.get("raw_description") or appr.get("description")
-            best["reconciled_with"]    = appr.get("reconciled_with") or appr.get("txn_id")
+            best["heading"]              = heading
+            best["approval_vendor"]      = appr.get("paid_to") or appr.get("vendor")
+            best["approval_desc"]        = appr.get("raw_description") or appr.get("description")
+            best["reconciled_with"]      = appr.get("reconciled_with") or appr.get("txn_id")
             best["merged_from_approval"] = appr.get("txn_id")
-            best["uncertain"]          = False
-            best["uncertain_fields"]   = []
-            best["confidence"]         = "merged"
+            best["uncertain"]            = False
+            best["uncertain_fields"]     = []
+            best["confidence"]           = "merged"
 
             to_remove_ids.add(appr["txn_id"])
             merged += 1
@@ -1386,13 +1385,22 @@ def api_merge_approval_to_sbi():
         ledger = [t for t in ledger if t.get("txn_id") not in to_remove_ids]
         _save_json(LEDGER_PATH, ledger)
 
-    unmatched = len(approval_entries) - merged
-    return jsonify({
+    return {
         "merged": merged,
         "approval_entries_removed": len(to_remove_ids),
-        "unmatched_approvals_kept": unmatched,
-        "total_sbi": len(sbi_entries),
-    })
+        "unmatched_approvals_kept": len(approval_entries) - merged,
+    }
+
+
+@app.route("/api/admin/merge-approval-to-sbi", methods=["GET"])
+@login_required
+def api_merge_approval_to_sbi():
+    result = _merge_approval_to_sbi_internal()
+    result["total_sbi"] = sum(
+        1 for t in load_ledger()
+        if (t.get("account") or "").find("3152") >= 0 and t.get("source") == "sbi_statement"
+    )
+    return jsonify(result)
 
 
 @app.route("/api/admin/bulk-holiday-7009", methods=["GET"])
