@@ -1883,10 +1883,8 @@ def api_transfer_recon_manual_pair():
         return jsonify({"error": f"Seq #{seq2} not found in ledger"}), 404
 
     pairs = db.load("manual_transfer_pairs") or []
-    # Avoid duplicates
-    for p in pairs:
-        if set([p["seq1"], p["seq2"]]) == set([seq1, seq2]):
-            return jsonify({"ok": True, "message": "Already linked"})
+    # Remove any existing link that involves either seq — old links broken
+    pairs = [p for p in pairs if seq1 not in (p["seq1"], p["seq2"]) and seq2 not in (p["seq1"], p["seq2"])]
     pairs.append({"seq1": seq1, "seq2": seq2})
     db.save("manual_transfer_pairs", pairs)
     return jsonify({"ok": True, "linked": [seq1, seq2]})
