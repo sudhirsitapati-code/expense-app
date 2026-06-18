@@ -1238,6 +1238,21 @@ def api_repair_sbi():
                 txn["credit"] = amount if correct_dir == "credit" else 0
                 changed = True
 
+        # ── Normalise invalid type values left by old repair runs ────────────
+        cur_type = (txn.get("type") or "").lower()
+        if cur_type in ("debit", "credit", ""):
+            # WDL = expense, DEP credit = transfer/income
+            raw_up = (txn.get("raw_description") or "").strip().upper()
+            if raw_up.startswith("WDL"):
+                new_type = "expense"
+            elif raw_up.startswith("DEP"):
+                new_type = "transfer"
+            else:
+                new_type = "expense" if float(txn.get("debit") or 0) > 0 else "transfer"
+            if new_type != cur_type:
+                txn["type"] = new_type
+                changed = True
+
         # ── Description cleaning (raw_description is the field SBI entries use) ─
         raw_desc   = txn.get("raw_description") or txn.get("transaction_details") or txn.get("description") or ""
         clean_desc = _re.sub(r"\s+", " ", raw_desc).strip()
