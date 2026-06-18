@@ -1170,78 +1170,80 @@ def api_repair_sbi():
     from src.sbi_statement_parser import _parse_paid_to
     import re as _re
 
-    _SBI_BF_KEYWORDS = ("brought forward", "opening bal", "closing bal", "b/f balance", "b/f")
+    _SBI_BF_KEYWORDS = (
+        "brought forward", "opening bal", "closing bal", "b/f balance", "b/f",
+        "brought fwd", "b/f bal", "opening balance", "closing balance",
+    )
 
     ledger = _load_json(LEDGER_PATH)
 
-    # Remove Brought Forward / summary entries
+    # Remove Brought Forward / summary entries — check all text fields
     before_len = len(ledger)
-    ledger = [
-        t for t in ledger
-        if not (
-            str(t.get("account", "")).startswith("SBI")
-            and t.get("confidence") != "manual"
-            and any(kw in (t.get("transaction_details") or t.get("description") or "").lower()
-                    for kw in _SBI_BF_KEYWORDS)
-        )
-    ]
+    def _is_bf(t):
+        if not str(t.get("account", "")).startswith("SBI"):
+            return False
+        if t.get("confidence") == "manual":
+            return False
+        text = " ".join(str(t.get(f) or "") for f in
+                        ("transaction_details", "description", "paid_to", "vendor")).lower()
+        return any(kw in text for kw in _SBI_BF_KEYWORDS)
+    ledger = [t for t in ledger if not _is_bf(t)]
     removed = before_len - len(ledger)
 
-    # Group SBI transactions by account, sorted by date
-    sbi_txns = [t for t in ledger if str(t.get("account", "")).startswith("SBI") and t.get("confidence") != "manual"]
-    sbi_txns.sort(key=lambda t: (_parse_date(t.get("date", "")) or datetime.min))
+    # Group SBI transactions, sorted by date then seq
+    sbi_txns = [t for t in ledger
+                if str(t.get("account", "")).startswith("SBI")
+                and t.get("confidence") != "manual"]
+    sbi_txns.sort(key=lambda t: (
+        _parse_date(t.get("date", "")) or datetime.min,
+        t.get("seq", 0)
+    ))
 
     fixed = 0
+    paid_to_samples = []
+
     for i, txn in enumerate(sbi_txns):
-        bal = txn.get("balance")
-        if bal is None:
-            continue
-
-        # Find previous transaction for same account
-        acct = txn.get("account")
-        prev_bal = None
-        for j in range(i - 1, -1, -1):
-            if sbi_txns[j].get("account") == acct and sbi_txns[j].get("balance") is not None:
-                prev_bal = sbi_txns[j]["balance"]
-                break
-
-        if prev_bal is None:
-            continue
-
-        delta = float(bal) - float(prev_bal)
-        correct_direction = "debit" if delta < 0 else "credit"
-        amount = float(txn.get("debit") or txn.get("credit") or txn.get("amount") or 0)
-        if amount == 0:
-            continue
-
-        current_debit  = float(txn.get("debit") or 0)
-        current_credit = float(txn.get("credit") or 0)
-        is_wrong = (correct_direction == "debit" and current_debit == 0 and current_credit > 0) or \
-                   (correct_direction == "credit" and current_credit == 0 and current_debit > 0)
-
-        # Clean description and parse paid_to (always refresh paid_to with improved parser)
-        raw_desc = txn.get("transaction_details") or txn.get("description") or ""
-        clean_desc = _re.sub(r"\s+", " ", raw_desc).strip()
-        paid_to = _parse_paid_to(clean_desc) if clean_desc else None
-
         changed = False
-        if is_wrong:
-            if correct_direction == "debit":
-                txn["debit"]  = amount
-                txn["credit"] = 0
-                txn["type"]   = "debit"
-            else:
-                txn["credit"] = amount
-                txn["debit"]  = 0
-                txn["type"]   = "credit"
-            changed = True
 
-        if clean_desc and clean_desc != raw_desc:
+        # ── Direction fix via balance delta ──────────────────────────────────
+        bal = txn.get("balance")
+        if bal is not None:
+            acct = txn.get("account")
+            prev_bal = None
+            for j in range(i - 1, -1, -1):
+                if sbi_txns[j].get("account") == acct and sbi_txns[j].get("balance") is not None:
+                    prev_bal = sbi_txns[j]["balance"]
+                    break
+
+            if prev_bal is not None:
+                delta = float(bal) - float(prev_bal)
+                correct = "debit" if delta < 0 else "credit"
+                amount  = float(txn.get("debit") or txn.get("credit") or txn.get("amount") or 0)
+                cur_d   = float(txn.get("debit") or 0)
+                cur_c   = float(txn.get("credit") or 0)
+                is_wrong = (correct == "debit"  and cur_d == 0 and cur_c > 0) or \
+                           (correct == "credit" and cur_c == 0 and cur_d > 0)
+                if is_wrong and amount > 0:
+                    txn["debit"]  = amount if correct == "debit"  else 0
+                    txn["credit"] = amount if correct == "credit" else 0
+                    txn["type"]   = correct
+                    changed = True
+
+        # ── Description cleaning ──────────────────────────────────────────────
+        raw_desc   = txn.get("transaction_details") or txn.get("description") or ""
+        clean_desc = _re.sub(r"\s+", " ", raw_desc).strip()
+        if clean_desc != raw_desc:
             txn["transaction_details"] = clean_desc
             changed = True
-        if paid_to and paid_to != txn.get("paid_to"):  # always refresh
-            txn["paid_to"] = paid_to
-            changed = True
+
+        # ── paid_to — always recompute and overwrite ──────────────────────────
+        paid_to = _parse_paid_to(clean_desc) if clean_desc else None
+        if paid_to:
+            if paid_to != txn.get("paid_to"):
+                txn["paid_to"] = paid_to
+                changed = True
+            if len(paid_to_samples) < 5:
+                paid_to_samples.append({"desc": clean_desc[:60], "paid_to": paid_to})
 
         if changed:
             fixed += 1
@@ -1249,7 +1251,12 @@ def api_repair_sbi():
     if fixed or removed:
         _save_json(LEDGER_PATH, ledger)
 
-    return jsonify({"fixed": fixed, "bf_removed": removed, "total_sbi": len(sbi_txns)})
+    return jsonify({
+        "fixed": fixed,
+        "bf_removed": removed,
+        "total_sbi": len(sbi_txns),
+        "paid_to_samples": paid_to_samples,
+    })
 
 
 @app.route("/api/admin/bulk-holiday-7009", methods=["GET"])
