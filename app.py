@@ -1122,6 +1122,17 @@ def api_ledger_update(txn_id):
     return jsonify({"status": "ok"}) if ok else (jsonify({"error": "not found"}), 404)
 
 
+@app.route("/api/admin/set-sbi-password", methods=["GET"])
+@login_required
+def api_set_sbi_password():
+    """Store SBI PDF password in DB. Usage: ?pw=YOUR_PASSWORD"""
+    pw = request.args.get("pw", "")
+    if not pw:
+        return jsonify({"error": "provide ?pw=your_password"}), 400
+    db.save("sbi_pdf_password", pw)
+    return jsonify({"message": "SBI PDF password saved to DB", "length": len(pw)})
+
+
 @app.route("/api/admin/reset-sbi", methods=["GET"])
 @login_required
 def api_reset_sbi():

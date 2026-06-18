@@ -20,7 +20,17 @@ from src import db as _db
 
 SBI_LABEL = os.getenv("SBI_GMAIL_LABEL", "SBI-Expenses")
 _SBI_PDF_PASSWORD = os.getenv("SBI_PDF_PASSWORD", "")
-_SBI_PDF_PASSWORDS = [_SBI_PDF_PASSWORD] if _SBI_PDF_PASSWORD else []
+
+
+def _get_sbi_password() -> str:
+    """Read SBI password from DB (set via /api/admin/set-sbi-password), fallback to env var."""
+    try:
+        pw = _db.load("sbi_pdf_password")
+        if pw:
+            return str(pw)
+    except Exception:
+        pass
+    return _SBI_PDF_PASSWORD
 
 FY27_START = datetime(2026, 4, 1)
 
@@ -78,8 +88,8 @@ def _fy_fields(dt: Optional[datetime]) -> dict:
 
 
 def _open_pdf(pdf_bytes: bytes):
-    base = _SBI_PDF_PASSWORD
-    print(f"[sbi_parser] password env set: {bool(base)}, first4: {repr(base[:4]) if base else 'EMPTY'}")
+    base = _get_sbi_password()
+    print(f"[sbi_parser] password set: {bool(base)}, first4: {repr(base[:4]) if base else 'EMPTY'}")
     candidates = list(dict.fromkeys([
         base,
         base.upper(),
