@@ -291,14 +291,17 @@ def _parse_paid_to(desc: str) -> Optional[str]:
         name_words = name_raw.split()
         last_short = name_words and len(name_words[-1]) <= 2
 
+        # Strip leading honorifics (Mrs, Mr, Miss, Dr) that leak into the name field
+        name_clean = re.sub(r"^(?:Mrs?\.?|Miss|Dr\.?)\s+", "", name_raw, flags=re.IGNORECASE).strip()
+
         if last_short:
             # Name was split mid-word — use just the first word (e.g. "ZOMATO" not "ZOMATO L")
-            best = name_words[0]
+            best = name_clean.split()[0] if name_clean.split() else name_clean
         else:
-            best = name_raw
+            best = name_clean
 
         # If best name is too short/noisy and VPA looks useful, prefer VPA
-        best = best if len(best) > 3 else (vpa if len(vpa) > 3 else best)
+        best = best if len(best) > 5 else (vpa if len(vpa) > 3 else best)
         best = re.sub(r"[._\-]", " ", best).strip()
         return best.title() if best else None
 
