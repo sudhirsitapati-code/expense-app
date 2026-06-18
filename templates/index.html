@@ -421,6 +421,23 @@
   </table>
   </div>
 
+  <!-- Matched pairs -->
+  <details open>
+    <summary class="fw-semibold text-success mb-2" style="cursor:pointer">
+      <i class="bi bi-check2-circle me-1"></i>Matched Pairs <span id="tPairsCount" class="text-muted fw-normal"></span>
+    </summary>
+    <div class="table-wrap mt-2 mb-4">
+    <table class="table table-sm mb-0">
+      <thead><tr>
+        <th>#</th><th>Debit Date</th><th>From Account</th>
+        <th>#</th><th>Credit Date</th><th>To Account</th>
+        <th class="text-end">Amount</th><th>Gap</th>
+      </tr></thead>
+      <tbody id="transferPairsBody"></tbody>
+    </table>
+    </div>
+  </details>
+
   <!-- Transfer debits -->
   <details open>
     <summary class="fw-semibold text-warning mb-2" style="cursor:pointer">
@@ -1422,7 +1439,21 @@ async function loadTransferRecon() {
     else badge.classList.add('d-none');
     document.getElementById('suspectedBadge').textContent = sc;
 
+    _trData.pairs = d.pairs || [];
     renderSuspected(_trData.suspected);
+
+    document.getElementById('tPairsCount').textContent  = `(${_trData.pairs.length})`;
+    document.getElementById('transferPairsBody').innerHTML = _trData.pairs.length
+      ? _trData.pairs.map(p => `<tr>
+          <td class="text-muted small">${p.debit_seq??'—'}</td>
+          <td>${p.debit_date||'—'}</td><td><small>${p.from_account}</small></td>
+          <td class="text-muted small">${p.credit_seq??'—'}</td>
+          <td>${p.credit_date||'—'}</td><td><small>${p.to_account}</small></td>
+          <td class="text-end">${fmt(p.amount)}</td>
+          <td class="text-center"><span class="badge bg-secondary">${p.days_gap}d</span></td>
+        </tr>`).join('')
+      : '<tr><td colspan="8" class="text-muted text-center py-2">No matched pairs yet</td></tr>';
+
     document.getElementById('tDebitCount').textContent  = `(${_trData.debits.length})`;
     document.getElementById('tCreditCount').textContent = `(${_trData.credits.length})`;
     renderTransferRows('transferDebitsBody',  _trData.debits,   'table-warning');
@@ -1440,11 +1471,13 @@ async function reclassifyTransfer(txnId) {
   if (!newType) return;
   const row = document.getElementById('unrecon-row-' + txnId);
   sel.disabled = true;
+  // When reclassifying to expense, mark uncertain so it lands in Not Sure
+  const payload = { type: newType, confidence: 'manual' };
+  if (newType === 'expense') { payload.uncertain = true; payload.uncertain_fields = ['heading']; }
   try {
     const r = await fetch(`/api/master-ledger/${txnId}`, {
-      method: 'PATCH',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ type: newType, confidence: 'manual' })
+      method: 'PATCH', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
     });
     if (r.ok) {
       row.style.opacity = '0.4';
@@ -1452,14 +1485,11 @@ async function reclassifyTransfer(txnId) {
       const btn = row.querySelector('button');
       btn.textContent = '✓ Saved';
       btn.classList.replace('btn-outline-secondary', 'btn-success');
-    } else {
-      sel.disabled = false;
-      alert('Save failed');
-    }
-  } catch(e) {
-    sel.disabled = false;
-    alert('Error: ' + e);
-  }
+      if (newType === 'expense') {
+        btn.insertAdjacentHTML('afterend', ' <small class="text-warning">→ Not Sure</small>');
+      }
+    } else { sel.disabled = false; alert('Save failed'); }
+  } catch(e) { sel.disabled = false; alert('Error: ' + e); }
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────

@@ -1682,13 +1682,57 @@ def api_transfer_recon():
             "heading":     t.get("heading") or "",
         }
 
-    # ── Section 1: all transfer-typed entries ─────────────────────────────────
-    transfers = sorted(
-        [t for t in ledger if (t.get("type") or "").lower() == "transfer"],
-        key=lambda x: x.get("date", ""), reverse=True
-    )
-    transfer_debits  = [_row(t) for t in transfers if float(t.get("debit")  or 0) > 0]
-    transfer_credits = [_row(t) for t in transfers if float(t.get("credit") or 0) > 0]
+    # ── Section 1: match transfer debits ↔ credits ───────────────────────────
+    # Same amount (±max(₹500, 0.5%)), date within ±7 days.
+    # Same account allowed — e.g. reversal or round-trip within one account.
+    transfers = [t for t in ledger if (t.get("type") or "").lower() == "transfer"]
+    t_debits  = [t for t in transfers if float(t.get("debit")  or 0) > 0]
+    t_credits = [t for t in transfers if float(t.get("credit") or 0) > 0]
+
+    matched_d = set()
+    matched_c = set()
+    pairs = []
+
+    for d in sorted(t_debits, key=lambda x: x.get("date", "")):
+        if d["txn_id"] in matched_d:
+            continue
+        d_amt  = float(d.get("debit", 0))
+        d_date = _ml_pd(d.get("date", ""))
+        if not d_date:
+            continue
+        best_c, best_days = None, 999
+        for c in t_credits:
+            if c["txn_id"] in matched_c:
+                continue
+            c_amt  = float(c.get("credit", 0))
+            c_date = _ml_pd(c.get("date", ""))
+            if not c_date:
+                continue
+            if abs(d_amt - c_amt) > max(500, d_amt * 0.005):
+                continue
+            days = abs((d_date - c_date).days)
+            if days > 7:
+                continue
+            if days < best_days:
+                best_c, best_days = c, days
+        if best_c:
+            matched_d.add(d["txn_id"])
+            matched_c.add(best_c["txn_id"])
+            pairs.append({
+                "debit_seq":    d.get("seq"),
+                "credit_seq":   best_c.get("seq"),
+                "debit_date":   d.get("date"),
+                "credit_date":  best_c.get("date"),
+                "days_gap":     best_days,
+                "amount":       d_amt,
+                "from_account": d.get("account"),
+                "to_account":   best_c.get("account"),
+                "from_desc":    (d.get("raw_description") or d.get("transaction_details") or "").strip(),
+                "to_desc":      (best_c.get("raw_description") or best_c.get("transaction_details") or "").strip(),
+            })
+
+    transfer_debits  = [_row(t) for t in t_debits  if t["txn_id"] not in matched_d]
+    transfer_credits = [_row(t) for t in t_credits if t["txn_id"] not in matched_c]
 
     # ── Section 2: suspected transfers ────────────────────────────────────────
     # Build lookup: (amount, date_str) → list of txn on different accounts
@@ -1746,6 +1790,7 @@ def api_transfer_recon():
     suspected.sort(key=lambda x: x.get("date", ""), reverse=True)
 
     return jsonify({
+        "pairs":            pairs,
         "transfer_debits":  transfer_debits,
         "transfer_credits": transfer_credits,
         "suspected":        suspected,
