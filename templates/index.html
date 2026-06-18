@@ -409,8 +409,11 @@
   <div class="table-wrap mb-4">
   <table class="table table-hover table-sm mb-0">
     <thead><tr>
-      <th>#</th><th>Date</th><th>Account</th><th>Dir</th>
-      <th class="text-end">Amount</th><th>Type / Heading</th><th>Description</th><th>Why suspected</th><th>Action</th>
+      <th>#</th>
+      <th style="cursor:pointer;user-select:none" onclick="trSort('suspected','date',this)">Date ↕</th>
+      <th>Account</th><th>Dir</th>
+      <th class="text-end" style="cursor:pointer;user-select:none" onclick="trSort('suspected','amount',this)">Amount ↕</th>
+      <th>Type / Heading</th><th>Description</th><th>Why suspected</th><th>Action</th>
     </tr></thead>
     <tbody id="suspectedBody">
       <tr><td colspan="9" class="text-muted text-center py-3">Loading…</td></tr>
@@ -425,7 +428,13 @@
     </summary>
     <div class="table-wrap mt-2 mb-4">
     <table class="table table-sm mb-0">
-      <thead><tr><th>#</th><th>Date</th><th>Account</th><th class="text-end">Amount</th><th>Description</th><th>Paid To</th><th>Action</th></tr></thead>
+      <thead><tr>
+        <th>#</th>
+        <th style="cursor:pointer;user-select:none" onclick="trSort('debits','date',this)">Date ↕</th>
+        <th>Account</th>
+        <th class="text-end" style="cursor:pointer;user-select:none" onclick="trSort('debits','amount',this)">Amount ↕</th>
+        <th>Description</th><th>Paid To</th><th>Action</th>
+      </tr></thead>
       <tbody id="transferDebitsBody"></tbody>
     </table>
     </div>
@@ -438,7 +447,13 @@
     </summary>
     <div class="table-wrap mt-2">
     <table class="table table-sm mb-0">
-      <thead><tr><th>#</th><th>Date</th><th>Account</th><th class="text-end">Amount</th><th>Description</th><th>Paid To</th><th>Action</th></tr></thead>
+      <thead><tr>
+        <th>#</th>
+        <th style="cursor:pointer;user-select:none" onclick="trSort('credits','date',this)">Date ↕</th>
+        <th>Account</th>
+        <th class="text-end" style="cursor:pointer;user-select:none" onclick="trSort('credits','amount',this)">Amount ↕</th>
+        <th>Description</th><th>Paid To</th><th>Action</th>
+      </tr></thead>
       <tbody id="transferCreditsBody"></tbody>
     </table>
     </div>
@@ -1317,6 +1332,27 @@ async function loadAcctStatus() {
 // ── Transfer Recon ─────────────────────────────────────────────────────────
 const fmt = n => '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits:0});
 
+// cached data for client-side sort
+const _trData = { suspected: [], debits: [], credits: [] };
+const _trSort  = { suspected: {col:null,dir:1}, debits: {col:null,dir:1}, credits: {col:null,dir:1} };
+
+function trSort(section, col, th) {
+  const s = _trSort[section];
+  if (s.col === col) s.dir *= -1; else { s.col = col; s.dir = -1; } // default newest first
+  // update header icons on this table only
+  th.closest('thead').querySelectorAll('th').forEach(h => {
+    if (h === th) h.textContent = h.textContent.replace(/[↕↑↓]/,'') + (s.dir === 1 ? ' ↑' : ' ↓');
+    else h.textContent = h.textContent.replace(/[↕↑↓]/,'') + (h.textContent.trim().endsWith('↕') ? '' : ' ↕');
+  });
+  const rows = [..._trData[section]].sort((a, b) => {
+    if (col === 'date') return s.dir * (parseDateVal(a.date) - parseDateVal(b.date));
+    return s.dir * (a.amount - b.amount);
+  });
+  if (section === 'suspected') renderSuspected(rows);
+  else if (section === 'debits') renderTransferRows('transferDebitsBody', rows, 'table-warning');
+  else renderTransferRows('transferCreditsBody', rows, 'table-info');
+}
+
 function _reclassifyBtn(txnId, extra) {
   return `<div class="d-flex gap-1" id="reclass-wrap-${txnId}">
     <select class="form-select form-select-sm" style="width:115px" id="reclass-type-${txnId}">
@@ -1342,6 +1378,29 @@ function _transferRow(t, rowClass) {
   </tr>`;
 }
 
+function renderSuspected(rows) {
+  document.getElementById('suspectedBody').innerHTML = rows.length
+    ? rows.map(t => `
+      <tr id="unrecon-row-${t.txn_id}">
+        <td class="text-muted small">${t.seq??'—'}</td>
+        <td>${t.date||'—'}</td>
+        <td><small>${t.account}</small></td>
+        <td><span class="badge ${t.direction==='debit'?'bg-danger':'bg-primary'}">${t.direction}</span></td>
+        <td class="text-end fw-semibold">${fmt(t.amount)}</td>
+        <td><small>${t.type||''} / ${t.heading||''}</small></td>
+        <td><small class="text-muted">${(t.description||'').slice(0,45)}</small></td>
+        <td><small class="text-warning">${(t.reason||[]).join('; ')}</small></td>
+        <td>${_reclassifyBtn(t.txn_id)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="9" class="text-success text-center py-2">No suspected transfers</td></tr>';
+}
+
+function renderTransferRows(bodyId, rows, rowClass) {
+  document.getElementById(bodyId).innerHTML = rows.length
+    ? rows.map(t => _transferRow(t, rowClass)).join('')
+    : '<tr><td colspan="7" class="text-muted text-center py-2">None</td></tr>';
+}
+
 async function loadTransferRecon() {
   ['suspectedBody','transferDebitsBody','transferCreditsBody'].forEach(id => {
     document.getElementById(id).innerHTML =
@@ -1351,43 +1410,23 @@ async function loadTransferRecon() {
     const r = await fetch('/api/transfer-recon');
     const d = await r.json();
 
+    // Cache for sort
+    _trData.suspected = d.suspected || [];
+    _trData.debits    = d.transfer_debits || [];
+    _trData.credits   = d.transfer_credits || [];
+
     // Tab badge
+    const sc = _trData.suspected.length;
     const badge = document.getElementById('unreconBadge');
-    const sc = (d.suspected||[]).length;
     if (sc > 0) { badge.textContent = sc; badge.classList.remove('d-none'); }
     else badge.classList.add('d-none');
-
-    // Suspected
     document.getElementById('suspectedBadge').textContent = sc;
-    if (!sc) {
-      document.getElementById('suspectedBody').innerHTML =
-        '<tr><td colspan="9" class="text-success text-center py-2">No suspected transfers</td></tr>';
-    } else {
-      document.getElementById('suspectedBody').innerHTML = (d.suspected||[]).map(t => `
-        <tr id="unrecon-row-${t.txn_id}">
-          <td class="text-muted small">${t.seq??'—'}</td>
-          <td>${t.date||'—'}</td>
-          <td><small>${t.account}</small></td>
-          <td><span class="badge ${t.direction==='debit'?'bg-danger':'bg-primary'}">${t.direction}</span></td>
-          <td class="text-end fw-semibold">${fmt(t.amount)}</td>
-          <td><small>${t.type||''} / ${t.heading||''}</small></td>
-          <td><small class="text-muted">${(t.description||'').slice(0,45)}</small></td>
-          <td><small class="text-warning">${(t.reason||[]).join('; ')}</small></td>
-          <td>${_reclassifyBtn(t.txn_id, '<option value="transfer">Transfer</option>')}</td>
-        </tr>`).join('');
-    }
 
-    // Transfer debits
-    document.getElementById('tDebitCount').textContent = `(${(d.transfer_debits||[]).length})`;
-    document.getElementById('transferDebitsBody').innerHTML = (d.transfer_debits||[]).length
-      ? d.transfer_debits.map(t => _transferRow(t, 'table-warning')).join('')
-      : '<tr><td colspan="7" class="text-muted text-center py-2">None</td></tr>';
-
-    // Transfer credits
-    document.getElementById('tCreditCount').textContent = `(${(d.transfer_credits||[]).length})`;
-    document.getElementById('transferCreditsBody').innerHTML = (d.transfer_credits||[]).length
-      ? d.transfer_credits.map(t => _transferRow(t, 'table-info')).join('')
-      : '<tr><td colspan="7" class="text-muted text-center py-2">None</td></tr>';
+    renderSuspected(_trData.suspected);
+    document.getElementById('tDebitCount').textContent  = `(${_trData.debits.length})`;
+    document.getElementById('tCreditCount').textContent = `(${_trData.credits.length})`;
+    renderTransferRows('transferDebitsBody',  _trData.debits,   'table-warning');
+    renderTransferRows('transferCreditsBody', _trData.credits,  'table-info');
 
   } catch(e) {
     document.getElementById('suspectedBody').innerHTML =
