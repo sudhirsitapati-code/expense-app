@@ -79,6 +79,7 @@ def _fy_fields(dt: Optional[datetime]) -> dict:
 
 def _open_pdf(pdf_bytes: bytes):
     base = _SBI_PDF_PASSWORD
+    print(f"[sbi_parser] password env set: {bool(base)}, first4: {repr(base[:4]) if base else 'EMPTY'}")
     candidates = list(dict.fromkeys([
         base,
         base.upper(),
