@@ -240,10 +240,25 @@ def _parse_sbi_statement_text(text: str) -> list:
     return transactions
 
 
+_SBI_SKIP_DESCS = {
+    "brought forward", "opening balance", "closing balance", "total", "b/f",
+    "description", "particulars", "narration", "txn date",
+}
+
+def _to_float(s: str) -> Optional[float]:
+    s = s.replace(",", "").replace(" ", "").strip()
+    if not s:
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
 def _parse_sbi_tables(pdf) -> list:
     """
     Extract SBI transactions from PDF tables.
-    SBI e-statement table columns: Txn Date | Value Date | Description | Ref/Cheque | Debit | Credit | Balance
+    SBI e-statement columns: Txn Date | Value Date | Description | Ref/Cheque | Debit | Credit | Balance
     """
     transactions = []
     seen = set()
@@ -254,43 +269,36 @@ def _parse_sbi_tables(pdf) -> list:
                 if not row or len(row) < 5:
                     continue
                 row_clean = [str(c or "").strip() for c in row]
-                # Try to parse first cell as a date
+
+                # Col 0: transaction date
                 dt = _parse_date(row_clean[0])
                 if not dt:
                     continue
-                # Find description — usually col 2
+
+                # Col 2: description (skip header/summary rows)
                 desc = row_clean[2] if len(row_clean) > 2 else ""
-                if not desc or desc.lower() in ("description", "particulars", "narration"):
+                if not desc or desc.lower().strip() in _SBI_SKIP_DESCS:
                     continue
-                # Find debit/credit amounts — scan right to left for numeric cells
-                # SBI format: [..., debit, credit, balance]
-                amounts = []
-                for cell in row_clean[3:]:
-                    c = cell.replace(",", "").replace(" ", "")
-                    try:
-                        v = float(c)
-                        amounts.append(v)
-                    except ValueError:
-                        amounts.append(None)
-                # Last non-None is balance, then credit, then debit
-                non_none = [(i, v) for i, v in enumerate(amounts) if v is not None]
-                if len(non_none) < 2:
+                if any(skip in desc.lower() for skip in ("brought forward", "opening bal", "closing bal")):
                     continue
-                balance = non_none[-1][1]
-                # Second-to-last non-None amount is credit, third-to-last is debit
-                credit = non_none[-2][1] if len(non_none) >= 2 else 0
-                debit  = non_none[-3][1] if len(non_none) >= 3 else 0
-                # Direction from which of debit/credit is non-zero
-                if debit > 0 and credit == 0:
+
+                # Cols -3, -2, -1 = Debit, Credit, Balance (positional from right)
+                # Works for both 7-col and 6-col variants
+                n = len(row_clean)
+                balance = _to_float(row_clean[n - 1])
+                credit  = _to_float(row_clean[n - 2])
+                debit   = _to_float(row_clean[n - 3]) if n >= 7 else None
+
+                if debit and debit > 0:
                     amount, direction = debit, "debit"
-                elif credit > 0 and debit == 0:
+                elif credit and credit > 0:
                     amount, direction = credit, "credit"
-                elif debit > 0:
-                    amount, direction = debit, "debit"
                 else:
                     continue
+
                 if amount < 1:
                     continue
+
                 date_str = dt.strftime("%d/%m/%Y")
                 key = f"{date_str}|{desc[:40]}|{amount}"
                 if key in seen:
