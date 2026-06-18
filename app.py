@@ -1662,10 +1662,6 @@ def api_transfer_recon():
     """
     from src.master_ledger import _parse_date as _ml_pd
 
-    TRANSFER_KW = ["neft", "rtgs", "imps", "inft", "inf/", "/inf/",
-                   "bil/", "bill pay", "trfr", "transfer", "trf/",
-                   "self transfer", "own account"]
-
     ledger = load_ledger()
 
     def _row(t):
@@ -1735,55 +1731,42 @@ def api_transfer_recon():
     transfer_credits = [_row(t) for t in t_credits if t["txn_id"] not in matched_c]
 
     # ── Section 2: suspected transfers ────────────────────────────────────────
-    # Build lookup: (amount, date_str) → list of txn on different accounts
-    from collections import defaultdict
-    amt_date_index = defaultdict(list)
-    for t in ledger:
-        amt = float(t.get("debit") or t.get("credit") or 0)
-        if amt >= 10000 and amt % 1000 == 0:
-            amt_date_index[round(amt)].append(t)
+    # Only flag a non-transfer entry if it has the same amount as an UNMATCHED
+    # transfer debit or credit, on any account, within 7 days — i.e. it looks
+    # like the missing counterpart of an unreconciled transfer.
+    unmatched_transfers = (
+        [t for t in t_debits  if t["txn_id"] not in matched_d] +
+        [t for t in t_credits if t["txn_id"] not in matched_c]
+    )
 
     suspected = []
     seen_suspected = set()
-    for t in ledger:
-        if (t.get("type") or "").lower() == "transfer":
+    for ut in unmatched_transfers:
+        ut_amt  = float(ut.get("debit") or ut.get("credit") or 0)
+        ut_date = _ml_pd(ut.get("date", ""))
+        ut_is_debit = float(ut.get("debit") or 0) > 0
+        if not ut_date:
             continue
-        if t.get("confidence") == "manual":
-            continue
-        if t["txn_id"] in seen_suspected:
-            continue
-
-        amt  = float(t.get("debit") or t.get("credit") or 0)
-        desc = (t.get("raw_description") or t.get("transaction_details") or t.get("description") or "").lower()
-        t_date = _ml_pd(t.get("date", ""))
-
-        # Signal 1: description keyword
-        has_kw = any(kw in desc for kw in TRANSFER_KW)
-
-        # Signal 2: matching amount on different account within 7 days
-        matching_acct = None
-        if amt >= 10000 and amt % 1000 == 0 and t_date:
-            for candidate in amt_date_index.get(round(amt), []):
-                if candidate["txn_id"] == t["txn_id"]:
-                    continue
-                if candidate.get("account") == t.get("account"):
-                    continue
-                c_date = _ml_pd(candidate.get("date", ""))
-                if c_date and abs((t_date - c_date).days) <= 7:
-                    # Opposite direction → strong signal
-                    t_is_debit = float(t.get("debit") or 0) > 0
-                    c_is_debit = float(candidate.get("debit") or 0) > 0
-                    if t_is_debit != c_is_debit:
-                        matching_acct = candidate.get("account")
-                        break
-
-        if has_kw or matching_acct:
+        for t in ledger:
+            if (t.get("type") or "").lower() == "transfer":
+                continue
+            if t["txn_id"] in seen_suspected:
+                continue
+            t_amt  = float(t.get("debit") or t.get("credit") or 0)
+            t_date = _ml_pd(t.get("date", ""))
+            if not t_date:
+                continue
+            if abs(ut_amt - t_amt) > max(500, ut_amt * 0.005):
+                continue
+            if abs((ut_date - t_date).days) > 7:
+                continue
+            # Should be opposite direction to be a counterpart
+            t_is_debit = float(t.get("debit") or 0) > 0
+            if t_is_debit == ut_is_debit:
+                continue
             row = _row(t)
-            row["reason"] = []
-            if has_kw:
-                row["reason"].append("transfer keyword in description")
-            if matching_acct:
-                row["reason"].append(f"same amount on {matching_acct} within 7 days")
+            row["reason"] = [f"matches unreconciled transfer #{ut.get('seq')} (₹{ut_amt:,.0f}) on {ut.get('date')}"]
+            row["matched_transfer_seq"] = ut.get("seq")
             suspected.append(row)
             seen_suspected.add(t["txn_id"])
 
