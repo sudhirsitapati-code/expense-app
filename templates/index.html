@@ -410,11 +410,11 @@
   <div class="table-wrap mb-4">
   <table class="table table-hover table-sm mb-0">
     <thead><tr>
-      <th>Date</th><th>Account</th><th>Direction</th>
-      <th class="text-end">Amount</th><th>Description</th><th>Paid To</th>
+      <th>#</th><th>Date</th><th>Account</th><th>Dir</th>
+      <th class="text-end">Amount</th><th>Description</th><th>Paid To</th><th>Reclassify</th>
     </tr></thead>
     <tbody id="unreconciledBody">
-      <tr><td colspan="6" class="text-muted text-center py-3">Loading…</td></tr>
+      <tr><td colspan="8" class="text-muted text-center py-3">Loading…</td></tr>
     </tbody>
   </table>
   </div>
@@ -1331,16 +1331,27 @@ async function loadTransferRecon() {
     const fmt = n => '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits:0});
     if (!d.unreconciled_list?.length) {
       document.getElementById('unreconciledBody').innerHTML =
-        '<tr><td colspan="6" class="text-success text-center py-3">✓ All transfers reconciled</td></tr>';
+        '<tr><td colspan="8" class="text-success text-center py-3">✓ All transfers reconciled</td></tr>';
     } else {
       document.getElementById('unreconciledBody').innerHTML = d.unreconciled_list.map(t => `
-        <tr class="${t.direction === 'debit' ? 'table-warning' : 'table-info'}">
+        <tr class="${t.direction === 'debit' ? 'table-warning' : 'table-info'}" id="unrecon-row-${t.txn_id}">
+          <td class="text-muted small">${t.seq ?? '—'}</td>
           <td>${t.date || '—'}</td>
           <td><small>${t.account}</small></td>
           <td><span class="badge ${t.direction === 'debit' ? 'bg-danger' : 'bg-primary'}">${t.direction}</span></td>
           <td class="text-end fw-semibold">${fmt(t.amount)}</td>
           <td><small class="text-muted">${(t.description||'').slice(0,50)}</small></td>
           <td><small>${t.paid_to||'—'}</small></td>
+          <td>
+            <div class="d-flex gap-1">
+              <select class="form-select form-select-sm" style="width:120px" id="reclass-type-${t.txn_id}">
+                <option value="">— reclassify —</option>
+                <option value="expense">Expense</option>
+                <option value="investment">Investment</option>
+              </select>
+              <button class="btn btn-sm btn-outline-secondary" onclick="reclassifyTransfer('${t.txn_id}')">✓</button>
+            </div>
+          </td>
         </tr>`).join('');
     }
 
@@ -1359,6 +1370,34 @@ async function loadTransferRecon() {
   } catch(e) {
     document.getElementById('unreconciledBody').innerHTML =
       `<tr><td colspan="6" class="text-danger text-center py-3">Error loading: ${e}</td></tr>`;
+  }
+}
+
+async function reclassifyTransfer(txnId) {
+  const sel = document.getElementById('reclass-type-' + txnId);
+  const newType = sel.value;
+  if (!newType) return;
+  const row = document.getElementById('unrecon-row-' + txnId);
+  sel.disabled = true;
+  try {
+    const r = await fetch(`/api/master-ledger/${txnId}`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ type: newType, confidence: 'manual' })
+    });
+    if (r.ok) {
+      row.style.opacity = '0.4';
+      row.style.textDecoration = 'line-through';
+      const btn = row.querySelector('button');
+      btn.textContent = '✓ Saved';
+      btn.classList.replace('btn-outline-secondary', 'btn-success');
+    } else {
+      sel.disabled = false;
+      alert('Save failed');
+    }
+  } catch(e) {
+    sel.disabled = false;
+    alert('Error: ' + e);
   }
 }
 

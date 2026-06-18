@@ -1720,6 +1720,7 @@ def api_transfer_recon():
     unreconciled = [
         {
             "txn_id":    t["txn_id"],
+            "seq":       t.get("seq"),
             "date":      t.get("date"),
             "account":   t.get("account"),
             "direction": "debit"  if float(t.get("debit")  or 0) > 0 else "credit",
