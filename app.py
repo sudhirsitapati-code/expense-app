@@ -1653,116 +1653,102 @@ def api_photos_upload():
 @login_required
 def api_transfer_recon():
     """
-    Match transfer debits to ANY matching credit (and vice versa) across different
-    account numbers.  One side classified as transfer is enough — the counterpart
-    may be classified differently (income, expense, etc.) but will still match.
-
-    Match criteria:
-      - Different account numbers
-      - Same amount within max(₹500, 0.5% of amount)
-      - Date within ±7 days either direction
+    Two sections:
+    1. All transactions typed 'transfer' — listed as debits and credits for manual review.
+    2. Suspected transfers — non-transfer transactions that look like interbank moves:
+       - Description contains NEFT/RTGS/IMPS/TFR/transfer keywords, OR
+       - Large round amount (≥₹10,000, multiple of 1000) that exactly matches
+         a debit or credit on a DIFFERENT account within 7 days.
     """
     from src.master_ledger import _parse_date as _ml_pd
+
+    TRANSFER_KW = ["neft", "rtgs", "imps", "inft", "inf/", "/inf/",
+                   "bil/", "bill pay", "trfr", "transfer", "trf/",
+                   "self transfer", "own account"]
+
     ledger = load_ledger()
 
-    # All transfer-typed entries are candidates — include manual too (they're
-    # already confirmed; we just want to find their counterpart)
-    transfers = [t for t in ledger if (t.get("type") or "").lower() == "transfer"]
-
-    # ALL ledger entries are eligible as counterparts
-    all_debits  = [t for t in ledger if float(t.get("debit")  or 0) > 0]
-    all_credits = [t for t in ledger if float(t.get("credit") or 0) > 0]
-
-    transfer_debits  = [t for t in transfers if float(t.get("debit")  or 0) > 0]
-    transfer_credits = [t for t in transfers if float(t.get("credit") or 0) > 0]
-
-    matched_debit_ids  = set()
-    matched_credit_ids = set()
-    pairs = []
-
-    def _amt_ok(a, b):
-        return abs(a - b) <= max(500, a * 0.005)
-
-    def _find_best(src_txns, pool, src_field, pool_field):
-        for s in sorted(src_txns, key=lambda x: x.get("date", "")):
-            if s["txn_id"] in matched_debit_ids or s["txn_id"] in matched_credit_ids:
-                continue
-            s_amt  = float(s.get(src_field, 0))
-            s_date = _ml_pd(s.get("date", ""))
-            s_acct = s.get("account", "")
-            if not s_date or s_amt == 0:
-                continue
-            best_p    = None
-            best_days = 999
-            for p in pool:
-                if p["txn_id"] in matched_debit_ids or p["txn_id"] in matched_credit_ids:
-                    continue
-                if p["txn_id"] == s["txn_id"]:
-                    continue
-                if p.get("account", "") == s_acct:
-                    continue
-                p_amt  = float(p.get(pool_field, 0))
-                p_date = _ml_pd(p.get("date", ""))
-                if not p_date or p_amt == 0:
-                    continue
-                if not _amt_ok(s_amt, p_amt):
-                    continue
-                days = abs((s_date - p_date).days)
-                if days > 7:
-                    continue
-                if days < best_days:
-                    best_p    = p
-                    best_days = days
-            if best_p:
-                debit_t  = s  if src_field == "debit"  else best_p
-                credit_t = best_p if src_field == "debit" else s
-                matched_debit_ids.add(debit_t["txn_id"])
-                matched_credit_ids.add(credit_t["txn_id"])
-                d_amt = float(debit_t.get("debit", 0))
-                pairs.append({
-                    "debit_seq":     debit_t.get("seq"),
-                    "credit_seq":    credit_t.get("seq"),
-                    "debit_date":    debit_t.get("date"),
-                    "credit_date":   credit_t.get("date"),
-                    "days_gap":      best_days,
-                    "amount":        d_amt,
-                    "from_account":  debit_t.get("account"),
-                    "to_account":    credit_t.get("account"),
-                    "from_desc":     debit_t.get("raw_description") or debit_t.get("transaction_details") or "",
-                    "to_desc":       credit_t.get("raw_description") or credit_t.get("transaction_details") or "",
-                    "debit_txn_id":  debit_t["txn_id"],
-                    "credit_txn_id": credit_t["txn_id"],
-                })
-
-    # Match transfer debits → any credit on different account
-    _find_best(transfer_debits,  all_credits, "debit",  "credit")
-    # Match remaining transfer credits → any debit on different account
-    _find_best(transfer_credits, all_debits,  "credit", "debit")
-
-    unreconciled = [
-        {
-            "txn_id":    t["txn_id"],
-            "seq":       t.get("seq"),
-            "date":      t.get("date"),
-            "account":   t.get("account"),
-            "direction": "debit"  if float(t.get("debit")  or 0) > 0 else "credit",
-            "amount":    float(t.get("debit") or t.get("credit") or 0),
-            "description": t.get("raw_description") or t.get("transaction_details") or t.get("description") or "",
-            "paid_to":   t.get("paid_to") or "",
+    def _row(t):
+        return {
+            "txn_id":      t["txn_id"],
+            "seq":         t.get("seq"),
+            "date":        t.get("date"),
+            "account":     t.get("account"),
+            "direction":   "debit" if float(t.get("debit") or 0) > 0 else "credit",
+            "amount":      float(t.get("debit") or t.get("credit") or 0),
+            "description": (t.get("raw_description") or t.get("transaction_details") or t.get("description") or "").strip(),
+            "paid_to":     t.get("paid_to") or "",
+            "type":        t.get("type") or "",
+            "heading":     t.get("heading") or "",
         }
-        for t in transfers
-        if t["txn_id"] not in matched_debit_ids and t["txn_id"] not in matched_credit_ids
-    ]
 
-    # Sort unreconciled: debits first, then by date desc
-    unreconciled.sort(key=lambda x: (x["direction"] != "debit", x.get("date", "")), reverse=False)
-    unreconciled.sort(key=lambda x: x.get("date", ""), reverse=True)
+    # ── Section 1: all transfer-typed entries ─────────────────────────────────
+    transfers = sorted(
+        [t for t in ledger if (t.get("type") or "").lower() == "transfer"],
+        key=lambda x: x.get("date", ""), reverse=True
+    )
+    transfer_debits  = [_row(t) for t in transfers if float(t.get("debit")  or 0) > 0]
+    transfer_credits = [_row(t) for t in transfers if float(t.get("credit") or 0) > 0]
+
+    # ── Section 2: suspected transfers ────────────────────────────────────────
+    # Build lookup: (amount, date_str) → list of txn on different accounts
+    from collections import defaultdict
+    amt_date_index = defaultdict(list)
+    for t in ledger:
+        amt = float(t.get("debit") or t.get("credit") or 0)
+        if amt >= 10000 and amt % 1000 == 0:
+            amt_date_index[round(amt)].append(t)
+
+    suspected = []
+    seen_suspected = set()
+    for t in ledger:
+        if (t.get("type") or "").lower() == "transfer":
+            continue
+        if t.get("confidence") == "manual":
+            continue
+        if t["txn_id"] in seen_suspected:
+            continue
+
+        amt  = float(t.get("debit") or t.get("credit") or 0)
+        desc = (t.get("raw_description") or t.get("transaction_details") or t.get("description") or "").lower()
+        t_date = _ml_pd(t.get("date", ""))
+
+        # Signal 1: description keyword
+        has_kw = any(kw in desc for kw in TRANSFER_KW)
+
+        # Signal 2: matching amount on different account within 7 days
+        matching_acct = None
+        if amt >= 10000 and amt % 1000 == 0 and t_date:
+            for candidate in amt_date_index.get(round(amt), []):
+                if candidate["txn_id"] == t["txn_id"]:
+                    continue
+                if candidate.get("account") == t.get("account"):
+                    continue
+                c_date = _ml_pd(candidate.get("date", ""))
+                if c_date and abs((t_date - c_date).days) <= 7:
+                    # Opposite direction → strong signal
+                    t_is_debit = float(t.get("debit") or 0) > 0
+                    c_is_debit = float(candidate.get("debit") or 0) > 0
+                    if t_is_debit != c_is_debit:
+                        matching_acct = candidate.get("account")
+                        break
+
+        if has_kw or matching_acct:
+            row = _row(t)
+            row["reason"] = []
+            if has_kw:
+                row["reason"].append("transfer keyword in description")
+            if matching_acct:
+                row["reason"].append(f"same amount on {matching_acct} within 7 days")
+            suspected.append(row)
+            seen_suspected.add(t["txn_id"])
+
+    suspected.sort(key=lambda x: x.get("date", ""), reverse=True)
 
     return jsonify({
-        "reconciled":     len(pairs),
-        "unreconciled":   len(unreconciled),
-        "pairs":          pairs,
-        "unreconciled_list": unreconciled,
+        "transfer_debits":  transfer_debits,
+        "transfer_credits": transfer_credits,
+        "suspected":        suspected,
     })
 
 
