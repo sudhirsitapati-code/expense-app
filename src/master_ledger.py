@@ -1314,7 +1314,15 @@ def repair_pdf_descriptions() -> int:
                        "shree thake", "smaaash", "status rest", "taj lands e",
                        "buono pizze", "mayfairhot", "msw mahesh", "msw rigmor",
                        "bombay coff", "tata starbu", "mansuri cat", "nmacc food",
-                       "semolina", "madras crea", "carnatic", "manis cafe", "gravity"]
+                       "semolina", "madras crea", "carnatic", "manis cafe", "gravity",
+                       # SBI restaurant / food vendors
+                       "bar and rest", "bar & rest", "hotel", "bakery", "canteen",
+                       "juice", "chai", "tea stall", "mess ", "tiffin", "udupi"]
+    # Ketki = domestic help salary paid from SBI
+    KETKI_KW        = ["ketki"]
+    # M2M ferry / Alibaug ferry = Malhar holiday
+    MALHAR_KW       = ["m2m ferry", "m2mferry", "alibaug ferry", "ro-ro ferry",
+                       "roro ferry", "mandwa ferry"]
     ENTERTAINMENT_KW = ["prime video", "primevideo", "netflix", "netflixupi",
                         "google play", "googleplay", "spotify", "hotstar",
                         "bookmyshow", "pvr", "apple medi", "appleservices"]
@@ -1340,6 +1348,16 @@ def repair_pdf_descriptions() -> int:
         # 7281 account debits → Financial Expense (OD interest / charges)
         if "7281" in account and debit > 0 and not already:
             txn["type"] = "Expense"; txn["heading"] = "Financial Expense"; txn["uncertain"] = False
+            det_fixed += 1; continue
+
+        # Ketki = domestic help — always expense regardless of heading
+        if any(kw in desc for kw in KETKI_KW):
+            txn["type"] = "Expense"; txn["heading"] = "Staff Salary"; txn["uncertain"] = False
+            det_fixed += 1; continue
+
+        # M2M / Alibaug ferry = Malhar holiday trip
+        if any(kw in desc for kw in MALHAR_KW):
+            txn["type"] = "Expense"; txn["heading"] = "Holiday"; txn["uncertain"] = False
             det_fixed += 1; continue
 
         # Eating out / Entertainment only applied to unclassified entries

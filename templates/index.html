@@ -75,9 +75,17 @@
      TAB 1 — SUBMIT EXPENSE
 ═══════════════════════════════════════════════════════ -->
 <div id="tab-submit" class="main-tab-content">
+
+<!-- Submit sub-tabs -->
+<ul class="nav sub-tabs gap-1 mb-3">
+  <li class="nav-item"><a class="nav-link active" href="#" onclick="switchSubmit('form',this)"><i class="bi bi-plus-circle me-1"></i>New Expense</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchSubmit('photos',this)"><i class="bi bi-camera me-1"></i>Attach Photos</a></li>
+</ul>
+
+<!-- New Expense form -->
+<div id="submit-form">
 <div class="row g-3 justify-content-center">
 <div class="col-lg-6">
-  <h6 class="fw-bold mb-3 text-primary"><i class="bi bi-plus-circle me-2"></i>Submit Expense</h6>
   <form id="expenseForm" onsubmit="submitExpense(event)">
     <div class="mb-2">
       <label class="form-label fw-semibold small">Submitter</label>
@@ -140,6 +148,48 @@
 </div>
 </div>
 </div>
+</div><!-- /submit-form -->
+
+<!-- Attach Photos panel -->
+<div id="submit-photos" class="d-none">
+<div class="row g-3 justify-content-center">
+<div class="col-lg-6">
+  <h6 class="fw-bold mb-3 text-primary"><i class="bi bi-camera me-2"></i>Attach Photos to Expense</h6>
+
+  <div class="mb-3">
+    <label class="form-label fw-semibold small">Select Expense</label>
+    <select class="form-select form-select-sm" id="photoExpenseSelect">
+      <option value="">Loading recent expenses…</option>
+    </select>
+  </div>
+
+  <!-- Estimate photos -->
+  <div class="card p-3 mb-3">
+    <div class="fw-semibold small text-secondary mb-2"><i class="bi bi-file-earmark-text me-1"></i>Estimate / Quote</div>
+    <div id="estimatePreviews" class="d-flex flex-wrap gap-2 mb-2"></div>
+    <label class="btn btn-outline-secondary btn-sm w-100">
+      <i class="bi bi-camera me-1"></i>Add Estimate Photo
+      <input type="file" id="estimateInput" accept="image/*" capture="environment" multiple class="d-none" onchange="addPhotoPreviews('estimate', this)">
+    </label>
+  </div>
+
+  <!-- Bill photos -->
+  <div class="card p-3 mb-3">
+    <div class="fw-semibold small text-secondary mb-2"><i class="bi bi-receipt me-1"></i>Bill / Invoice</div>
+    <div id="billPreviews" class="d-flex flex-wrap gap-2 mb-2"></div>
+    <label class="btn btn-outline-secondary btn-sm w-100">
+      <i class="bi bi-camera me-1"></i>Add Bill Photo
+      <input type="file" id="billInput" accept="image/*" capture="environment" multiple class="d-none" onchange="addPhotoPreviews('bill', this)">
+    </label>
+  </div>
+
+  <button class="btn btn-primary btn-sm w-100 py-2" onclick="uploadPhotos()">
+    <i class="bi bi-cloud-upload me-1"></i>Save Photos
+  </button>
+  <div id="photoResult" class="mt-3 d-none"></div>
+</div>
+</div>
+</div><!-- /submit-photos -->
 
 <!-- ═══════════════════════════════════════════════════════
      TAB 2 — APPROVALS
@@ -262,7 +312,9 @@
   <div class="table-wrap">
   <table class="table table-hover mb-0">
     <thead><tr>
-      <th>#</th><th>Date</th><th>Account</th><th>Description</th>
+      <th>#</th>
+      <th style="cursor:pointer;user-select:none" onclick="cycleSort('date')" id="hdrDate">Date ↕</th>
+      <th>Account</th><th>Description</th>
       <th>Paid To</th>
       <th class="text-end" style="cursor:pointer;user-select:none" onclick="cycleSort('debit')" id="hdrDebit">Debit ↕</th>
       <th class="text-end" style="cursor:pointer;user-select:none" onclick="cycleSort('credit')" id="hdrCredit">Credit ↕</th>
@@ -421,6 +473,80 @@ function typeBadge(t) {
     investment:'badge-investment', transfer:'badge-transfer', official:'badge-official'
   }[(t||'').toLowerCase()] || 'bg-secondary text-white';
   return `<span class="badge ${cls}">${t||'—'}</span>`;
+}
+
+// ── SUBMIT SUB-TABS ────────────────────────────────────────────────────────
+function switchSubmit(name, el) {
+  document.querySelectorAll('#tab-submit .sub-tabs .nav-link').forEach(l => l.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('submit-form').classList.toggle('d-none', name !== 'form');
+  document.getElementById('submit-photos').classList.toggle('d-none', name !== 'photos');
+  if (name === 'photos') loadRecentExpensesForPhotos();
+  return false;
+}
+
+async function loadRecentExpensesForPhotos() {
+  const sel = document.getElementById('photoExpenseSelect');
+  try {
+    const r = await fetch('/api/recent-expenses');
+    const data = await r.json();
+    sel.innerHTML = '<option value="">— select expense —</option>' +
+      data.map(e => `<option value="${e.id}">${e.date} · ${e.vendor} · ₹${e.amount}</option>`).join('');
+  } catch { sel.innerHTML = '<option value="">Failed to load</option>'; }
+}
+
+// photo staging: {estimate: [{file, dataUrl}], bill: [{file, dataUrl}]}
+const _stagedPhotos = { estimate: [], bill: [] };
+
+function addPhotoPreviews(type, input) {
+  const container = document.getElementById(type + 'Previews');
+  Array.from(input.files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      _stagedPhotos[type].push({ file, dataUrl: ev.target.result });
+      const img = document.createElement('img');
+      img.src = ev.target.result;
+      img.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #ddd;cursor:pointer';
+      img.title = 'Click to remove';
+      img.onclick = () => {
+        const idx = _stagedPhotos[type].findIndex(p => p.dataUrl === ev.target.result);
+        if (idx >= 0) _stagedPhotos[type].splice(idx, 1);
+        img.remove();
+      };
+      container.appendChild(img);
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+async function uploadPhotos() {
+  const expenseId = document.getElementById('photoExpenseSelect').value;
+  const result = document.getElementById('photoResult');
+  if (!expenseId) { result.className='mt-3 alert alert-warning py-2'; result.textContent='Please select an expense first.'; return; }
+  if (!_stagedPhotos.estimate.length && !_stagedPhotos.bill.length) {
+    result.className='mt-3 alert alert-warning py-2'; result.textContent='No photos selected.'; return;
+  }
+  result.className='mt-3 alert alert-info py-2'; result.textContent='Uploading…';
+  const payload = {
+    expense_id: expenseId,
+    estimates: _stagedPhotos.estimate.map(p => p.dataUrl),
+    bills:     _stagedPhotos.bill.map(p => p.dataUrl),
+  };
+  try {
+    const r = await fetch('/api/photos/upload', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    const data = await r.json();
+    result.className = 'mt-3 alert alert-success py-2';
+    result.textContent = `Saved ${data.estimates} estimate(s) and ${data.bills} bill(s).`;
+    _stagedPhotos.estimate = []; _stagedPhotos.bill = [];
+    document.getElementById('estimatePreviews').innerHTML = '';
+    document.getElementById('billPreviews').innerHTML = '';
+  } catch(err) {
+    result.className = 'mt-3 alert alert-danger py-2';
+    result.textContent = 'Upload failed: ' + err;
+  }
 }
 
 // ── SUBMIT ─────────────────────────────────────────────────────────────────
@@ -635,9 +761,20 @@ function refreshLedgerHeadings() {
 
 let _sortCol = null, _sortDir = 0; // 0=none,1=asc,-1=desc
 
+function parseDateVal(s) {
+  if (!s) return 0;
+  // DD/MM/YYYY or DD-MM-YYYY → sortable number YYYYMMDD
+  const m = s.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+  if (m) return parseInt(m[3] + m[2] + m[1]);
+  return new Date(s).getTime() || 0;
+}
+
 function sortedLedger(txns) {
   if (!_sortCol) return txns;
   return [...txns].sort((a, b) => {
+    if (_sortCol === 'date') {
+      return _sortDir * (parseDateVal(a.date) - parseDateVal(b.date));
+    }
     const av = parseFloat(a[_sortCol]) || 0;
     const bv = parseFloat(b[_sortCol]) || 0;
     return _sortDir * (av - bv);
@@ -648,12 +785,10 @@ function cycleSort(col) {
   if (_sortCol !== col) { _sortCol = col; _sortDir = 1; }
   else if (_sortDir === 1) _sortDir = -1;
   else { _sortCol = null; _sortDir = 0; }
-  const icons = { null: '↕', 1: '↑', '-1': '↓' };
-  document.getElementById('hdrDebit').textContent  = 'Debit '  + (col === 'debit'  || _sortCol !== 'credit' && _sortCol !== 'debit' ? icons[String(_sortCol === 'debit'  ? _sortDir : 0)] : '↕');
-  document.getElementById('hdrCredit').textContent = 'Credit ' + (col === 'credit' || _sortCol !== 'credit' && _sortCol !== 'debit' ? icons[String(_sortCol === 'credit' ? _sortDir : 0)] : '↕');
-  // Reset both then set correct one
-  document.getElementById('hdrDebit').textContent  = 'Debit '  + (_sortCol === 'debit'  ? (_sortDir === 1 ? '↑' : '↓') : '↕');
-  document.getElementById('hdrCredit').textContent = 'Credit ' + (_sortCol === 'credit' ? (_sortDir === 1 ? '↑' : '↓') : '↕');
+  const icon = c => _sortCol === c ? (_sortDir === 1 ? '↑' : '↓') : '↕';
+  document.getElementById('hdrDate').textContent   = 'Date '   + icon('date');
+  document.getElementById('hdrDebit').textContent  = 'Debit '  + icon('debit');
+  document.getElementById('hdrCredit').textContent = 'Credit ' + icon('credit');
   if (window._ledgerAll) renderLedger(sortedLedger(window._ledgerAll));
 }
 

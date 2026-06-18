@@ -1402,6 +1402,25 @@ def _merge_approval_to_sbi_internal() -> dict:
     }
 
 
+@app.route("/api/admin/migrate-cash-upi-to-sbi", methods=["GET"])
+@login_required
+def api_migrate_cash_upi_to_sbi():
+    """One-time: reclassify all account='cash/upi' entries to SBI-3152."""
+    from src.master_ledger import _save_json, LEDGER_PATH
+    ledger  = load_ledger()
+    updated = 0
+    for txn in ledger:
+        if (txn.get("account") or "").lower() == "cash/upi":
+            txn["account"]      = "SBI-3152"
+            txn["bank"]         = "SBI"
+            txn["source"]       = "sbi_statement"
+            txn["account_type"] = "sbi3152"
+            updated += 1
+    if updated:
+        _save_json(LEDGER_PATH, ledger)
+    return jsonify({"migrated": updated})
+
+
 @app.route("/api/admin/merge-approval-to-sbi", methods=["GET"])
 @login_required
 def api_merge_approval_to_sbi():
