@@ -1229,11 +1229,11 @@ def api_repair_sbi():
                     txn["type"]   = correct
                     changed = True
 
-        # ── Description cleaning ──────────────────────────────────────────────
-        raw_desc   = txn.get("transaction_details") or txn.get("description") or ""
+        # ── Description cleaning (raw_description is the field SBI entries use) ─
+        raw_desc   = txn.get("raw_description") or txn.get("transaction_details") or txn.get("description") or ""
         clean_desc = _re.sub(r"\s+", " ", raw_desc).strip()
         if clean_desc != raw_desc:
-            txn["transaction_details"] = clean_desc
+            txn["raw_description"] = clean_desc
             changed = True
 
         # ── paid_to — always recompute and overwrite ──────────────────────────
