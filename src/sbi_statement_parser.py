@@ -78,15 +78,30 @@ def _fy_fields(dt: Optional[datetime]) -> dict:
 
 
 def _open_pdf(pdf_bytes: bytes):
-    passwords = _SBI_PDF_PASSWORDS + [""]
-    for pw in passwords:
+    base = _SBI_PDF_PASSWORD
+    candidates = list(dict.fromkeys([
+        base,
+        base.upper(),
+        base.lower(),
+        base.capitalize(),
+    ] + ([""] if not base else [])))
+    for pw in candidates:
         try:
             pdf = pdfplumber.open(io.BytesIO(pdf_bytes), password=pw)
             _ = pdf.pages
+            print(f"[sbi_parser] opened PDF with password variant: {repr(pw[:4])}***")
             return pdf
         except Exception:
             pass
-    raise ValueError("No password worked for SBI PDF")
+    # Last resort: try without password (some PDFs aren't encrypted)
+    try:
+        pdf = pdfplumber.open(io.BytesIO(pdf_bytes))
+        _ = pdf.pages
+        print("[sbi_parser] opened PDF without password")
+        return pdf
+    except Exception:
+        pass
+    raise ValueError(f"No password worked for SBI PDF (tried {len(candidates)} variants)")
 
 
 def _extract_account_from_text(text: str) -> str:
@@ -338,6 +353,7 @@ def fetch_and_parse_sbi_statements(force_reprocess: bool = False) -> dict:
             _save_processed_id(msg_id)
             continue
 
+        password_failed = False
         for pdf_bytes in pdfs:
             try:
                 txns = _parse_pdf_transactions(pdf_bytes)
@@ -351,13 +367,21 @@ def fetch_and_parse_sbi_statements(force_reprocess: bool = False) -> dict:
                 if added:
                     new_count += added
                     statements_processed += 1
+            except ValueError as e:
+                if "password" in str(e).lower():
+                    password_failed = True
+                    print(f"[sbi] Password failure for {msg_id}: {e}")
+                else:
+                    print(f"[sbi] Parse error in message {msg_id}: {e}")
             except Exception as e:
                 print(f"[sbi] Parse error in message {msg_id}: {e}")
             finally:
                 del pdf_bytes
                 gc.collect()
 
-        _save_processed_id(msg_id)
+        # Only mark as processed if password didn't fail — so we can retry after fixing password
+        if not password_failed:
+            _save_processed_id(msg_id)
         _save_transactions(existing)
 
     print(f"[sbi] Processed {statements_processed} statement(s), {new_count} new transaction(s).")

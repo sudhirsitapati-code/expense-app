@@ -1122,6 +1122,31 @@ def api_ledger_update(txn_id):
     return jsonify({"status": "ok"}) if ok else (jsonify({"error": "not found"}), 404)
 
 
+@app.route("/api/admin/reset-sbi", methods=["GET"])
+@login_required
+def api_reset_sbi():
+    """Unmark all SBI statement emails so they get re-processed on next Sync PDF."""
+    from src import db as _db
+    processed = set(_db.load("processed_statement_ids", default=[]))
+    # Remove any SBI transactions from icici_transactions store
+    icici = _db.load("icici_transactions") or []
+    before = len(icici)
+    icici = [t for t in icici if t.get("bank") != "SBI" and not str(t.get("account","")).startswith("SBI")]
+    _db.save("icici_transactions", icici)
+    # Unmark all processed IDs that came from SBI emails by clearing the full set
+    # and re-adding only non-SBI ones — we do this by removing IDs added in the last SBI run
+    # Simpler: just rebuild without SBI — but we don't know which IDs are SBI.
+    # So we rely on the parser NOT marking on password failure going forward.
+    # For now, wipe all processed IDs so everything gets retried (safe — dedup prevents doubles).
+    # Only wipe if user confirms by passing ?confirm=yes
+    from flask import request as _req
+    if _req.args.get("confirm") == "yes":
+        # Clear only recently added IDs (risky); safer: just clear all and let dedup handle it
+        _db.save("processed_statement_ids", [])
+        return jsonify({"message": "All processed statement IDs cleared — Sync PDF will retry everything", "sbi_txns_removed": before - len(icici)})
+    return jsonify({"message": "Pass ?confirm=yes to clear all processed statement IDs", "sbi_txns_removed": before - len(icici)})
+
+
 @app.route("/api/admin/bulk-holiday-7009", methods=["GET"])
 @login_required
 def api_bulk_holiday_7009():
