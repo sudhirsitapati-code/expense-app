@@ -337,38 +337,42 @@ def _parse_sbi_tables(pdf) -> list:
                     print(f"[sbi_table] row({len(row_clean)}): {row_clean}")
 
                 n = len(row_clean)
-
-                # Always try to update prev_balance from this row's last column,
-                # even if we ultimately skip it as a transaction.
-                candidate_bal = _to_float(row_clean[n - 1])
-                if candidate_bal is not None:
-                    prev_balance = candidate_bal
+                balance = _to_float(row_clean[n - 1])
 
                 # Col 0: must be a transaction date to proceed
                 dt = _parse_date(row_clean[0])
                 if not dt:
+                    # Still seed prev_balance from non-transaction rows (e.g. Brought Forward)
+                    if balance is not None:
+                        prev_balance = balance
                     continue
 
                 # Col 2: description — skip summary / header rows
                 desc = row_clean[2] if n > 2 else ""
                 desc_low = desc.lower().strip()
                 if not desc or desc_low in _SBI_SKIP_DESCS:
+                    if balance is not None:
+                        prev_balance = balance
                     continue
                 if any(s in desc_low for s in _SBI_SKIP_SUBSTRINGS):
+                    if balance is not None:
+                        prev_balance = balance
                     continue
 
-                balance = candidate_bal  # already parsed above
                 col_minus2 = _to_float(row_clean[n - 2])
                 col_minus3 = _to_float(row_clean[n - 3]) if n >= 7 else None
 
-                # Primary: balance delta tells us direction unambiguously
-                if balance is not None and prev_balance is not None and balance != prev_balance:
+                # Use the prev_balance captured from PREVIOUS rows for delta calculation
+                # (prev_balance is updated at the bottom of this block, after we use it)
+                if balance is not None and prev_balance is not None:
                     delta = balance - prev_balance
                     amount = next(
                         (c for c in [col_minus3, col_minus2] if c and c > 0),
                         None
                     )
                     if not amount:
+                        if balance is not None:
+                            prev_balance = balance
                         continue
                     direction = "debit" if delta < 0 else "credit"
                 else:
@@ -378,7 +382,13 @@ def _parse_sbi_tables(pdf) -> list:
                     elif col_minus2 and col_minus2 > 0:
                         amount, direction = col_minus2, "credit"
                     else:
+                        if balance is not None:
+                            prev_balance = balance
                         continue
+
+                # Update prev_balance for the NEXT row
+                if balance is not None:
+                    prev_balance = balance
 
                 if amount < 1:
                     continue
