@@ -242,8 +242,12 @@ def _parse_sbi_statement_text(text: str) -> list:
 
 _SBI_SKIP_DESCS = {
     "brought forward", "opening balance", "closing balance", "total", "b/f",
-    "description", "particulars", "narration", "txn date",
+    "description", "particulars", "narration", "txn date", "value date",
 }
+_SBI_SKIP_SUBSTRINGS = (
+    "brought forward", "opening bal", "closing bal", "b/f balance",
+)
+
 
 def _to_float(s: str) -> Optional[float]:
     s = s.replace(",", "").replace(" ", "").strip()
@@ -255,14 +259,67 @@ def _to_float(s: str) -> Optional[float]:
         return None
 
 
+def _parse_paid_to(desc: str) -> Optional[str]:
+    """
+    Extract a clean vendor/payee name from an SBI transaction description.
+
+    Common SBI description formats:
+      UPI/DR/123456789012/VENDOR NAME/ICICI/...
+      UPI/CR/123456789012/SENDER NAME/HDFC/...
+      NEFT/NNNNNNNNNNN/VENDOR NAME
+      IMPS/123456789012/VENDOR NAME/HDFC
+      ATW/123456/SBI ATM LOCATION
+      TO TRANSFER-VENDOR NAME
+      BY TRANSFER-VENDOR NAME
+      SI/123/VENDOR NAME
+    """
+    d = desc.strip()
+
+    # UPI: take the segment after the 12-digit reference number
+    m = re.match(r"UPI/(?:DR|CR)/\d+/([^/]+)", d, re.IGNORECASE)
+    if m:
+        return m.group(1).strip().title()
+
+    # NEFT / IMPS: third segment
+    m = re.match(r"(?:NEFT|IMPS)[- /][\w]+[/ -](.+?)(?:/|$)", d, re.IGNORECASE)
+    if m:
+        return m.group(1).strip().title()
+
+    # TO TRANSFER- / BY TRANSFER-
+    m = re.match(r"(?:TO|BY)\s+TRANSFER[-\s]+(.+)", d, re.IGNORECASE)
+    if m:
+        return m.group(1).strip().title()
+
+    # ATW / ATM — return location
+    m = re.match(r"(?:ATW|ATM)[/ -][\d]+[/ -](.+?)(?:/|$)", d, re.IGNORECASE)
+    if m:
+        return m.group(1).strip().title()
+
+    # SI (standing instruction)
+    m = re.match(r"SI/\d+/(.+?)(?:/|$)", d, re.IGNORECASE)
+    if m:
+        return m.group(1).strip().title()
+
+    # Generic: return first meaningful segment (skip short prefix codes)
+    parts = re.split(r"[/\-]", d)
+    for part in parts:
+        part = part.strip()
+        if len(part) > 3 and not part.isdigit():
+            return part.title()
+
+    return None
+
+
 def _parse_sbi_tables(pdf) -> list:
     """
     Extract SBI transactions from PDF tables.
     SBI e-statement columns: Txn Date | Value Date | Description | Ref/Cheque | Debit | Credit | Balance
 
-    pdfplumber sometimes drops empty cells, so a 7-col debit row becomes 6 cols
-    with the debit amount landing at position n-2 (normally Credit).
-    We use balance delta as the primary direction signal to avoid misclassification.
+    Key invariants:
+    - Seed prev_balance from EVERY row with a parseable balance (including skipped rows)
+      so the first real transaction always has a reference balance for delta calculation.
+    - Balance delta is the authoritative direction signal; positional is only a last-resort
+      fallback when prev_balance is genuinely unavailable.
     """
     transactions = []
     seen = set()
@@ -271,57 +328,57 @@ def _parse_sbi_tables(pdf) -> list:
         for table in tables:
             prev_balance: Optional[float] = None
             for row_idx, row in enumerate(table):
-                if not row or len(row) < 5:
+                if not row or len(row) < 4:
                     continue
                 row_clean = [str(c or "").strip() for c in row]
 
-                # Log first 5 rows per table to diagnose column layout
-                if row_idx < 5:
+                # Log first 6 rows per table for diagnostics
+                if row_idx < 6:
                     print(f"[sbi_table] row({len(row_clean)}): {row_clean}")
 
-                # Col 0: transaction date
+                n = len(row_clean)
+
+                # Always try to update prev_balance from this row's last column,
+                # even if we ultimately skip it as a transaction.
+                candidate_bal = _to_float(row_clean[n - 1])
+                if candidate_bal is not None:
+                    prev_balance = candidate_bal
+
+                # Col 0: must be a transaction date to proceed
                 dt = _parse_date(row_clean[0])
                 if not dt:
                     continue
 
-                # Col 2: description (skip header/summary rows)
-                desc = row_clean[2] if len(row_clean) > 2 else ""
-                if not desc or desc.lower().strip() in _SBI_SKIP_DESCS:
+                # Col 2: description — skip summary / header rows
+                desc = row_clean[2] if n > 2 else ""
+                desc_low = desc.lower().strip()
+                if not desc or desc_low in _SBI_SKIP_DESCS:
                     continue
-                if any(skip in desc.lower() for skip in ("brought forward", "opening bal", "closing bal")):
+                if any(s in desc_low for s in _SBI_SKIP_SUBSTRINGS):
                     continue
 
-                n = len(row_clean)
-                balance = _to_float(row_clean[n - 1])
-                # Read both candidate amount columns; one will be empty (None)
-                col_minus2 = _to_float(row_clean[n - 2])  # Credit in 7-col, or amount in 6-col
-                col_minus3 = _to_float(row_clean[n - 3]) if n >= 7 else None  # Debit in 7-col
+                balance = candidate_bal  # already parsed above
+                col_minus2 = _to_float(row_clean[n - 2])
+                col_minus3 = _to_float(row_clean[n - 3]) if n >= 7 else None
 
-                # Primary: use balance delta to determine direction
-                # This handles pdfplumber dropping empty cells (6-col vs 7-col rows)
-                if balance is not None and prev_balance is not None:
+                # Primary: balance delta tells us direction unambiguously
+                if balance is not None and prev_balance is not None and balance != prev_balance:
                     delta = balance - prev_balance
-                    # Pick the non-None amount value
-                    amount = None
-                    for candidate in [col_minus3, col_minus2]:
-                        if candidate and candidate > 0:
-                            amount = candidate
-                            break
+                    amount = next(
+                        (c for c in [col_minus3, col_minus2] if c and c > 0),
+                        None
+                    )
                     if not amount:
-                        prev_balance = balance
                         continue
                     direction = "debit" if delta < 0 else "credit"
                 else:
-                    # Fallback: positional — only reliable when we know column count is 7
+                    # Fallback positional (only when we truly have no prior balance)
                     if col_minus3 and col_minus3 > 0:
                         amount, direction = col_minus3, "debit"
                     elif col_minus2 and col_minus2 > 0:
                         amount, direction = col_minus2, "credit"
                     else:
-                        prev_balance = balance
                         continue
-
-                prev_balance = balance
 
                 if amount < 1:
                     continue
@@ -331,12 +388,14 @@ def _parse_sbi_tables(pdf) -> list:
                 if key in seen:
                     continue
                 seen.add(key)
+                paid_to = _parse_paid_to(desc)
                 transactions.append({
-                    "date": date_str,
-                    "description": desc,
-                    "amount": amount,
+                    "date":          date_str,
+                    "description":   desc,
+                    "paid_to":       paid_to,
+                    "amount":        amount,
                     "txn_direction": direction,
-                    "balance": balance,
+                    "balance":       balance,
                 })
     return transactions
 
@@ -388,7 +447,7 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             "account":            account,
             "date":               t.get("date", ""),
             "transaction_details": t.get("description", ""),
-            "paid_to":            None,
+            "paid_to":            t.get("paid_to"),
             "debit":              debit,
             "credit":             credit,
             "acc_type":           None,
