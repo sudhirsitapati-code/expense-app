@@ -1904,18 +1904,35 @@ def _parse_acc27_excel(file_obj):
         'Internet': 'Misc', 'Miscellaneous': 'Misc',
     }
 
-    def _pd(cell):
+    # FY27 month_num → expected calendar year (month_num stored in col 0)
+    FY_MONTH_YEAR = {1: 2026, 2: 2026, 3: 2026, 4: 2026, 5: 2026,
+                     6: 2026, 7: 2026, 8: 2026, 9: 2026, 10: 2027,
+                     11: 2027, 12: 2027}  # Apr=1…Mar=12
+
+    def _fix_year(d, mo_num):
+        """Correct year typos using the FY month number."""
+        if d is None or mo_num is None: return d
+        expected = FY_MONTH_YEAR.get(int(mo_num))
+        if expected and d.year != expected:
+            try: return d.replace(year=expected)
+            except ValueError: pass
+        return d
+
+    def _pd(cell, mo_num=None):
         v = cell.value
         if isinstance(v, _dt2):
-            # Excel stored Indian DD/MM/YYYY as MM/DD — swap if number_format says mm-dd
             fmt = cell.number_format or ''
             if 'mm-dd' in fmt:
-                try: return _dt2(v.year, v.day, v.month)
-                except ValueError: pass  # day>12 already unambiguous, no swap needed
-            return v
+                try: v = _dt2(v.year, v.day, v.month)
+                except ValueError: pass
+            return _fix_year(v, mo_num)
         if isinstance(v, str):
+            s = v.strip()
+            # Fix missing hyphen: '06-062026' → '06-06-2026'
+            import re
+            s = re.sub(r'^(\d{2})-(\d{2})(\d{4})$', r'\1-\2-\3', s)
             for sfmt in ('%d-%m-%Y','%d/%m/%Y','%Y-%m-%d','%d-%b-%Y'):
-                try: return _dt2.strptime(v.strip(), sfmt)
+                try: return _fix_year(_dt2.strptime(s, sfmt), mo_num)
                 except: pass
         return None
 
@@ -1926,7 +1943,7 @@ def _parse_acc27_excel(file_obj):
         if row[0].value is None: continue
         acct = str(row[2].value or '').lower().replace(' ','')
         if 'sbi' not in acct: continue
-        d = _pd(row[3])
+        d = _pd(row[3], row[0].value)
         if not d: continue
         debit  = float(row[6].value) if row[6].value else 0
         credit = float(row[7].value) if row[7].value else 0
