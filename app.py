@@ -1894,80 +1894,106 @@ def api_transfer_recon_manual_pair():
     return jsonify({"ok": True, "linked": [seq1, seq2]})
 
 
-@app.route("/api/admin/acc27-match-preview", methods=["POST"])
-@login_required
-def api_acc27_match_preview():
-    """
-    POST a list of Excel entries (extracted from ACC27 SudhirExpenses).
-    Returns up to `limit` candidate matches from the master ledger.
-    Each match shows: ledger entry + Excel entry + confidence.
-    """
-    from src.master_ledger import _parse_date as _ml_pd
-    from datetime import timedelta
+def _parse_acc27_excel(file_obj):
+    """Extract SBI entries from ACC27 SudhirExpenses sheet."""
+    import openpyxl, io
+    from datetime import datetime as _dt2
 
-    data     = request.get_json() or {}
-    xl_list  = data.get("entries", [])
-    limit    = int(data.get("limit", 1))
-    apply_it = data.get("apply", False)
+    HEADING_FIX = {
+        'Staff salary': 'Staff Salary', 'Grocries': 'Groceries',
+        'Internet': 'Misc', 'Miscellaneous': 'Misc',
+    }
+
+    def _pd(v):
+        if isinstance(v, _dt2): return v
+        if isinstance(v, str):
+            for fmt in ('%d-%m-%Y','%d/%m/%Y','%Y-%m-%d','%d-%b-%Y'):
+                try: return _dt2.strptime(v.strip(), fmt)
+                except: pass
+        return None
+
+    wb = openpyxl.load_workbook(file_obj, data_only=True)
+    ws = wb['SudhirExpenses']
+    out = []
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, values_only=True):
+        if row[0] is None: continue
+        acct = str(row[2] or '').lower().replace(' ','')
+        if 'sbi' not in acct: continue
+        d = _pd(row[3])
+        if not d: continue
+        debit  = float(row[6]) if row[6] else 0
+        credit = float(row[7]) if row[7] else 0
+        amt = abs(debit or credit)
+        if amt == 0: continue
+        heading = str(row[9] or '').strip()
+        heading = HEADING_FIX.get(heading, heading)
+        out.append({
+            'date': d.strftime('%d-%b-%y'),
+            'account': 'SBI-4852',
+            'debit': debit, 'credit': credit, 'amount': amt,
+            'description': str(row[4] or '').strip(),
+            'paid_to': str(row[5] or '').strip() or None,
+            'type': str(row[8] or '').strip().lower(),
+            'heading': heading,
+            'notes': str(row[10] or '').strip() or None,
+        })
+    return out
+
+
+def _run_acc27_match(xl_list, apply_it=False, limit=5):
+    from src.master_ledger import _parse_date as _ml_pd
+    from collections import defaultdict
 
     ledger = load_ledger()
-    # Index by (account, rounded_amount) for fast lookup
-    def _acct_norm(a):
-        return (a or "").upper().replace(" ", "").replace("-", "")
 
-    from collections import defaultdict
+    def _anorm(a): return (a or "").upper().replace(" ","").replace("-","")
+
     by_acct_amt = defaultdict(list)
     for t in ledger:
-        key = (_acct_norm(t.get("account", "")), round(float(t.get("debit") or 0)))
-        by_acct_amt[key].append(t)
-        key2 = (_acct_norm(t.get("account", "")), round(float(t.get("credit") or 0)))
-        if key2 != key:
-            by_acct_amt[key2].append(t)
+        for field in ("debit","credit"):
+            v = round(float(t.get(field) or 0))
+            if v > 0:
+                by_acct_amt[(_anorm(t.get("account","")), v)].append(t)
 
     results = []
     applied = 0
-    for xl in xl_list:
-        xl_acct = _acct_norm(xl.get("account", ""))
-        xl_amt  = round(float(xl.get("amount", 0)))
-        xl_date_str = xl.get("date", "")
-        xl_date = _ml_pd(xl_date_str)
+    already_matched = set()
 
+    for xl in xl_list:
+        xl_acct  = _anorm(xl.get("account",""))
+        xl_amt   = round(float(xl.get("amount", 0)))
+        xl_date  = _ml_pd(xl.get("date",""))
         candidates = by_acct_amt.get((xl_acct, xl_amt), [])
-        best = None
-        best_days = 999
+        best, best_days = None, 999
         for t in candidates:
-            t_date = _ml_pd(t.get("date", ""))
+            if t.get("txn_id") in already_matched: continue
+            t_date = _ml_pd(t.get("date",""))
             if not t_date or not xl_date:
-                # No date — still a candidate if account+amount match exactly
-                if best is None:
-                    best = t; best_days = 99
+                if best is None: best, best_days = t, 99
                 continue
             days = abs((xl_date - t_date).days)
             if days <= 30 and days < best_days:
-                best = t; best_days = days
+                best, best_days = t, days
 
         if best is None:
             results.append({"xl": xl, "ledger": None, "match": "none"})
             continue
 
-        confidence = "exact" if best_days <= 3 else "good" if best_days <= 10 else "weak"
-        match_rec = {
+        already_matched.add(best.get("txn_id"))
+        confidence = "exact" if best_days <= 3 else "good" if best_days <= 14 else "weak"
+        results.append({
             "xl": xl,
             "ledger": {k: best.get(k) for k in
                        ["txn_id","seq","date","account","debit","credit",
                         "raw_description","type","heading","paid_to"]},
-            "match": confidence,
-            "days_gap": best_days,
-        }
-        results.append(match_rec)
+            "match": confidence, "days_gap": best_days,
+        })
 
-        if apply_it and confidence in ("exact", "good"):
+        if apply_it and confidence in ("exact","good"):
             best["type"]    = xl.get("type") or best.get("type")
             best["heading"] = xl.get("heading") or best.get("heading")
-            if xl.get("paid_to"):
-                best["paid_to"] = xl["paid_to"]
-            if xl.get("notes"):
-                best["remarks"] = xl["notes"]
+            if xl.get("paid_to"): best["paid_to"] = xl["paid_to"]
+            if xl.get("notes"):   best["remarks"]  = xl["notes"]
             applied += 1
 
         if not apply_it and len([r for r in results if r["match"] != "none"]) >= limit:
@@ -1975,9 +2001,37 @@ def api_acc27_match_preview():
 
     if apply_it:
         save_ledger(ledger)
-        return jsonify({"applied": applied, "total": len(xl_list)})
+        return {"applied": applied, "total": len(xl_list)}
 
-    return jsonify({"results": results[:limit * 3], "total_xl": len(xl_list)})
+    matched   = [r for r in results if r["match"] != "none"]
+    unmatched = [r for r in results if r["match"] == "none"]
+    return {"results": matched, "unmatched_count": len(unmatched),
+            "total_xl": len(xl_list)}
+
+
+@app.route("/admin/acc27")
+@login_required
+def admin_acc27_page():
+    return render_template("acc27_admin.html")
+
+
+@app.route("/api/admin/acc27-match-preview", methods=["POST"])
+@login_required
+def api_acc27_match_preview():
+    """Accept multipart Excel upload OR JSON entries list. Returns match preview."""
+    import io
+    if request.files.get("file"):
+        xl_list  = _parse_acc27_excel(io.BytesIO(request.files["file"].read()))
+        limit    = int(request.form.get("limit", 5))
+        apply_it = request.form.get("apply","") == "1"
+    else:
+        data     = request.get_json() or {}
+        xl_list  = data.get("entries", [])
+        limit    = int(data.get("limit", 5))
+        apply_it = data.get("apply", False)
+
+    result = _run_acc27_match(xl_list, apply_it=apply_it, limit=limit)
+    return jsonify(result)
 
 
 @app.route("/api/year-summary", methods=["GET"])

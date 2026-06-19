@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ACC27 Enrichment</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<style>
+body { background:#f8f9fa; padding:20px; }
+.match-exact { background:#d1f5d3; }
+.match-good  { background:#fff9c4; }
+.match-weak  { background:#ffe0cc; }
+.match-none  { background:#f8d7da; }
+th.sortable { cursor:pointer; user-select:none; }
+</style>
+</head>
+<body>
+<div class="container-xl">
+  <div class="d-flex align-items-center mb-3 gap-3">
+    <h5 class="mb-0 fw-bold"><i class="bi bi-file-earmark-spreadsheet me-2"></i>ACC27 → Ledger Enrichment</h5>
+    <a href="/" class="btn btn-sm btn-outline-secondary ms-auto">← Back to App</a>
+  </div>
+
+  <!-- Upload -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div>
+          <label class="form-label small fw-semibold mb-1">Upload _ACC 27.xlsx</label>
+          <input type="file" id="xlFile" class="form-control form-control-sm" accept=".xlsx" style="width:280px">
+        </div>
+        <div class="align-self-end">
+          <button class="btn btn-sm btn-primary" onclick="loadPreview()"><i class="bi bi-search me-1"></i>Preview matches</button>
+        </div>
+        <div class="align-self-end ms-2" id="applyZone" style="display:none">
+          <button class="btn btn-sm btn-success" onclick="applyAll()"><i class="bi bi-check-circle me-1"></i>Apply all exact+good</button>
+        </div>
+      </div>
+      <div id="uploadMsg" class="small text-muted mt-2"></div>
+    </div>
+  </div>
+
+  <!-- Summary tiles -->
+  <div class="row g-2 mb-3" id="tiles" style="display:none">
+    <div class="col-6 col-md-3"><div class="card border-0 bg-white"><div class="card-body py-2 px-3">
+      <div class="text-muted small">Excel entries</div><div class="fw-bold" id="tTotal">—</div>
+    </div></div></div>
+    <div class="col-6 col-md-3"><div class="card border-0 bg-success bg-opacity-10"><div class="card-body py-2 px-3">
+      <div class="text-muted small">Exact matches (≤3d)</div><div class="fw-bold text-success" id="tExact">—</div>
+    </div></div></div>
+    <div class="col-6 col-md-3"><div class="card border-0 bg-warning bg-opacity-10"><div class="card-body py-2 px-3">
+      <div class="text-muted small">Good matches (≤14d)</div><div class="fw-bold text-warning" id="tGood">—</div>
+    </div></div></div>
+    <div class="col-6 col-md-3"><div class="card border-0 bg-danger bg-opacity-10"><div class="card-body py-2 px-3">
+      <div class="text-muted small">No match</div><div class="fw-bold text-danger" id="tNone">—</div>
+    </div></div></div>
+  </div>
+
+  <!-- Results table -->
+  <div class="table-responsive">
+  <table class="table table-sm table-bordered mb-0 small" id="resultsTable" style="display:none">
+    <thead class="table-dark">
+      <tr>
+        <th>Conf.</th>
+        <th>Gap</th>
+        <th>XL Date</th>
+        <th>Seq #</th>
+        <th>Ledger Date</th>
+        <th>Account</th>
+        <th>Amount</th>
+        <th>Ledger Raw Desc</th>
+        <th>XL Description</th>
+        <th>Type: was → will be</th>
+        <th>Heading: was → will be</th>
+      </tr>
+    </thead>
+    <tbody id="resultsBody"></tbody>
+  </table>
+  </div>
+  <div id="statusMsg" class="mt-3 fw-semibold"></div>
+</div>
+
+<script>
+let _allEntries = [];
+let _allResults = [];
+
+async function loadPreview() {
+  const f = document.getElementById('xlFile').files[0];
+  if (!f) { alert('Choose a file first'); return; }
+  const msg = document.getElementById('uploadMsg');
+  msg.textContent = 'Uploading and matching…';
+
+  const fd = new FormData();
+  fd.append('file', f);
+  fd.append('limit', '9999');  // get all
+
+  try {
+    const r = await fetch('/api/admin/acc27-match-preview', { method:'POST', body: fd });
+    const d = await r.json();
+
+    _allResults = d.results || [];
+    const noMatch = d.unmatched_count || 0;
+    const total   = d.total_xl || 0;
+    const exact   = _allResults.filter(x => x.match === 'exact').length;
+    const good    = _allResults.filter(x => x.match === 'good').length;
+
+    document.getElementById('tTotal').textContent = total;
+    document.getElementById('tExact').textContent = exact;
+    document.getElementById('tGood').textContent  = good;
+    document.getElementById('tNone').textContent  = noMatch;
+    document.getElementById('tiles').style.display = '';
+    document.getElementById('applyZone').style.display = '';
+    document.getElementById('resultsTable').style.display = '';
+
+    renderTable(_allResults);
+    msg.textContent = `Matched ${_allResults.length} of ${total} entries.`;
+  } catch(e) {
+    msg.textContent = 'Error: ' + e;
+  }
+}
+
+function renderTable(rows) {
+  const tbody = document.getElementById('resultsBody');
+  const confBadge = c => c === 'exact' ? '<span class="badge bg-success">exact</span>'
+    : c === 'good' ? '<span class="badge bg-warning text-dark">good</span>'
+    : '<span class="badge bg-danger">weak</span>';
+
+  tbody.innerHTML = rows.map(m => {
+    const xl = m.xl, ld = m.ledger || {};
+    const typeDiff   = xl.type    !== (ld.type    || '').toLowerCase();
+    const headDiff   = xl.heading !== (ld.heading || '');
+    return `<tr class="match-${m.match}">
+      <td>${confBadge(m.match)}</td>
+      <td class="text-center">${m.days_gap ?? '—'}d</td>
+      <td>${xl.date}</td>
+      <td class="fw-semibold">#${ld.seq ?? '—'}</td>
+      <td>${ld.date ?? '—'}</td>
+      <td><small>${ld.account ?? '—'}</small></td>
+      <td class="text-end">₹${(xl.amount||0).toLocaleString('en-IN')}</td>
+      <td class="text-muted" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ld.raw_description||''}">${ld.raw_description||'—'}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${xl.description}">${xl.description}</td>
+      <td>${typeDiff ? `<span class="text-muted">${ld.type||'—'}</span> → <strong>${xl.type}</strong>` : `<span class="text-muted">${xl.type}</span>`}</td>
+      <td>${headDiff ? `<span class="text-muted">${ld.heading||'—'}</span> → <strong>${xl.heading}</strong>` : `<span class="text-muted">${xl.heading}</span>`}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function applyAll() {
+  if (!confirm(`Apply all exact+good matches? This will update the master ledger.`)) return;
+  const f = document.getElementById('xlFile').files[0];
+  if (!f) { alert('File no longer available — re-select the file'); return; }
+  const msg = document.getElementById('statusMsg');
+  msg.textContent = 'Applying…'; msg.className = 'mt-3 fw-semibold text-muted';
+
+  const fd = new FormData();
+  fd.append('file', f);
+  fd.append('apply', '1');
+  fd.append('limit', '9999');
+
+  const r = await fetch('/api/admin/acc27-match-preview', { method:'POST', body: fd });
+  const d = await r.json();
+  msg.textContent = `✓ Applied ${d.applied} of ${d.total} entries.`;
+  msg.className = 'mt-3 fw-semibold text-success';
+}
+</script>
+</body>
+</html>
