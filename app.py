@@ -1894,6 +1894,92 @@ def api_transfer_recon_manual_pair():
     return jsonify({"ok": True, "linked": [seq1, seq2]})
 
 
+@app.route("/api/admin/acc27-match-preview", methods=["POST"])
+@login_required
+def api_acc27_match_preview():
+    """
+    POST a list of Excel entries (extracted from ACC27 SudhirExpenses).
+    Returns up to `limit` candidate matches from the master ledger.
+    Each match shows: ledger entry + Excel entry + confidence.
+    """
+    from src.master_ledger import _parse_date as _ml_pd
+    from datetime import timedelta
+
+    data     = request.get_json() or {}
+    xl_list  = data.get("entries", [])
+    limit    = int(data.get("limit", 1))
+    apply_it = data.get("apply", False)
+
+    ledger = load_ledger()
+    # Index by (account, rounded_amount) for fast lookup
+    def _acct_norm(a):
+        return (a or "").upper().replace(" ", "").replace("-", "")
+
+    from collections import defaultdict
+    by_acct_amt = defaultdict(list)
+    for t in ledger:
+        key = (_acct_norm(t.get("account", "")), round(float(t.get("debit") or 0)))
+        by_acct_amt[key].append(t)
+        key2 = (_acct_norm(t.get("account", "")), round(float(t.get("credit") or 0)))
+        if key2 != key:
+            by_acct_amt[key2].append(t)
+
+    results = []
+    applied = 0
+    for xl in xl_list:
+        xl_acct = _acct_norm(xl.get("account", ""))
+        xl_amt  = round(float(xl.get("amount", 0)))
+        xl_date_str = xl.get("date", "")
+        xl_date = _ml_pd(xl_date_str)
+
+        candidates = by_acct_amt.get((xl_acct, xl_amt), [])
+        best = None
+        best_days = 999
+        for t in candidates:
+            t_date = _ml_pd(t.get("date", ""))
+            if not t_date or not xl_date:
+                # No date — still a candidate if account+amount match exactly
+                if best is None:
+                    best = t; best_days = 99
+                continue
+            days = abs((xl_date - t_date).days)
+            if days <= 30 and days < best_days:
+                best = t; best_days = days
+
+        if best is None:
+            results.append({"xl": xl, "ledger": None, "match": "none"})
+            continue
+
+        confidence = "exact" if best_days <= 3 else "good" if best_days <= 10 else "weak"
+        match_rec = {
+            "xl": xl,
+            "ledger": {k: best.get(k) for k in
+                       ["txn_id","seq","date","account","debit","credit",
+                        "raw_description","type","heading","paid_to"]},
+            "match": confidence,
+            "days_gap": best_days,
+        }
+        results.append(match_rec)
+
+        if apply_it and confidence in ("exact", "good"):
+            best["type"]    = xl.get("type") or best.get("type")
+            best["heading"] = xl.get("heading") or best.get("heading")
+            if xl.get("paid_to"):
+                best["paid_to"] = xl["paid_to"]
+            if xl.get("notes"):
+                best["remarks"] = xl["notes"]
+            applied += 1
+
+        if not apply_it and len([r for r in results if r["match"] != "none"]) >= limit:
+            break
+
+    if apply_it:
+        save_ledger(ledger)
+        return jsonify({"applied": applied, "total": len(xl_list)})
+
+    return jsonify({"results": results[:limit * 3], "total_xl": len(xl_list)})
+
+
 @app.route("/api/year-summary", methods=["GET"])
 @login_required
 def api_year_summary():
