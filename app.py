@@ -1970,33 +1970,38 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
 
     ledger = load_ledger()
 
-    def _anorm(a): return (a or "").upper().replace(" ","").replace("-","")
-
-    by_acct_amt = defaultdict(list)
+    # Index by rounded amount only — account name may differ between Excel and ledger
+    by_amt = defaultdict(list)
     for t in ledger:
         for field in ("debit","credit"):
             v = round(float(t.get(field) or 0))
             if v > 0:
-                by_acct_amt[(_anorm(t.get("account","")), v)].append(t)
+                by_amt[v].append(t)
+
+    def _is_sbi(t):
+        acct = (t.get("account") or "").upper()
+        return "SBI" in acct or "3152" in acct
 
     results = []
     applied = 0
     already_matched = set()
 
     for xl in xl_list:
-        xl_acct  = _anorm(xl.get("account",""))
         xl_amt   = round(float(xl.get("amount", 0)))
         xl_date  = _ml_pd(xl.get("date",""))
-        candidates = by_acct_amt.get((xl_acct, xl_amt), [])
+        candidates = by_amt.get(xl_amt, [])
         best, best_days = None, 999
         for t in candidates:
             if t.get("txn_id") in already_matched: continue
             t_date = _ml_pd(t.get("date",""))
             if not t_date or not xl_date:
-                if best is None: best, best_days = t, 99
+                # no date — only pick if SBI account, no better match yet
+                if best is None and _is_sbi(t): best, best_days = t, 99
                 continue
             days = abs((xl_date - t_date).days)
-            if days <= 30 and days < best_days:
+            if days > 30: continue
+            # prefer SBI account entries; within same day-gap, SBI wins
+            if days < best_days or (days == best_days and _is_sbi(t) and not _is_sbi(best)):
                 best, best_days = t, days
 
         if best is None:
@@ -2036,8 +2041,58 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
 
     matched   = [r for r in results if r["match"] != "none"]
     unmatched = [r for r in results if r["match"] == "none"]
-    return {"results": matched, "unmatched_count": len(unmatched),
-            "total_xl": len(xl_list)}
+    return {"results": matched, "unmatched": unmatched,
+            "unmatched_count": len(unmatched), "total_xl": len(xl_list)}
+
+
+@app.route("/api/admin/acc27-debug")
+@login_required
+def api_acc27_debug():
+    """Show SBI ledger entries and first 20 unmatched Excel entries for diagnosis."""
+    from src.master_ledger import _parse_date as _ml_pd
+    import io
+    ledger  = load_ledger()
+    sbi_txns = [t for t in ledger if "SBI" in (t.get("account") or "").upper()
+                                  or "3152" in (t.get("account") or "")]
+    # unique accounts in ledger
+    all_accounts = sorted(set(t.get("account","") for t in ledger))
+    xl_list = []
+    if request.files.get("file"):
+        xl_list = _parse_acc27_excel(io.BytesIO(request.files["file"].read()))
+
+    # For each xl entry, show nearest SBI ledger entry by date (ignoring amount)
+    samples = []
+    for xl in xl_list[:30]:
+        xl_date = _ml_pd(xl.get("date",""))
+        nearest, nearest_days = None, 9999
+        for t in sbi_txns:
+            td = _ml_pd(t.get("date",""))
+            if td and xl_date:
+                d = abs((xl_date - td).days)
+                if d < nearest_days:
+                    nearest, nearest_days = t, d
+        samples.append({
+            "xl_date": xl.get("date"), "xl_amt": xl.get("amount"),
+            "xl_desc": xl.get("description","")[:60],
+            "nearest_date": nearest.get("date") if nearest else None,
+            "nearest_amt": (nearest.get("debit") or nearest.get("credit")) if nearest else None,
+            "nearest_acct": nearest.get("account") if nearest else None,
+            "nearest_seq": nearest.get("seq") if nearest else None,
+            "days_gap": nearest_days if nearest else None,
+        })
+
+    return jsonify({
+        "total_ledger": len(ledger),
+        "sbi_count": len(sbi_txns),
+        "all_accounts_sample": all_accounts[:50],
+        "sbi_sample": [{
+            "seq": t.get("seq"), "date": t.get("date"),
+            "account": t.get("account"),
+            "debit": t.get("debit"), "credit": t.get("credit"),
+            "raw_description": (t.get("raw_description","") or "")[:80]
+        } for t in sbi_txns[:30]],
+        "xl_nearest_sbi": samples,
+    })
 
 
 @app.route("/admin/acc27")

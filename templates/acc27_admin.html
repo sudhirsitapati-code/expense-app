@@ -57,6 +57,17 @@ th.sortable { cursor:pointer; user-select:none; }
     </div></div></div>
   </div>
 
+  <!-- Filter + debug -->
+  <div class="d-flex gap-2 mb-2 align-items-center" id="filterBar" style="display:none!important">
+    <div class="btn-group btn-group-sm">
+      <button class="btn btn-outline-secondary active" onclick="filterRows('all',this)">All</button>
+      <button class="btn btn-outline-success" onclick="filterRows('exact',this)">Exact</button>
+      <button class="btn btn-outline-warning" onclick="filterRows('good',this)">Good</button>
+      <button class="btn btn-outline-danger" onclick="filterRows('none',this)">No match</button>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="debugLedger()"><i class="bi bi-bug me-1"></i>Debug ledger</button>
+  </div>
+
   <!-- Results table -->
   <div class="table-responsive">
   <table class="table table-sm table-bordered mb-0 small" id="resultsTable" style="display:none">
@@ -79,10 +90,10 @@ th.sortable { cursor:pointer; user-select:none; }
   </table>
   </div>
   <div id="statusMsg" class="mt-3 fw-semibold"></div>
+  <pre id="debugOut" class="bg-dark text-light p-3 small mt-3" style="display:none;max-height:400px;overflow:auto"></pre>
 </div>
 
 <script>
-let _allEntries = [];
 let _allResults = [];
 
 async function loadPreview() {
@@ -93,63 +104,89 @@ async function loadPreview() {
 
   const fd = new FormData();
   fd.append('file', f);
-  fd.append('limit', '9999');  // get all
+  fd.append('limit', '9999');
 
   try {
     const r = await fetch('/api/admin/acc27-match-preview', { method:'POST', body: fd });
     const d = await r.json();
 
-    _allResults = d.results || [];
-    const noMatch = d.unmatched_count || 0;
-    const total   = d.total_xl || 0;
-    const exact   = _allResults.filter(x => x.match === 'exact').length;
-    const good    = _allResults.filter(x => x.match === 'good').length;
+    // Combine matched + unmatched for display
+    const matched   = d.results || [];
+    const unmatched = d.unmatched || [];
+    _allResults = [...matched, ...unmatched];
 
-    document.getElementById('tTotal').textContent = total;
+    const exact = matched.filter(x => x.match === 'exact').length;
+    const good  = matched.filter(x => x.match === 'good').length;
+    const none  = (d.unmatched_count || 0);
+
+    document.getElementById('tTotal').textContent = d.total_xl || 0;
     document.getElementById('tExact').textContent = exact + ' (will apply)';
     document.getElementById('tGood').textContent  = good + ' (→ Not Sure)';
-    document.getElementById('tNone').textContent  = noMatch;
+    document.getElementById('tNone').textContent  = none;
     document.getElementById('tiles').style.display = '';
     document.getElementById('applyZone').style.display = '';
     document.getElementById('resultsTable').style.display = '';
+    document.getElementById('filterBar').style.display = '';
 
     renderTable(_allResults);
-    msg.textContent = `Matched ${_allResults.length} of ${total} entries.`;
+    msg.textContent = `Matched ${matched.length} of ${d.total_xl} entries (${none} unmatched).`;
   } catch(e) {
     msg.textContent = 'Error: ' + e;
   }
 }
 
+function filterRows(type, btn) {
+  document.querySelectorAll('#filterBar .btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const rows = type === 'all' ? _allResults : _allResults.filter(r => r.match === type);
+  renderTable(rows);
+}
+
 function renderTable(rows) {
   const tbody = document.getElementById('resultsBody');
   const confBadge = c => c === 'exact' ? '<span class="badge bg-success">exact</span>'
-    : c === 'good' ? '<span class="badge bg-warning text-dark">good</span>'
-    : '<span class="badge bg-danger">weak</span>';
+    : c === 'good'  ? '<span class="badge bg-warning text-dark">good</span>'
+    : c === 'weak'  ? '<span class="badge bg-secondary">weak</span>'
+    : '<span class="badge bg-danger">no match</span>';
 
   tbody.innerHTML = rows.map(m => {
-    const xl = m.xl, ld = m.ledger || {};
-    const typeDiff   = xl.type    !== (ld.type    || '').toLowerCase();
-    const headDiff   = xl.heading !== (ld.heading || '');
+    const xl = m.xl || m, ld = m.ledger || {};
+    const isNone = m.match === 'none';
+    const typeDiff = !isNone && xl.type !== (ld.type || '').toLowerCase();
+    const headDiff = !isNone && xl.heading !== (ld.heading || '');
     return `<tr class="match-${m.match}">
       <td>${confBadge(m.match)}</td>
-      <td class="text-center">${m.days_gap ?? '—'}d</td>
+      <td class="text-center">${isNone ? '—' : (m.days_gap ?? '—') + 'd'}</td>
       <td>${xl.date}</td>
-      <td class="fw-semibold">#${ld.seq ?? '—'}</td>
+      <td class="fw-semibold">${isNone ? '—' : '#' + (ld.seq ?? '—')}</td>
       <td>${ld.date ?? '—'}</td>
       <td><small>${ld.account ?? '—'}</small></td>
       <td class="text-end">₹${(xl.amount||0).toLocaleString('en-IN')}</td>
-      <td class="text-muted" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ld.raw_description||''}">${ld.raw_description||'—'}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${xl.description}">${xl.description}</td>
-      <td>${m.match === 'exact' && typeDiff ? `<span class="text-muted">${ld.type||'—'}</span> → <strong>${xl.type}</strong>` : `<span class="text-muted">${ld.type||xl.type}</span>`}</td>
+      <td class="text-muted" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ld.raw_description||''}">${ld.raw_description||'—'}</td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${xl.description||''}">${xl.description||'—'}</td>
+      <td>${!isNone && typeDiff ? `<span class="text-muted">${ld.type||'—'}</span> → <strong>${xl.type}</strong>` : `<span class="text-muted">${ld.type||xl.type||'—'}</span>`}</td>
       <td>${m.match === 'exact'
         ? (headDiff ? `<span class="text-muted">${ld.heading||'—'}</span> → <strong>${xl.heading}</strong>` : `<span class="text-muted">${xl.heading}</span>`)
+        : isNone ? '<span class="text-muted">—</span>'
         : `<span class="badge bg-warning text-dark">→ Not Sure (Vincent)</span>`}</td>
     </tr>`;
   }).join('');
 }
 
+async function debugLedger() {
+  const f = document.getElementById('xlFile').files[0];
+  const out = document.getElementById('debugOut');
+  out.style.display = '';
+  out.textContent = 'Loading…';
+  const fd = new FormData();
+  if (f) fd.append('file', f);
+  const r = await fetch('/api/admin/acc27-debug', { method: f ? 'POST' : 'GET', body: f ? fd : undefined });
+  const d = await r.json();
+  out.textContent = JSON.stringify(d, null, 2);
+}
+
 async function applyAll() {
-  if (!confirm(`Apply all exact+good matches? This will update the master ledger.`)) return;
+  if (!confirm('Apply all exact+good matches? This will update the master ledger.')) return;
   const f = document.getElementById('xlFile').files[0];
   if (!f) { alert('File no longer available — re-select the file'); return; }
   const msg = document.getElementById('statusMsg');
