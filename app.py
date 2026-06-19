@@ -2015,6 +2015,9 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
                 raw = f"acc27|{xl.get('date','')}|{xl.get('description','')}|{xl.get('amount',0)}"
                 new_id = hashlib.sha1(raw.encode()).hexdigest()[:16]
                 if new_id not in existing_ids:
+                    # June entries have confirmed type/heading from Excel — not uncertain
+                    # Apr/May unmatched are likely cash payments — flag for Vincent
+                    is_june = (xl.get("date","")[3:5] == "06")
                     new_entry = {
                         "txn_id":          new_id,
                         "date":            xl.get("date",""),
@@ -2027,9 +2030,10 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
                         "heading":         xl.get("heading",""),
                         "paid_to":         xl.get("paid_to") or None,
                         "source":          "acc27_excel",
-                        "uncertain":       True,
-                        "uncertain_fields":["heading"],
                     }
+                    if not is_june:
+                        new_entry["uncertain"]        = True
+                        new_entry["uncertain_fields"] = ["heading"]
                     if xl.get("notes"): new_entry["remarks"] = xl["notes"]
                     ledger.append(new_entry)
                     existing_ids.add(new_id)
