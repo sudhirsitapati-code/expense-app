@@ -53,7 +53,7 @@ th.sortable { cursor:pointer; user-select:none; }
       <div class="text-muted small">Good matches (≤14d)</div><div class="fw-bold text-warning" id="tGood">—</div>
     </div></div></div>
     <div class="col-6 col-md-3"><div class="card border-0 bg-danger bg-opacity-10"><div class="card-body py-2 px-3">
-      <div class="text-muted small">No match</div><div class="fw-bold text-danger" id="tNone">—</div>
+      <div class="text-muted small">No match (→ create new)</div><div class="fw-bold text-danger" id="tNone">—</div>
     </div></div></div>
   </div>
 
@@ -199,7 +199,7 @@ async function applyAll() {
 
   const r = await fetch('/api/admin/acc27-match-preview', { method:'POST', body: fd });
   const d = await r.json();
-  msg.textContent = `✓ Applied ${d.applied} of ${d.total} entries.`;
+  msg.textContent = `✓ Applied ${d.applied} exact matches · Created ${d.created} new entries · Fixed ${d.atm_fixed} ATM→transfer`;
   msg.className = 'mt-3 fw-semibold text-success';
 }
 </script>

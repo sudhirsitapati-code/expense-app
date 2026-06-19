@@ -1964,8 +1964,11 @@ def _parse_acc27_excel(file_obj):
     return out
 
 
+_ATM_KEYWORDS = ["atm", "atw", "cash withdrawal", "cash wthdl", "atm wtdl", "cash wtdl"]
+
 def _run_acc27_match(xl_list, apply_it=False, limit=5):
-    from src.master_ledger import _parse_date as _ml_pd
+    import hashlib
+    from src.master_ledger import _parse_date as _ml_pd, _assign_seq
     from collections import defaultdict
 
     ledger = load_ledger()
@@ -1982,8 +1985,11 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
         acct = (t.get("account") or "").upper()
         return "SBI" in acct or "3152" in acct
 
+    existing_ids = {t["txn_id"] for t in ledger}
+
     results = []
     applied = 0
+    created = 0
     already_matched = set()
 
     for xl in xl_list:
@@ -1995,17 +2001,39 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
             if t.get("txn_id") in already_matched: continue
             t_date = _ml_pd(t.get("date",""))
             if not t_date or not xl_date:
-                # no date — only pick if SBI account, no better match yet
                 if best is None and _is_sbi(t): best, best_days = t, 99
                 continue
             days = abs((xl_date - t_date).days)
             if days > 30: continue
-            # prefer SBI account entries; within same day-gap, SBI wins
             if days < best_days or (days == best_days and _is_sbi(t) and not _is_sbi(best)):
                 best, best_days = t, days
 
         if best is None:
             results.append({"xl": xl, "ledger": None, "match": "none"})
+            if apply_it:
+                # Create a new ledger entry from the Excel row
+                raw = f"acc27|{xl.get('date','')}|{xl.get('description','')}|{xl.get('amount',0)}"
+                new_id = hashlib.sha1(raw.encode()).hexdigest()[:16]
+                if new_id not in existing_ids:
+                    new_entry = {
+                        "txn_id":          new_id,
+                        "date":            xl.get("date",""),
+                        "account":         "SBI-3152",
+                        "debit":           xl.get("debit") or 0,
+                        "credit":          xl.get("credit") or 0,
+                        "raw_description": xl.get("description",""),
+                        "description":     xl.get("description",""),
+                        "type":            xl.get("type") or "expense",
+                        "heading":         xl.get("heading",""),
+                        "paid_to":         xl.get("paid_to") or None,
+                        "source":          "acc27_excel",
+                        "uncertain":       True,
+                        "uncertain_fields":["heading"],
+                    }
+                    if xl.get("notes"): new_entry["remarks"] = xl["notes"]
+                    ledger.append(new_entry)
+                    existing_ids.add(new_id)
+                    created += 1
             continue
 
         already_matched.add(best.get("txn_id"))
@@ -2028,7 +2056,6 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
                 best.pop("uncertain_fields", None)
                 applied += 1
             else:
-                # good/weak — leave type/heading alone, flag for Vincent
                 best["uncertain"]        = True
                 best["uncertain_fields"] = ["heading"]
 
@@ -2036,8 +2063,18 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
             break
 
     if apply_it:
+        # Rule: all SBI ATM withdrawals → type=transfer
+        atm_fixed = 0
+        for t in ledger:
+            if not _is_sbi(t): continue
+            desc = (t.get("raw_description") or "").lower()
+            if any(kw in desc for kw in _ATM_KEYWORDS) and t.get("type") != "transfer":
+                t["type"] = "transfer"
+                atm_fixed += 1
+        _assign_seq(ledger)
         save_ledger(ledger)
-        return {"applied": applied, "total": len(xl_list)}
+        return {"applied": applied, "created": created, "atm_fixed": atm_fixed,
+                "total": len(xl_list)}
 
     matched   = [r for r in results if r["match"] != "none"]
     unmatched = [r for r in results if r["match"] == "none"]
