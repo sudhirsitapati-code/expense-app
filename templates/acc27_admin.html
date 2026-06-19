@@ -71,8 +71,8 @@ th.sortable { cursor:pointer; user-select:none; }
         <th>Amount</th>
         <th>Ledger Raw Desc</th>
         <th>XL Description</th>
-        <th>Type: was → will be</th>
-        <th>Heading: was → will be</th>
+        <th>Type</th>
+        <th>Heading / Action</th>
       </tr>
     </thead>
     <tbody id="resultsBody"></tbody>
@@ -106,8 +106,8 @@ async function loadPreview() {
     const good    = _allResults.filter(x => x.match === 'good').length;
 
     document.getElementById('tTotal').textContent = total;
-    document.getElementById('tExact').textContent = exact;
-    document.getElementById('tGood').textContent  = good;
+    document.getElementById('tExact').textContent = exact + ' (will apply)';
+    document.getElementById('tGood').textContent  = good + ' (→ Not Sure)';
     document.getElementById('tNone').textContent  = noMatch;
     document.getElementById('tiles').style.display = '';
     document.getElementById('applyZone').style.display = '';
@@ -140,8 +140,10 @@ function renderTable(rows) {
       <td class="text-end">₹${(xl.amount||0).toLocaleString('en-IN')}</td>
       <td class="text-muted" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ld.raw_description||''}">${ld.raw_description||'—'}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${xl.description}">${xl.description}</td>
-      <td>${typeDiff ? `<span class="text-muted">${ld.type||'—'}</span> → <strong>${xl.type}</strong>` : `<span class="text-muted">${xl.type}</span>`}</td>
-      <td>${headDiff ? `<span class="text-muted">${ld.heading||'—'}</span> → <strong>${xl.heading}</strong>` : `<span class="text-muted">${xl.heading}</span>`}</td>
+      <td>${m.match === 'exact' && typeDiff ? `<span class="text-muted">${ld.type||'—'}</span> → <strong>${xl.type}</strong>` : `<span class="text-muted">${ld.type||xl.type}</span>`}</td>
+      <td>${m.match === 'exact'
+        ? (headDiff ? `<span class="text-muted">${ld.heading||'—'}</span> → <strong>${xl.heading}</strong>` : `<span class="text-muted">${xl.heading}</span>`)
+        : `<span class="badge bg-warning text-dark">→ Not Sure (Vincent)</span>`}</td>
     </tr>`;
   }).join('');
 }

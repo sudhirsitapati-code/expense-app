@@ -1989,12 +1989,19 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
             "match": confidence, "days_gap": best_days,
         })
 
-        if apply_it and confidence in ("exact","good"):
-            best["type"]    = xl.get("type") or best.get("type")
-            best["heading"] = xl.get("heading") or best.get("heading")
-            if xl.get("paid_to"): best["paid_to"] = xl["paid_to"]
-            if xl.get("notes"):   best["remarks"]  = xl["notes"]
-            applied += 1
+        if apply_it:
+            if confidence == "exact":
+                best["type"]    = xl.get("type") or best.get("type")
+                best["heading"] = xl.get("heading") or best.get("heading")
+                if xl.get("paid_to"): best["paid_to"] = xl["paid_to"]
+                if xl.get("notes"):   best["remarks"]  = xl["notes"]
+                best.pop("uncertain", None)
+                best.pop("uncertain_fields", None)
+                applied += 1
+            else:
+                # good/weak — leave type/heading alone, flag for Vincent
+                best["uncertain"]        = True
+                best["uncertain_fields"] = ["heading"]
 
         if not apply_it and len([r for r in results if r["match"] != "none"]) >= limit:
             break
