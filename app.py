@@ -1904,38 +1904,45 @@ def _parse_acc27_excel(file_obj):
         'Internet': 'Misc', 'Miscellaneous': 'Misc',
     }
 
-    def _pd(v):
-        if isinstance(v, _dt2): return v
+    def _pd(cell):
+        v = cell.value
+        if isinstance(v, _dt2):
+            # Excel stored Indian DD/MM/YYYY as MM/DD — swap if number_format says mm-dd
+            fmt = cell.number_format or ''
+            if 'mm-dd' in fmt:
+                try: return _dt2(v.year, v.day, v.month)
+                except ValueError: pass  # day>12 already unambiguous, no swap needed
+            return v
         if isinstance(v, str):
-            for fmt in ('%d-%m-%Y','%d/%m/%Y','%Y-%m-%d','%d-%b-%Y'):
-                try: return _dt2.strptime(v.strip(), fmt)
+            for sfmt in ('%d-%m-%Y','%d/%m/%Y','%Y-%m-%d','%d-%b-%Y'):
+                try: return _dt2.strptime(v.strip(), sfmt)
                 except: pass
         return None
 
     wb = openpyxl.load_workbook(file_obj, data_only=True)
     ws = wb['SudhirExpenses']
     out = []
-    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, values_only=True):
-        if row[0] is None: continue
-        acct = str(row[2] or '').lower().replace(' ','')
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, values_only=False):
+        if row[0].value is None: continue
+        acct = str(row[2].value or '').lower().replace(' ','')
         if 'sbi' not in acct: continue
         d = _pd(row[3])
         if not d: continue
-        debit  = float(row[6]) if row[6] else 0
-        credit = float(row[7]) if row[7] else 0
+        debit  = float(row[6].value) if row[6].value else 0
+        credit = float(row[7].value) if row[7].value else 0
         amt = abs(debit or credit)
         if amt == 0: continue
-        heading = str(row[9] or '').strip()
+        heading = str(row[9].value or '').strip()
         heading = HEADING_FIX.get(heading, heading)
         out.append({
             'date': d.strftime('%d-%b-%y'),
             'account': 'SBI-3152',  # sbi4852 in Excel = SBI-3152 in ledger
             'debit': debit, 'credit': credit, 'amount': amt,
-            'description': str(row[4] or '').strip(),
-            'paid_to': str(row[5] or '').strip() or None,
-            'type': str(row[8] or '').strip().lower(),
+            'description': str(row[4].value or '').strip(),
+            'paid_to': str(row[5].value or '').strip() or None,
+            'type': str(row[8].value or '').strip().lower(),
             'heading': heading,
-            'notes': str(row[10] or '').strip() or None,
+            'notes': str(row[10].value or '').strip() or None,
         })
     return out
 
