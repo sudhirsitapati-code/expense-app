@@ -1952,7 +1952,7 @@ def _parse_acc27_excel(file_obj):
         heading = str(row[9].value or '').strip()
         heading = HEADING_FIX.get(heading, heading)
         out.append({
-            'date': d.strftime('%d-%b-%y'),
+            'date': d.strftime('%d/%m/%Y'),
             'account': 'SBI-3152',  # sbi4852 in Excel = SBI-3152 in ledger
             'debit': debit, 'credit': credit, 'amount': amt,
             'description': str(row[4].value or '').strip(),

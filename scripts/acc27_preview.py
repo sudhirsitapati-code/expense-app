@@ -41,7 +41,7 @@ def extract_xl():
         if amt == 0: continue
         heading = HEADING_FIX.get(str(row[9] or '').strip(), str(row[9] or '').strip())
         out.append({
-            'date': d.strftime('%d-%b-%y'),
+            'date': d.strftime('%d/%m/%Y'),
             'account': 'SBI-4852',
             'debit': debit, 'credit': credit, 'amount': amt,
             'description': str(row[4] or '').strip(),
