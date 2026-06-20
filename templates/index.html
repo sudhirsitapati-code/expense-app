@@ -46,6 +46,10 @@
   .tracker-unpaid { color:#f59e0b; font-weight:600; }
   .cc-card { background:#fff; border-radius:10px; padding:1rem 1.2rem; box-shadow:0 2px 6px rgba(0,0,0,.06); }
   .main-tab-content { background:#fff; border-radius:0 12px 12px 12px; box-shadow:0 2px 8px rgba(0,0,0,.07); padding:1.2rem; min-height:300px; }
+  .year-bar { background:#0f2942; border-bottom:2px solid #1e3a5f; }
+  .year-btn { font-size:.78rem; font-weight:700; padding:.25rem .9rem; border-radius:20px; border:1.5px solid rgba(255,255,255,.35); color:rgba(255,255,255,.7); background:transparent; cursor:pointer; transition:all .15s; letter-spacing:.03em; }
+  .year-btn.active { background:#fff; color:#0f2942; border-color:#fff; }
+  .year-btn:hover:not(.active) { background:rgba(255,255,255,.15); color:#fff; }
 </style>
 </head>
 <body>
@@ -58,6 +62,13 @@
     <a href="/logout" class="btn btn-sm btn-outline-light">Logout</a>
   </div>
 </nav>
+
+<!-- ═══ YEAR BAR ═══ -->
+<div class="year-bar d-flex align-items-center gap-2 px-3 py-2">
+  <small class="text-white-50 fw-semibold me-1">Fiscal Year</small>
+  <button class="year-btn" id="yrBtn-FY26" onclick="setYear('FY26')">FY 2025–26</button>
+  <button class="year-btn active" id="yrBtn-FY27" onclick="setYear('FY27')">FY 2026–27</button>
+</div>
 
 <div class="container-fluid px-3 pt-2">
 
@@ -354,7 +365,7 @@
 
 <!-- ── Budget Tracker (MIS) ── -->
 <div id="rp-mis" class="d-none">
-  <div class="d-flex align-items-center gap-2 mb-3">
+  <div class="d-flex align-items-center gap-2 mb-3" id="misPeriodBtns">
     <button class="btn btn-sm btn-outline-primary" id="misBtnMonth" onclick="loadMIS('month',this)">This Month</button>
     <button class="btn btn-sm btn-outline-primary" id="misBtnQtr"   onclick="loadMIS('quarter',this)">This Quarter</button>
     <button class="btn btn-sm btn-outline-primary active" id="misBtnYtd" onclick="loadMIS('ytd',this)">YTD</button>
@@ -366,8 +377,8 @@
       <th style="width:33%">Category</th>
       <th class="text-end" id="misColFy26Label">FY26</th>
       <th class="text-end" id="misColFy26FY" style="display:none">FY26 Full Year</th>
-      <th class="text-end">FY27 Budget</th>
-      <th class="text-end">FY27 Actual</th>
+      <th class="text-end" id="misColBudgetHdr">FY27 Budget</th>
+      <th class="text-end" id="misColActualHdr">FY27 Actual</th>
       <th style="width:90px">Used %</th>
     </tr></thead>
     <tbody id="misBody"></tbody>
@@ -619,6 +630,22 @@ function switchApproval(name, el) {
   ['pending','month','unauthorized','tracker'].forEach(n =>
     document.getElementById('ap-' + n).classList.toggle('d-none', n !== name));
   return false;
+}
+
+// ── Fiscal Year selector ──────────────────────────────────────────────────
+let _activeYear = 'FY27';
+function setYear(fy) {
+  _activeYear = fy;
+  document.querySelectorAll('.year-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('yrBtn-' + fy)?.classList.add('active');
+  // Re-load whichever report tab is currently visible
+  const activeReport = [...document.querySelectorAll('#reportTabs .nav-link')]
+    .find(l => l.classList.contains('active'))?.getAttribute('onclick')?.match(/'(\w[^']+)'/)?.[1];
+  if (activeReport === 'ledger' || activeReport === 'notsure') loadLedger();
+  if (activeReport === 'mis')           loadMIS('ytd', document.getElementById('misBtnYtd'));
+  if (activeReport === 'transfer-recon') loadTransferRecon();
+  if (activeReport === 'year')          loadYear(fy === 'FY27' ? 'FY27' : 'FY26',
+    document.getElementById(fy === 'FY27' ? 'fyBtn27' : 'fyBtn26'));
 }
 
 function switchReport(name, el) {
@@ -980,7 +1007,8 @@ async function loadLedger() {
   if (ty) params.set('type', ty);
   if (he) params.set('heading', he);
   if (mo) params.set('month', mo);
-  const qs = params.toString() ? '?' + params.toString() : '';
+  params.set('fy', _activeYear);
+  const qs = '?' + params.toString();
 
   const r = await fetch('/api/master-ledger' + qs);
   const d = await r.json();
@@ -1273,26 +1301,37 @@ async function loadMIS(period, btn) {
     document.getElementById(id)?.classList.remove('active'));
   if (btn) btn.classList.add('active');
 
-  const r = await fetch(`/api/mis?period=${period}`);
-  const d = await r.json();
-  const lbl = period==='month'?'This Month':period==='quarter'?'This Quarter':'Year to Date';
-  document.getElementById('misPeriodLabel').textContent = `(${lbl}: ${(d.period_months||[]).join(', ')})`;
+  const isFY26 = _activeYear === 'FY26';
+  document.getElementById('misPeriodBtns').style.display = isFY26 ? 'none' : '';
 
-  const isYtd = period === 'ytd';
+  const r = await fetch(`/api/mis?period=${period}&fy=${_activeYear}`);
+  const d = await r.json();
+
+  if (isFY26) {
+    document.getElementById('misPeriodLabel').textContent = '(FY 2025–26 Full Year)';
+    document.getElementById('misColFy26Label').textContent = 'FY26 Period';
+    document.getElementById('misColFy26FY').style.display = '';
+    document.getElementById('misColBudgetHdr').textContent = 'FY27 Budget';
+    document.getElementById('misColActualHdr').textContent = 'FY26 Actual';
+  } else {
+    const lbl = period==='month'?'This Month':period==='quarter'?'This Quarter':'Year to Date';
+    document.getElementById('misPeriodLabel').textContent = `(${lbl}: ${(d.period_months||[]).join(', ')})`;
+    const isYtd = period === 'ytd';
+    document.getElementById('misColFy26FY').style.display = isYtd ? '' : 'none';
+    const MONTH_ABBR = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const nowMonth = new Date().getMonth() + 1;
+    document.getElementById('misColFy26Label').textContent =
+      period === 'month' ? `FY26 ${MONTH_ABBR[nowMonth]}` : period === 'quarter' ? 'FY26 QTD' : 'FY26 YTD';
+    document.getElementById('misColBudgetHdr').textContent = 'FY27 Budget';
+    document.getElementById('misColActualHdr').textContent = 'FY27 Actual';
+  }
+
+  const isYtd = isFY26 || period === 'ytd';
   const cols = isYtd ? 6 : 5;
-  document.getElementById('misColFy26FY').style.display = isYtd ? '' : 'none';
-  const MONTH_ABBR = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const nowMonth = new Date().getMonth() + 1;
-  const fy26Label = period === 'month' ? `FY26 ${MONTH_ABBR[nowMonth]}`
-                  : period === 'quarter' ? 'FY26 QTD'
-                  : 'FY26 YTD';
-  document.getElementById('misColFy26Label').textContent = fy26Label;
 
   const tbody = document.getElementById('misBody');
   let html = '';
   let opTotal = {fy26:0,fy26fy:0,budget:0,actual:0};
-  const OP_SUPERS = ['Household','Personal','Family','Giving','Lifestyle','Property'];
-
   (d.groups||[]).forEach(g => {
     html += `<tr class="mis-super"><td colspan="${cols}" class="ps-2">${g.super_category}</td></tr>`;
     (g.rows||[]).forEach(row => {
@@ -1317,18 +1356,12 @@ async function loadMIS(period, btn) {
       <td><span style="font-size:10px">${g.subtotal.pct||0}%</span></td>
     </tr>`;
 
-    if (OP_SUPERS.includes(g.super_category)) {
-      opTotal.fy26   += g.subtotal.fy26;
-      opTotal.fy26fy += g.subtotal.fy26_full_year||0;
-      opTotal.budget += g.subtotal.budget;
-      opTotal.actual += g.subtotal.actual;
-      if (g.super_category === 'Property') {
-        html += `<tr class="mis-op"><td class="ps-2">OPERATIONAL EXPENSES TOTAL</td>
-          <td class="text-end">${fmt(opTotal.fy26)}</td>
-          ${isYtd ? `<td class="text-end">${fmt(opTotal.fy26fy)}</td>` : ''}
-          <td class="text-end">${fmt(opTotal.budget)}</td>
-          <td class="text-end">${fmt(opTotal.actual)}</td><td></td></tr>`;
-      }
+    if (g.super_category === 'Operating') {
+      html += `<tr class="mis-op"><td class="ps-2">OPERATING EXPENSES TOTAL</td>
+        <td class="text-end">${fmt(g.subtotal.fy26)}</td>
+        ${isYtd ? `<td class="text-end">${fmt(g.subtotal.fy26_full_year||0)}</td>` : ''}
+        <td class="text-end">${fmt(g.subtotal.budget)}</td>
+        <td class="text-end">${fmt(g.subtotal.actual)}</td><td></td></tr>`;
     }
   });
 
@@ -1533,7 +1566,7 @@ async function loadTransferRecon() {
       `<tr><td colspan="9" class="text-muted text-center py-2">Loading…</td></tr>`;
   });
   try {
-    const r = await fetch('/api/transfer-recon');
+    const r = await fetch(`/api/transfer-recon?fy=${_activeYear}`);
     const d = await r.json();
 
     // Cache for sort

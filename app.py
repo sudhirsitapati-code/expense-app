@@ -185,6 +185,7 @@ def api_mis():
     FY27 Actual: what's been approved in the period (month/quarter/ytd).
     """
     period = request.args.get("period", "month")
+    fy     = request.args.get("fy", "FY27")   # FY26 | FY27
 
     with open(os.path.join(CONFIG_DIR, "budget_fy27.json")) as f:
         _bfile = json.load(f)
@@ -262,21 +263,24 @@ def api_mis():
     # FY month names covered by this period (for FY26 lookup)
     fy_mon_names = [CAL_TO_FY_MON[int(m.split("-")[1])] for m in period_months]
 
-    # ── Heading → super-category ──────────────────────────────────────────────
+    # ── Heading → super-category (mirrors ACC26 Summaryexpenses structure) ────
     HEADING_SUPER = {
-        "Groceries":"Household","Staff Salary":"Household","Electricity & Gas":"Household",
-        "Misc":"Household","Cash":"Household",
-        "Alcohol":"Personal","Wellness":"Personal",
-        "Clothes":"Family","Gifts":"Family","Gift":"Family","Medical":"Family",
-        "Amma":"Family","Ketki":"Family","Children Education":"Family",
-        "Charity":"Giving","Uspaar":"Giving",
-        "Holiday":"Lifestyle","Eating Out":"Lifestyle","Entertainment":"Lifestyle",
-        "Malhar":"Property","Maintenance Expense":"Property","Home office":"Property",
-        "One Time Charge":"Property","Kalpataru Maintenance":"Property",
-        "Financial Expense":"Financial","Financial Expense / OD Interest":"Financial",
-        "Insurance":"Financial","Home Loan":"Financial","Tax":"Financial",
+        # Operating
+        "Misc":"Operating","Clothes":"Operating","Gifts":"Operating","Cash":"Operating",
+        "Maintenance Expense":"Operating","Malhar":"Operating","Home office":"Operating",
+        "Electricity & Gas":"Operating","Alcohol":"Operating","Medical":"Operating",
+        "Holiday":"Operating","Groceries":"Operating","Eating Out":"Operating",
+        "Amma":"Operating","Wellness":"Operating","Ketki":"Operating",
+        "Staff Salary":"Operating","Financial Expense / OD Interest":"Operating",
+        "Financial Expense":"Operating","Entertainment":"Operating",
+        "One Time Charge":"Operating",
+        # Non-Operating
+        "Children Education":"Non-Operating","Kalpataru Maintenance":"Non-Operating",
+        "Charity":"Non-Operating","Uspaar":"Non-Operating","Insurance":"Non-Operating",
+        # Financial
+        "Home Loan":"Financial","Tax":"Financial",
     }
-    SUPER_ORDER = ["Household","Personal","Family","Giving","Lifestyle","Property","Financial"]
+    SUPER_ORDER = ["Operating","Non-Operating","Financial"]
 
     # App category → ACC26 heading (for FY27 actual from approval log)
     APP_TO_HEADING = {
@@ -325,6 +329,48 @@ def api_mis():
         if h in _CANONICAL: return h
         return _HEADING_NORM.get(h.lower().strip(), "Misc")  # roll unknown → Misc
 
+    # ── FY26 mode: actuals come from hardcoded FY26_MONTHLY; no live ledger needed ──
+    if fy == "FY26":
+        all_headings = _CANONICAL
+        by_super: dict = {s: [] for s in SUPER_ORDER}
+        for heading in sorted(all_headings):
+            super_cat = HEADING_SUPER.get(heading, "Operating")
+            fy26_total = round(_fy26_full_year(heading))
+            fy26_period_val = round(_fy26_period(heading))
+            budget = round(budget_annual.get(heading, 0))
+            row = {
+                "category": heading,
+                "fy26_actual": fy26_period_val,
+                "fy26_full_year": fy26_total,
+                "fy27_budget": budget,
+                "fy27_actual": fy26_total,   # "actual" col = FY26 full-year spend
+                "pct": round(fy26_total / budget * 100) if budget else 0,
+            }
+            by_super.setdefault(super_cat, []).append(row)
+
+        groups = []
+        grand = {"fy26": 0, "fy26_full_year": 0, "budget": 0, "actual": 0}
+        for super_cat in SUPER_ORDER:
+            rows = by_super.get(super_cat, [])
+            if not rows:
+                continue
+            sub = {
+                "fy26":          sum(r["fy26_actual"] for r in rows),
+                "fy26_full_year": sum(r["fy26_full_year"] for r in rows),
+                "budget":        sum(r["fy27_budget"] for r in rows),
+                "actual":        sum(r["fy27_actual"] for r in rows),
+            }
+            sub["pct"] = round(sub["actual"] / sub["budget"] * 100) if sub["budget"] else 0
+            grand["fy26"]          += sub["fy26"]
+            grand["fy26_full_year"] += sub["fy26_full_year"]
+            grand["budget"]        += sub["budget"]
+            grand["actual"]        += sub["actual"]
+            groups.append({"super_category": super_cat, "rows": rows, "subtotal": sub})
+        grand["pct"] = round(grand["actual"] / grand["budget"] * 100) if grand["budget"] else 0
+        return jsonify({"period": "ytd", "fy": "FY26",
+                        "period_months": list(FY26_MONTHLY.get("Groceries", {}).keys()),
+                        "groups": groups, "grand": grand})
+
     # ── FY27 actual from master ledger ────────────────────────────────────────
     from src.master_ledger import _parse_date as _ml_parse_date
     fy27_actual: dict = {}
@@ -353,7 +399,7 @@ def api_mis():
     by_super: dict = {s: [] for s in SUPER_ORDER}
 
     for heading in sorted(all_headings):
-        super_cat = HEADING_SUPER.get(heading, "Household")
+        super_cat = HEADING_SUPER.get(heading, "Operating")
         fy26 = round(_fy26_period(heading))
         budget = _budget(heading)
         actual = round(fy27_actual.get(heading, 0))
@@ -726,8 +772,21 @@ def api_update_transaction(txn_id):
 @app.route("/api/master-ledger", methods=["GET"])
 @login_required
 def api_master_ledger():
-    """Return master ledger entries. Filters: uncertain, account, bank, type, heading, month, q."""
+    """Return master ledger entries. Filters: uncertain, account, bank, type, heading, month, q, fy."""
     txns = load_ledger()
+
+    # Fiscal year filter: FY26=Apr2025-Mar2026, FY27=Apr2026-Mar2027 (default)
+    fy = request.args.get("fy", "FY27")
+    _FY_RANGES = {"FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
+    if fy in _FY_RANGES:
+        from src.master_ledger import _parse_date as _ml_pd2
+        from datetime import date as _date
+        _fy_lo = _date.fromisoformat(_FY_RANGES[fy][0])
+        _fy_hi = _date.fromisoformat(_FY_RANGES[fy][1])
+        def _in_fy(t):
+            d = _ml_pd2(t.get("date",""))
+            return d and _fy_lo <= d.date() <= _fy_hi
+        txns = [t for t in txns if _in_fy(t)]
 
     # Optional filters
     only_uncertain = request.args.get("uncertain") == "1"
@@ -1722,8 +1781,20 @@ def api_transfer_recon():
          a debit or credit on a DIFFERENT account within 7 days.
     """
     from src.master_ledger import _parse_date as _ml_pd
+    from datetime import date as _date2
 
     ledger = load_ledger()
+
+    # Fiscal year filter
+    _fy_tr = request.args.get("fy", "FY27")
+    _FY_TR = {"FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
+    if _fy_tr in _FY_TR:
+        _lo = _date2.fromisoformat(_FY_TR[_fy_tr][0])
+        _hi = _date2.fromisoformat(_FY_TR[_fy_tr][1])
+        def _in_fy_tr(t):
+            d = _ml_pd(t.get("date",""))
+            return d and _lo <= d.date() <= _hi
+        ledger = [t for t in ledger if _in_fy_tr(t)]
 
     def _row(t):
         return {
