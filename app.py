@@ -719,7 +719,9 @@ def api_master_ledger():
         txns = [t for t in txns if t.get("bank") == bank_filter]
     if type_filter:
         txns = [t for t in txns if (t.get("type") or "").lower() == type_filter.lower()]
-    if heading_filter:
+    if heading_filter == "__none__":
+        txns = [t for t in txns if not (t.get("heading") or "").strip()]
+    elif heading_filter:
         txns = [t for t in txns if (t.get("heading") or "") == heading_filter]
     if month_filter:
         txns = [t for t in txns if (t.get("date",""))[:7] == month_filter
