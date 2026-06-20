@@ -2514,6 +2514,7 @@ _acc26_job = {}   # in-memory job state: {status, applied, total_parsed, ledger_
 
 def _run_acc26_import(file_bytes):
     """Background thread: parse + apply ACC26 entries to master ledger."""
+    from src.master_ledger import _assign_seq
     global _acc26_job
     try:
         _acc26_job = {"status": "running", "step": "parsing"}
