@@ -80,9 +80,10 @@ def login_required(f):
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 _PATH_TO_KEY = {
-    APPROVAL_LOG:    "approval_log",
-    RECONCILE_LOG:   "reconcile_log",
+    APPROVAL_LOG:      "approval_log",
+    RECONCILE_LOG:     "reconcile_log",
     TRANSACTIONS_PATH: "icici_transactions",
+    LEDGER_PATH:       "master_ledger",
 }
 
 def _load_json(path):
