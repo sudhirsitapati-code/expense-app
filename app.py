@@ -2103,7 +2103,7 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
                 t["type"] = "transfer"
                 atm_fixed += 1
         _assign_seq(ledger)
-        save_ledger(ledger)
+        _save_json(LEDGER_PATH, ledger)
         return {"applied": applied, "created": created, "atm_fixed": atm_fixed,
                 "total": len(xl_list)}
 
