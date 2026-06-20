@@ -1027,6 +1027,7 @@ function refreshLedgerHeadings() {
   const cur  = sel.value;
   const list = type ? (HEADINGS_BY_TYPE[type] || HEADINGS) : HEADINGS;
   sel.innerHTML = '<option value="">All Headings</option>' +
+    '<option value="__none__"' + (cur==='__none__'?' selected':'') + '>— None / blank —</option>' +
     list.map(h => `<option value="${h}" ${cur===h?'selected':''}>${h}</option>`).join('');
 }
 
