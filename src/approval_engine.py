@@ -37,6 +37,9 @@ class ExpenseRequest:
     is_post_facto: bool = False
     request_id: str = ""
     timestamp: str = ""
+    heading: str = ""
+    expense_type: str = "expense"  # expense | official | transfer | income
+    ai_comment: str = ""
 
     def __post_init__(self):
         if not self.request_id:
@@ -216,6 +219,36 @@ Reply ONLY with JSON."""
             f"Ref: {req.request_id}"
         )
 
+    def generate_ai_comment(self, req: ExpenseRequest) -> str:
+        """Generate a short AI review of the expense for Sudhir's approval screen."""
+        try:
+            missing = []
+            if not req.heading: missing.append("heading")
+            if not req.expense_type or req.expense_type == "expense" and not req.heading:
+                pass  # expense is fine without noting
+            if not req.vendor or len(req.vendor) < 3: missing.append("vendor name")
+            if not req.description or len(req.description) < 10: missing.append("description")
+
+            prompt = (
+                f"You are reviewing a household expense submission for approval.\n"
+                f"Vendor: {req.vendor}\n"
+                f"Amount: ₹{req.amount:,.0f}\n"
+                f"Type: {req.expense_type}, Heading: {req.heading or '(not set)'}\n"
+                f"Description: {req.description}\n"
+                f"Payment: {req.payment_method}, Submitted by: {req.submitter}\n"
+                f"Missing fields: {', '.join(missing) if missing else 'none'}\n\n"
+                f"In 2-3 short sentences: (1) Is this amount reasonable for this vendor/purpose? "
+                f"(2) Flag any missing or suspicious data. Be direct and concise."
+            )
+            resp = self.client.chat.completions.create(
+                model=self.deployment,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=120, temperature=0.3,
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception:
+            return ""
+
     def _save_to_log(self, req: ExpenseRequest, decision: ApprovalDecision):
         log = _db.load("approval_log")
         entry = {
@@ -225,6 +258,8 @@ Reply ONLY with JSON."""
             "vendor": req.vendor,
             "amount": req.amount,
             "category": req.category,
+            "heading": req.heading,
+            "expense_type": req.expense_type,
             "description": req.description,
             "payment_method": req.payment_method,
             "is_post_facto": req.is_post_facto,
@@ -236,11 +271,13 @@ Reply ONLY with JSON."""
             "confirmed_paid": decision.confirmed_paid,
             "confirmed_at": datetime.now().isoformat() if decision.confirmed_paid else None,
             "confirmed_by": "post_facto" if decision.confirmed_paid else None,
+            "ai_comment": req.ai_comment,
         }
         log.append(entry)
         _db.save("approval_log", log)
 
-    def update_log_with_sudhir_response(self, request_id: str, response: str):
+    def update_log_with_sudhir_response(self, request_id: str, response: str,
+                                          query_text: str = ""):
         log = _db.load("approval_log")
         for entry in log:
             if entry["request_id"] == request_id:
@@ -251,6 +288,11 @@ Reply ONLY with JSON."""
                 elif resp_upper == "N":
                     entry["action"] = "REJECTED"
                     entry["sudhir_response"] = "N"
+                elif resp_upper == "Q":
+                    # Reject with query — stays pending, query stored for submitter
+                    entry["action"] = "QUERY"
+                    entry["sudhir_response"] = "Q"
+                    entry["query_text"] = query_text
                 elif resp_upper.startswith("L"):
                     try:
                         lower_amount = float(resp_upper[1:].strip())

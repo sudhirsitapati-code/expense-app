@@ -850,19 +850,43 @@ async function loadApprovals(selectedMonth) {
     pl.innerHTML = '<div class="alert alert-success py-2">No pending approvals ✓</div>';
   } else {
     pl.innerHTML = d.pending.map(e => `
-      <div class="card mb-2 p-3">
-        <div class="d-flex justify-content-between align-items-start">
-          <div>
-            <strong>${e.vendor}</strong>
-            <span class="ms-2 fw-bold text-danger">₹${Number(e.amount).toLocaleString('en-IN')}</span>
-            <span class="badge bg-secondary ms-2">${e.category}</span>
-            ${e.is_post_facto ? '<span class="badge bg-info ms-1">post-facto</span>' : ''}
-            <div class="text-muted small mt-1">${e.submitter} · ${e.description}</div>
-            <div class="text-muted small">Ref: ${e.request_id}</div>
+      <div class="card mb-3 p-3 shadow-sm">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div class="flex-grow-1">
+            <div class="d-flex align-items-center flex-wrap gap-1 mb-1">
+              <strong>${e.vendor}</strong>
+              <span class="fw-bold text-danger ms-1">₹${Number(e.amount).toLocaleString('en-IN')}</span>
+              ${e.expense_type ? `<span class="badge bg-secondary ms-1">${e.expense_type}</span>` : ''}
+              ${e.heading
+                ? `<span class="badge bg-primary ms-1">${e.heading}</span>`
+                : '<span class="badge bg-warning text-dark ms-1">⚠ heading missing</span>'}
+              ${e.is_post_facto ? '<span class="badge bg-info ms-1">post-facto</span>' : ''}
+            </div>
+            <div class="small text-muted mb-1">
+              <i class="bi bi-person me-1"></i>${e.submitter}
+              &nbsp;·&nbsp;<i class="bi bi-credit-card me-1"></i>${e.payment_method || 'upi'}
+              &nbsp;·&nbsp;${e.description || '—'}
+            </div>
+            ${e.ai_comment ? `
+            <div class="small mt-2 p-2 rounded" style="background:#f0f7ff;border-left:3px solid #0d6efd">
+              <i class="bi bi-robot me-1 text-primary"></i>${e.ai_comment}
+            </div>` : ''}
+            <div style="font-size:.7rem;color:#aaa;margin-top:4px">Ref: ${e.request_id}</div>
+            <div id="qbox-${e.request_id}" class="mt-2" style="display:none">
+              <div class="input-group input-group-sm">
+                <input type="text" class="form-control" id="qt-${e.request_id}"
+                  placeholder="Type your query for ${e.submitter}…">
+                <button class="btn btn-warning" onclick="sendQuery('${e.request_id}')">Send</button>
+                <button class="btn btn-outline-secondary"
+                  onclick="document.getElementById('qbox-${e.request_id}').style.display='none'">✕</button>
+              </div>
+            </div>
           </div>
-          <div class="d-flex gap-1 flex-column align-items-end">
+          <div class="d-flex gap-1 flex-column align-items-end flex-shrink-0">
             <button class="btn-approve" onclick="decide('${e.request_id}','Y')">✓ Approve</button>
             <button class="btn-reject"  onclick="decide('${e.request_id}','N')">✗ Reject</button>
+            <button class="btn btn-sm btn-outline-warning mt-1"
+              onclick="document.getElementById('qbox-${e.request_id}').style.display='block'">? Query</button>
           </div>
         </div>
       </div>`).join('');
@@ -908,6 +932,14 @@ async function loadApprovals(selectedMonth) {
 async function decide(reqId, resp) {
   await fetch('/api/decide', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({request_id: reqId, response: resp})});
+  loadApprovals();
+}
+
+async function sendQuery(reqId) {
+  const txt = document.getElementById('qt-' + reqId).value.trim();
+  if (!txt) return;
+  await fetch('/api/decide', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({request_id: reqId, response: 'Q', query_text: txt})});
   loadApprovals();
 }
 

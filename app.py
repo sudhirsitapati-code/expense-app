@@ -450,10 +450,12 @@ def api_submit_expense():
                 submitter=data["submitter"],
                 vendor=data["vendor"],
                 amount=float(data["amount"]),
-                category=data["category"],
+                category=data.get("category", ""),
                 description=data["description"],
                 payment_method=data.get("payment_method", "upi"),
                 is_post_facto=data.get("is_post_facto", False),
+                heading=data.get("heading", ""),
+                expense_type=data.get("expense_type", "expense"),
             )
         except (KeyError, ValueError) as e:
             return jsonify({"error": str(e)}), 400
@@ -467,6 +469,19 @@ def api_submit_expense():
         sync_approved_to_history()
         send_auto_approval_notice(req.submitter, req.vendor, req.amount, decision.request_id)
     elif decision.action == "ESCALATE" and decision.escalation_message:
+        # Generate AI commentary for Sudhir's review screen (non-blocking)
+        try:
+            req.ai_comment = engine.generate_ai_comment(req)
+        except Exception:
+            pass
+        # Update log with AI comment
+        if req.ai_comment:
+            log = _load_json(APPROVAL_LOG)
+            for e in log:
+                if e.get("request_id") == req.request_id:
+                    e["ai_comment"] = req.ai_comment
+                    break
+            _save_json(APPROVAL_LOG, log)
         send_approval_request(decision.escalation_message)
 
     return jsonify({
@@ -484,23 +499,32 @@ def api_submit_expense():
 
 @app.route("/api/decide", methods=["POST"])
 def api_decide():
-    """Approve or reject from dashboard buttons."""
+    """Approve, reject, or query from dashboard buttons."""
     data = request.get_json()
     request_id = data.get("request_id")
     response = data.get("response", "")
+    query_text = data.get("query_text", "")
 
     log = _load_json(APPROVAL_LOG)
     entry = next((e for e in log if e.get("request_id") == request_id), None)
     if not entry:
         return jsonify({"error": "not found"}), 404
 
-    engine.update_log_with_sudhir_response(request_id, response)
+    engine.update_log_with_sudhir_response(request_id, response, query_text=query_text)
 
-    if response.upper() == "Y":
+    resp_upper = response.strip().upper()
+    if resp_upper == "Y":
         send_approval_result(entry["submitter"], entry["vendor"], entry["amount"], approved=True, request_id=request_id)
         sync_approved_to_history()
-    elif response.upper() == "N":
+    elif resp_upper == "N":
         send_approval_result(entry["submitter"], entry["vendor"], entry["amount"], approved=False, request_id=request_id)
+    elif resp_upper == "Q" and query_text:
+        # Notify submitter of query via WhatsApp
+        msg = (f"❓ Query on your expense request\n"
+               f"Vendor: {entry.get('vendor')} — ₹{entry.get('amount'):,.0f}\n"
+               f"Query: {query_text}\n"
+               f"Ref: {request_id}")
+        send_approval_request(msg)
 
     return jsonify({"status": "ok"})
 
@@ -532,9 +556,12 @@ def _approval_to_ledger_entry(e: dict) -> dict:
         "dining":"Eating Out","entertainment":"Entertainment","transport":"Holiday",
         "maintenance":"Maintenance Expense","home_repair":"One Time Charge",
     }
+    # Prefer explicit heading from new form; fall back to category mapping
+    explicit_heading = e.get("heading", "")
     cat = e.get("category", "")
-    # If the form already sent a canonical heading name, use it directly
-    heading = cat if cat in _CANONICAL_HEADINGS else APP_TO_HEADING.get(cat, "Misc")
+    heading = (explicit_heading if explicit_heading in _CANONICAL_HEADINGS
+               else cat if cat in _CANONICAL_HEADINGS
+               else APP_TO_HEADING.get(cat, "Misc"))
 
     txn = {
         "txn_id":          txn_id,
