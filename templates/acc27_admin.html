@@ -199,7 +199,8 @@ async function applyAll() {
 
   const r = await fetch('/api/admin/acc27-match-preview', { method:'POST', body: fd });
   const d = await r.json();
-  msg.textContent = `✓ Applied ${d.applied} exact matches · Created ${d.created} new entries · Fixed ${d.atm_fixed} ATM→transfer`;
+  msg.textContent = `✓ Applied ${d.applied} exact matches · Created ${d.created} new entries · Fixed ${d.atm_fixed} ATM→transfer`
+    + ` | Ledger: ${d.ledger_total} total, ${d.sbi_total} SBI (${d.sbi_uncertain} uncertain), ${d.total_uncertain} Not Sure total`;
   msg.className = 'mt-3 fw-semibold text-success';
 }
 </script>

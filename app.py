@@ -2104,8 +2104,13 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
                 atm_fixed += 1
         _assign_seq(ledger)
         _save_json(LEDGER_PATH, ledger)
+        sbi_total    = sum(1 for t in ledger if "SBI" in (t.get("account") or "").upper() or "3152" in (t.get("account") or ""))
+        sbi_uncertain = sum(1 for t in ledger if t.get("uncertain") and ("SBI" in (t.get("account") or "").upper() or "3152" in (t.get("account") or "")))
+        total_uncertain = sum(1 for t in ledger if t.get("uncertain"))
         return {"applied": applied, "created": created, "atm_fixed": atm_fixed,
-                "total": len(xl_list)}
+                "total": len(xl_list), "ledger_total": len(ledger),
+                "sbi_total": sbi_total, "sbi_uncertain": sbi_uncertain,
+                "total_uncertain": total_uncertain}
 
     matched   = [r for r in results if r["match"] != "none"]
     unmatched = [r for r in results if r["match"] == "none"]
