@@ -66,6 +66,7 @@
 <!-- ═══ YEAR BAR ═══ -->
 <div class="year-bar d-flex align-items-center gap-2 px-3 py-2">
   <small class="text-white-50 fw-semibold me-1">Fiscal Year</small>
+  <button class="year-btn" id="yrBtn-FY24" onclick="setYear('FY24')">FY 2023–24</button>
   <button class="year-btn" id="yrBtn-FY25" onclick="setYear('FY25')">FY 2024–25</button>
   <button class="year-btn" id="yrBtn-FY26" onclick="setYear('FY26')">FY 2025–26</button>
   <button class="year-btn active" id="yrBtn-FY27" onclick="setYear('FY27')">FY 2026–27</button>
@@ -375,7 +376,9 @@
   <div class="table-wrap">
   <table class="table table-sm mb-0">
     <thead><tr>
-      <th style="width:33%">Category</th>
+      <th style="width:28%">Category</th>
+      <th class="text-end" id="misColFy24" style="display:none">FY24</th>
+      <th class="text-end" id="misColFy25" style="display:none">FY25</th>
       <th class="text-end" id="misColFy26Label">FY26</th>
       <th class="text-end" id="misColFy26FY" style="display:none">FY26 Full Year</th>
       <th class="text-end" id="misColBudgetHdr">FY27 Budget</th>
@@ -645,8 +648,11 @@ function setYear(fy) {
   if (activeReport === 'ledger' || activeReport === 'notsure') loadLedger();
   if (activeReport === 'mis')           loadMIS('ytd', document.getElementById('misBtnYtd'));
   if (activeReport === 'transfer-recon') loadTransferRecon();
-  if (activeReport === 'year')          loadYear(fy === 'FY27' ? 'FY27' : 'FY26',
-    document.getElementById(fy === 'FY27' ? 'fyBtn27' : 'fyBtn26'));
+  if (activeReport === 'year') {
+    const yearMap = {FY27:'FY27', FY26:'FY26', FY25:'FY25', FY24:'FY25'};
+    const btnMap  = {FY27:'fyBtn27', FY26:'fyBtn26', FY25:'fyBtn25', FY24:'fyBtn25'};
+    loadYear(yearMap[fy]||'FY27', document.getElementById(btnMap[fy]||'fyBtn27'));
+  }
 }
 
 function switchReport(name, el) {
@@ -1308,33 +1314,50 @@ async function loadMIS(period, btn) {
   const r = await fetch(`/api/mis?period=${period}&fy=${_activeYear}`);
   const d = await r.json();
 
+  // FY27 YTD mode: show 3-year comparison columns
+  const isFY27Ytd = !isHistorical && period === 'ytd';
+
   if (isHistorical) {
-    const fyLabel = _activeYear === 'FY25' ? 'FY 2024–25' : 'FY 2025–26';
-    document.getElementById('misPeriodLabel').textContent = `(${fyLabel} Full Year)`;
-    document.getElementById('misColFy26Label').textContent = _activeYear === 'FY25' ? 'FY25 Period' : 'FY26 Period';
+    const fyLabels = {FY24:'FY 2023–24', FY25:'FY 2024–25', FY26:'FY 2025–26'};
+    document.getElementById('misPeriodLabel').textContent = `(${fyLabels[_activeYear] || _activeYear} Full Year)`;
+    const colLabels = {FY24:'FY24 Period', FY25:'FY25 Period', FY26:'FY26 Period'};
+    document.getElementById('misColFy26Label').textContent = colLabels[_activeYear] || 'Period';
     document.getElementById('misColFy26FY').style.display = '';
+    document.getElementById('misColFy24').style.display = 'none';
+    document.getElementById('misColFy25').style.display = 'none';
+    const actualLabels = {FY24:'FY24 Actual', FY25:'FY25 Actual', FY26:'FY26 Actual'};
     document.getElementById('misColBudgetHdr').textContent = 'FY27 Budget';
-    document.getElementById('misColActualHdr').textContent = _activeYear === 'FY25' ? 'FY25 Actual' : 'FY26 Actual';
+    document.getElementById('misColActualHdr').textContent = actualLabels[_activeYear] || 'Actual';
   } else {
     const lbl = period==='month'?'This Month':period==='quarter'?'This Quarter':'Year to Date';
     document.getElementById('misPeriodLabel').textContent = `(${lbl}: ${(d.period_months||[]).join(', ')})`;
     const isYtd = period === 'ytd';
     document.getElementById('misColFy26FY').style.display = isYtd ? '' : 'none';
-    const MONTH_ABBR = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const nowMonth = new Date().getMonth() + 1;
-    document.getElementById('misColFy26Label').textContent =
-      period === 'month' ? `FY26 ${MONTH_ABBR[nowMonth]}` : period === 'quarter' ? 'FY26 QTD' : 'FY26 YTD';
+    document.getElementById('misColFy24').style.display = isFY27Ytd ? '' : 'none';
+    document.getElementById('misColFy25').style.display = isFY27Ytd ? '' : 'none';
+    if (isFY27Ytd) {
+      document.getElementById('misColFy24').textContent = 'FY24 Full';
+      document.getElementById('misColFy25').textContent = 'FY25 Full';
+      document.getElementById('misColFy26Label').textContent = 'FY26 YTD';
+      document.getElementById('misColFy26FY').textContent = 'FY26 Full';
+    } else {
+      const MONTH_ABBR = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const nowMonth = new Date().getMonth() + 1;
+      document.getElementById('misColFy26Label').textContent =
+        period === 'month' ? `FY26 ${MONTH_ABBR[nowMonth]}` : period === 'quarter' ? 'FY26 QTD' : 'FY26 YTD';
+      document.getElementById('misColFy26FY').textContent = 'FY26 Full Year';
+    }
     document.getElementById('misColBudgetHdr').textContent = 'FY27 Budget';
     document.getElementById('misColActualHdr').textContent = 'FY27 Actual';
   }
 
   const isYtd = isHistorical || period === 'ytd';
-  const cols = isYtd ? 6 : 5;
+  const cols = isFY27Ytd ? 8 : isYtd ? 6 : 5;
 
   const tbody = document.getElementById('misBody');
   let html = '';
   const NON_FIN_SUPERS = ['Household','Personal','Family','Giving','Lifestyle','Property'];
-  let nonFinTotal = {fy26:0, fy26fy:0, budget:0, actual:0};
+  let nonFinTotal = {fy24:0, fy25:0, fy26:0, fy26fy:0, budget:0, actual:0};
   (d.groups||[]).forEach(g => {
     html += `<tr class="mis-super"><td colspan="${cols}" class="ps-2">${g.super_category}</td></tr>`;
     (g.rows||[]).forEach(row => {
@@ -1342,6 +1365,8 @@ async function loadMIS(period, btn) {
       const col = pct>100?'#ef4444':pct>80?'#f59e0b':'#16a34a';
       html += `<tr>
         <td class="ps-4">${row.category}</td>
+        ${isFY27Ytd ? `<td class="text-end text-muted">${fmt(row.fy24_actual)}</td>` : ''}
+        ${isFY27Ytd ? `<td class="text-end text-muted">${fmt(row.fy25_actual)}</td>` : ''}
         <td class="text-end">${fmt(row.fy26_actual)}</td>
         ${isYtd ? `<td class="text-end text-muted">${fmt(row.fy26_full_year)}</td>` : ''}
         <td class="text-end">${fmt(row.fy27_budget)}</td>
@@ -1352,6 +1377,8 @@ async function loadMIS(period, btn) {
     });
     html += `<tr class="mis-sub">
       <td class="ps-2">Sub-total ${g.super_category}</td>
+      ${isFY27Ytd ? `<td class="text-end">${fmt(g.subtotal.fy24_actual)}</td>` : ''}
+      ${isFY27Ytd ? `<td class="text-end">${fmt(g.subtotal.fy25_actual)}</td>` : ''}
       <td class="text-end">${fmt(g.subtotal.fy26)}</td>
       ${isYtd ? `<td class="text-end text-muted">${fmt(g.subtotal.fy26_full_year)}</td>` : ''}
       <td class="text-end">${fmt(g.subtotal.budget)}</td>
@@ -1360,6 +1387,8 @@ async function loadMIS(period, btn) {
     </tr>`;
 
     if (NON_FIN_SUPERS.includes(g.super_category)) {
+      nonFinTotal.fy24   += g.subtotal.fy24_actual || 0;
+      nonFinTotal.fy25   += g.subtotal.fy25_actual || 0;
       nonFinTotal.fy26   += g.subtotal.fy26   || 0;
       nonFinTotal.fy26fy += g.subtotal.fy26_full_year || 0;
       nonFinTotal.budget += g.subtotal.budget || 0;
@@ -1367,6 +1396,8 @@ async function loadMIS(period, btn) {
     }
     if (g.super_category === 'Property') {
       html += `<tr class="mis-op"><td class="ps-2">NON FINANCIAL EXPENSE</td>
+        ${isFY27Ytd ? `<td class="text-end">${fmt(nonFinTotal.fy24)}</td>` : ''}
+        ${isFY27Ytd ? `<td class="text-end">${fmt(nonFinTotal.fy25)}</td>` : ''}
         <td class="text-end">${fmt(nonFinTotal.fy26)}</td>
         ${isYtd ? `<td class="text-end">${fmt(nonFinTotal.fy26fy)}</td>` : ''}
         <td class="text-end">${fmt(nonFinTotal.budget)}</td>
@@ -1376,6 +1407,8 @@ async function loadMIS(period, btn) {
 
   html += `<tr class="mis-grand">
     <td class="ps-2">GRAND TOTAL</td>
+    ${isFY27Ytd ? `<td class="text-end">${fmt(d.grand?.fy24_actual)}</td>` : ''}
+    ${isFY27Ytd ? `<td class="text-end">${fmt(d.grand?.fy25_actual)}</td>` : ''}
     <td class="text-end">${fmt(d.grand?.fy26)}</td>
     ${isYtd ? `<td class="text-end">${fmt(d.grand?.fy26_full_year)}</td>` : ''}
     <td class="text-end">${fmt(d.grand?.budget)}</td>

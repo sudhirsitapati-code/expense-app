@@ -253,6 +253,36 @@ def api_mis():
         "Tax":            {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
     }
 
+    FY24_MONTHLY = {
+        "Misc":           {"Apr":10612,"May":7412,"Jun":5604,"Jul":3779,"Aug":3872,"Sep":1709,"Oct":690,"Nov":0,"Dec":0,"Jan":23492,"Feb":5290,"Mar":7080},
+        "Clothes":        {"Apr":8912,"May":41188,"Jun":1999,"Jul":13493,"Aug":0,"Sep":0,"Oct":6689,"Nov":4998,"Dec":1778,"Jan":0,"Feb":0,"Mar":41753},
+        "Gifts":          {"Apr":798,"May":6017,"Jun":1499,"Jul":95214,"Aug":0,"Sep":28468,"Oct":0,"Nov":81000,"Dec":2847,"Jan":3448,"Feb":0,"Mar":0},
+        "Cash":           {"Apr":20000,"May":0,"Jun":118169,"Jul":6000,"Aug":13500,"Sep":25046,"Oct":5000,"Nov":0,"Dec":10000,"Jan":0,"Feb":10000,"Mar":0},
+        "Maintenance Expense": {"Apr":121359,"May":178721,"Jun":222206,"Jul":193185,"Aug":241423,"Sep":186081,"Oct":251831,"Nov":351996,"Dec":177411,"Jan":219494,"Feb":99367,"Mar":182662},
+        "Malhar":         {"Apr":46717,"May":25616,"Jun":41806,"Jul":137102,"Aug":56668,"Sep":35621,"Oct":49810,"Nov":18800,"Dec":42843,"Jan":85470,"Feb":27870,"Mar":49750},
+        "Home office":    {"Apr":13782,"May":53133,"Jun":12792,"Jul":30412,"Aug":11812,"Sep":31167,"Oct":6206,"Nov":33010,"Dec":13500,"Jan":7000,"Feb":6000,"Mar":5000},
+        "Electricity & Gas": {"Apr":15383,"May":28199,"Jun":20582,"Jul":14461,"Aug":12563,"Sep":18634,"Oct":14635,"Nov":23979,"Dec":14912,"Jan":14781,"Feb":12491,"Mar":16975},
+        "Alcohol":        {"Apr":2800,"May":0,"Jun":19700,"Jul":19598,"Aug":18314,"Sep":0,"Oct":0,"Nov":0,"Dec":11610,"Jan":0,"Feb":0,"Mar":0},
+        "Medical":        {"Apr":0,"May":27400,"Jun":4000,"Jul":34500,"Aug":15297,"Sep":90264,"Oct":11746,"Nov":2313,"Dec":20138,"Jan":0,"Feb":1500,"Mar":74140},
+        "Holiday":        {"Apr":81805,"May":299243,"Jun":232239,"Jul":46421,"Aug":9250,"Sep":6800,"Oct":0,"Nov":49154,"Dec":164904,"Jan":27688,"Feb":296465,"Mar":73302},
+        "Groceries":      {"Apr":114558,"May":86085,"Jun":96964,"Jul":157379,"Aug":67436,"Sep":113728,"Oct":89000,"Nov":93120,"Dec":98000,"Jan":111205,"Feb":70000,"Mar":85000},
+        "Eating Out":     {"Apr":22416,"May":20065,"Jun":166419,"Jul":30346,"Aug":24036,"Sep":34605,"Oct":6549,"Nov":88444,"Dec":1980,"Jan":6779,"Feb":60212,"Mar":16879},
+        "Amma":           {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":21000,"Nov":37486,"Dec":3198,"Jan":9826,"Feb":10999,"Mar":12901},
+        "Ketki":          {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":145000,"Jan":1500,"Feb":0,"Mar":0},
+        "Wellness":       {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+        "One Time Charge":{"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+        "Entertainment":  {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+        "Staff Salary":   {"Apr":222000,"May":94500,"Jun":125000,"Jul":142000,"Aug":128000,"Sep":152000,"Oct":153100,"Nov":149000,"Dec":133000,"Jan":127000,"Feb":151000,"Mar":117100},
+        "Financial Expense / OD Interest": {"Apr":9000,"May":0,"Jun":0,"Jul":0,"Aug":50000,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":1525,"Feb":0,"Mar":0},
+        "Children Education": {"Apr":0,"May":756000,"Jun":21990,"Jul":196068,"Aug":73518,"Sep":12780,"Oct":2800,"Nov":7200,"Dec":770655,"Jan":209300,"Feb":5349,"Mar":16099},
+        "Kalpataru Maintenance": {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":26256,"Oct":28193,"Nov":28225,"Dec":28349,"Jan":28225,"Feb":28225,"Mar":151067},
+        "Charity":        {"Apr":0,"May":50000,"Jun":40000,"Jul":21040,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":50000,"Jan":100000,"Feb":100000,"Mar":0},
+        "Uspaar":         {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+        "Insurance":      {"Apr":0,"May":0,"Jun":0,"Jul":342056,"Aug":0,"Sep":0,"Oct":148374,"Nov":22189,"Dec":168504,"Jan":0,"Feb":0,"Mar":138429},
+        "Home Loan":      {"Apr":598843,"May":430433,"Jun":474414,"Jul":426159,"Aug":136367,"Sep":323197,"Oct":0,"Nov":593591,"Dec":411966,"Jan":590471,"Feb":600440,"Mar":575024},
+        "Tax":            {"Apr":1620,"May":2112347,"Jun":4598,"Jul":7103283,"Aug":0,"Sep":0,"Oct":61394,"Nov":0,"Dec":100,"Jan":800,"Feb":0,"Mar":0},
+    }
+
     # Calendar month number → FY month abbreviation
     CAL_TO_FY_MON = {4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec",1:"Jan",2:"Feb",3:"Mar"}
 
@@ -356,8 +386,50 @@ def api_mis():
         if h in _CANONICAL: return h
         return _HEADING_NORM.get(h.lower().strip(), "Misc")  # roll unknown → Misc
 
+    # ── FY24 mode: actuals come from hardcoded FY24_MONTHLY; no live ledger needed ──
+    if fy == "FY24":
+        all_headings = set(budget_annual.keys()) | set(FY24_MONTHLY.keys())
+        by_super: dict = {s: [] for s in SUPER_ORDER}
+        for heading in sorted(all_headings):
+            super_cat = HEADING_SUPER.get(heading, "Household")
+            monthly = FY24_MONTHLY.get(heading, {})
+            fy24_total = round(max(0, sum(monthly.values())))
+            budget = round(budget_annual.get(heading, 0))
+            row = {
+                "category": heading,
+                "fy26_actual": fy24_total,
+                "fy26_full_year": fy24_total,
+                "fy27_budget": budget,
+                "fy27_actual": fy24_total,
+                "pct": round(fy24_total / budget * 100) if budget else 0,
+            }
+            by_super.setdefault(super_cat, []).append(row)
+
+        groups = []
+        grand = {"fy26": 0, "fy26_full_year": 0, "budget": 0, "actual": 0}
+        for super_cat in SUPER_ORDER:
+            rows = by_super.get(super_cat, [])
+            if not rows:
+                continue
+            sub = {
+                "fy26":          sum(r["fy26_actual"] for r in rows),
+                "fy26_full_year": sum(r["fy26_full_year"] for r in rows),
+                "budget":        sum(r["fy27_budget"] for r in rows),
+                "actual":        sum(r["fy27_actual"] for r in rows),
+            }
+            sub["pct"] = round(sub["actual"] / sub["budget"] * 100) if sub["budget"] else 0
+            grand["fy26"]          += sub["fy26"]
+            grand["fy26_full_year"] += sub["fy26_full_year"]
+            grand["budget"]        += sub["budget"]
+            grand["actual"]        += sub["actual"]
+            groups.append({"super_category": super_cat, "rows": rows, "subtotal": sub})
+        grand["pct"] = round(grand["actual"] / grand["budget"] * 100) if grand["budget"] else 0
+        return jsonify({"period": "ytd", "fy": "FY24",
+                        "period_months": list(FY24_MONTHLY.get("Groceries", {}).keys()),
+                        "groups": groups, "grand": grand})
+
     # ── FY26 mode: actuals come from hardcoded FY26_MONTHLY; no live ledger needed ──
-    if fy == "FY26":
+    elif fy == "FY26":
         all_headings = _CANONICAL
         by_super: dict = {s: [] for s in SUPER_ORDER}
         for heading in sorted(all_headings):
@@ -482,10 +554,12 @@ def api_mis():
         }
         if period == "ytd":
             row["fy26_full_year"] = round(_fy26_full_year(heading))
+            row["fy25_actual"] = round(sum(FY25_MONTHLY.get(heading, {}).values()))
+            row["fy24_actual"] = round(sum(FY24_MONTHLY.get(heading, {}).values()))
         by_super.setdefault(super_cat, []).append(row)
 
     groups = []
-    grand = {"fy26": 0, "fy26_full_year": 0, "budget": 0, "actual": 0}
+    grand = {"fy26": 0, "fy26_full_year": 0, "fy25_actual": 0, "fy24_actual": 0, "budget": 0, "actual": 0}
     for super_cat in SUPER_ORDER:
         rows = by_super.get(super_cat, [])
         if not rows:
@@ -497,7 +571,11 @@ def api_mis():
         }
         if period == "ytd":
             sub["fy26_full_year"] = sum(r.get("fy26_full_year", 0) for r in rows)
+            sub["fy25_actual"] = sum(r.get("fy25_actual", 0) for r in rows)
+            sub["fy24_actual"] = sum(r.get("fy24_actual", 0) for r in rows)
             grand["fy26_full_year"] += sub["fy26_full_year"]
+            grand["fy25_actual"] += sub["fy25_actual"]
+            grand["fy24_actual"] += sub["fy24_actual"]
         sub["pct"] = round(sub["actual"] / sub["budget"] * 100) if sub["budget"] else 0
         grand["fy26"]   += sub["fy26"]
         grand["budget"] += sub["budget"]
@@ -846,7 +924,7 @@ def api_master_ledger():
 
     # Fiscal year filter: FY26=Apr2025-Mar2026, FY27=Apr2026-Mar2027 (default)
     fy = request.args.get("fy", "FY27")
-    _FY_RANGES = {"FY25": ("2024-04-01","2025-03-31"), "FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
+    _FY_RANGES = {"FY24": ("2023-04-01","2024-03-31"), "FY25": ("2024-04-01","2025-03-31"), "FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
     if fy in _FY_RANGES:
         from src.master_ledger import _parse_date as _ml_pd2
         from datetime import date as _date
@@ -1856,7 +1934,7 @@ def api_transfer_recon():
 
     # Fiscal year filter
     _fy_tr = request.args.get("fy", "FY27")
-    _FY_TR = {"FY25": ("2024-04-01","2025-03-31"), "FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
+    _FY_TR = {"FY24": ("2023-04-01","2024-03-31"), "FY25": ("2024-04-01","2025-03-31"), "FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
     if _fy_tr in _FY_TR:
         _lo = _date2.fromisoformat(_FY_TR[_fy_tr][0])
         _hi = _date2.fromisoformat(_FY_TR[_fy_tr][1])
@@ -2889,6 +2967,238 @@ def api_acc25_preview():
 def api_acc25_status():
     """Poll import job status."""
     return jsonify(_acc25_job)
+
+
+_ACC24_LOCAL = os.path.join(BASE_DIR, "data", "acc24.xlsx")
+_acc24_job = {}
+
+
+def _parse_acc24_sudhir(file_bytes):
+    """Parse SudhirExpenses sheet from ACC24 xlsx. Returns list of normalised ledger-ready dicts."""
+    import io, openpyxl
+    from datetime import datetime as _dt
+
+    _ACCT_MAP = {
+        "sbi4852":"SBI-3152","sbi":"SBI-3152",
+        "icic0018":"ICICI-0018","ici0018":"ICICI-0018","icici0018":"ICICI-0018","ICI0018":"ICICI-0018","ICIC0018":"ICICI-0018",
+        "icic7281":"ICICI-7281","ici7281":"ICICI-7281","icici7281":"ICICI-7281","ICIC7281":"ICICI-7281",
+        "icic1331":"ICICI-1331","ici1331":"ICICI-1331","icici1331":"ICICI-1331","icci1331":"ICICI-1331",
+        "ICIC1331":"ICICI-1331","Icici1331":"ICICI-1331",
+        "icic9175":"ICICI-9175","ici9175":"ICICI-9175","icici9175":"ICICI-9175","ICIC9175":"ICICI-9175",
+        "cridit card":"ICICI-CC","credit card":"ICICI-CC",
+    }
+    _TYPE_MAP = {
+        "expense":"expense","official":"official","transfer":"transfer","transfer ":"transfer",
+        "income":"income","tax":"expense","investment":"investment","error":"error",
+    }
+    _HEADING_NORM_ACC24 = {
+        "alchol":"Alcohol","alcohol":"Alcohol",
+        "amma":"Amma","AMMA":"Amma",
+        "birthday parties":"Entertainment","books":"Entertainment","entertaiment":"Entertainment","entertainment":"Entertainment",
+        "cash":"Cash",
+        "charity":"Charity","donation":"Charity",
+        "children education":"Children Education","children education ":"Children Education",
+        "clothes":"Clothes","clothing":"Clothes","dry cleaning":"Clothes",
+        "e&g":"Electricity & Gas","electricity & gas":"Electricity & Gas","electricity":"Electricity & Gas",
+        "eating out":"Eating Out","eating out ":"Eating Out",
+        "financial":"Financial Expense / OD Interest","financial expense":"Financial Expense / OD Interest",
+        "gift":"Gifts","gifts":"Gifts",
+        "groceries":"Groceries","grociries":"Groceries","grocries":"Groceries",
+        "hoilday":"Holiday","holiday":"Holiday",
+        "home office":"Home office","home office ":"Home office",
+        "insurance":"Insurance",
+        "ketki":"Ketki",
+        "maintenance":"Maintenance Expense","maintenance expense":"Maintenance Expense",
+        "malhar":"Malhar","malhar renovation":"Malhar",
+        "medical":"Medical",
+        "misc":"Misc","miscellaneous":"Misc",
+        "one time charge":"One Time Charge","one time":"One Time Charge",
+        "staff salary":"Staff Salary","staff slary":"Staff Salary","salary":"Staff Salary",
+        "tax":"Tax","home loan":"Home Loan",
+        "uspaar":"Uspaar",
+        "wellness":"Wellness",
+        "kalpataru":"Kalpataru Maintenance","kalpataru maintenance":"Kalpataru Maintenance",
+    }
+
+    def _parse_date_acc24(v):
+        FY24_START = _dt(2023, 4, 1)
+        FY24_END   = _dt(2024, 3, 31, 23, 59, 59)
+        if isinstance(v, _dt):
+            # Try original first
+            if FY24_START <= v <= FY24_END:
+                return v.strftime("%d/%m/%Y")
+            # Try swapping month and day (Excel MM/DD vs DD/MM confusion)
+            try:
+                swapped = v.replace(month=v.day, day=v.month)
+                if FY24_START <= swapped <= FY24_END:
+                    return swapped.strftime("%d/%m/%Y")
+            except ValueError:
+                pass
+            return v.strftime("%d/%m/%Y")  # return as-is, range filter will drop it
+        if isinstance(v, str):
+            v = v.strip()
+            for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%d-%m-%y", "%Y-%m-%d"):
+                try:
+                    return _dt.strptime(v, fmt).strftime("%d/%m/%Y")
+                except ValueError:
+                    pass
+        return None
+
+    def _norm_heading_acc24(h):
+        if not h:
+            return ""
+        return _HEADING_NORM_ACC24.get(str(h).strip().lower(), str(h).strip())
+
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    ws = wb["SudhirExpenses"]
+    rows = list(ws.iter_rows(values_only=True))
+
+    FY24_START = _dt(2023, 4, 1)
+    FY24_END   = _dt(2024, 3, 31, 23, 59, 59)
+
+    entries = []
+    for i, row in enumerate(rows[1:], start=2):
+        raw_date    = row[3]
+        raw_acct    = str(row[2] or "").strip()
+        raw_debit   = row[6]
+        raw_credit  = row[7]
+        raw_type    = str(row[9] or "").strip()   # type at col[9] for ACC24
+        raw_desc    = str(row[4] or "").strip()
+        raw_paid    = str(row[5] or "").strip()
+        raw_heading = str(row[10] or "").strip()  # heading at col[10]
+
+        date_str = _parse_date_acc24(raw_date)
+        if not date_str:
+            continue
+
+        try:
+            dt = _dt.strptime(date_str, "%d/%m/%Y")
+        except ValueError:
+            continue
+        if not (FY24_START <= dt <= FY24_END):
+            continue
+
+        typ = _TYPE_MAP.get(raw_type.lower(), "expense")
+        if typ == "error":
+            continue
+
+        debit  = float(raw_debit)  if raw_debit  else 0.0
+        credit = float(raw_credit) if raw_credit else 0.0
+        if debit < 0:
+            credit = abs(debit)
+            debit  = 0.0
+
+        acct = _ACCT_MAP.get(raw_acct, _ACCT_MAP.get(raw_acct.lower(), raw_acct))
+        heading = _norm_heading_acc24(raw_heading) if raw_heading else ""
+
+        entries.append({
+            "date":            date_str,
+            "account":         acct,
+            "raw_description": raw_desc,
+            "paid_to":         raw_paid if raw_paid != "None" else "",
+            "debit":           debit,
+            "credit":          credit,
+            "type":            typ,
+            "heading":         heading,
+            "note":            "",
+            "source":          "acc24_import",
+        })
+
+    return entries
+
+
+def _run_acc24_import(file_bytes):
+    """Background thread: parse + apply ACC24 entries to master ledger."""
+    from src.master_ledger import _assign_seq
+    global _acc24_job
+    try:
+        _acc24_job = {"status": "running", "step": "parsing"}
+        entries = _parse_acc24_sudhir(file_bytes)
+        _acc24_job["step"] = "loading ledger"
+        ledger = load_ledger()
+        existing_ids = {t["txn_id"] for t in ledger}
+        added = 0
+        _acc24_job["step"] = "merging"
+        for e in entries:
+            txn_id = f"acc24-{e['date'].replace('/','')}-{e['account']}-{int(e['debit'] or e['credit'])}"
+            if txn_id in existing_ids:
+                continue
+            existing_ids.add(txn_id)
+            ledger.append({
+                "txn_id":          txn_id,
+                "date":            e["date"],
+                "account":         e["account"],
+                "raw_description": e["raw_description"],
+                "paid_to":         e["paid_to"],
+                "debit":           e["debit"],
+                "credit":          e["credit"],
+                "type":            e["type"],
+                "heading":         e["heading"],
+                "note":            e["note"],
+                "source":          "acc24_import",
+                "uncertain":       False,
+            })
+            added += 1
+        _acc24_job["step"] = "saving"
+        _assign_seq(ledger)
+        _save_json(LEDGER_PATH, ledger)
+        _acc24_job = {"status": "done", "applied": added,
+                      "total_parsed": len(entries), "ledger_total": len(ledger)}
+    except Exception as ex:
+        _acc24_job = {"status": "error", "error": str(ex)}
+
+
+@app.route("/admin/acc24")
+@login_required
+def admin_acc24_page():
+    return render_template("acc24_admin.html")
+
+
+@app.route("/api/admin/acc24-preview", methods=["POST"])
+@login_required
+def api_acc24_preview():
+    """Parse uploaded ACC24 xlsx (or local file if present), return entries for preview."""
+    import threading
+    f = request.files.get("file")
+    if f:
+        file_bytes = f.read()
+    elif os.path.exists(_ACC24_LOCAL):
+        with open(_ACC24_LOCAL, "rb") as fh:
+            file_bytes = fh.read()
+    else:
+        return jsonify({"error": "no file uploaded and local acc24.xlsx not found"}), 400
+
+    apply_it = request.form.get("apply", "") == "1"
+
+    if apply_it:
+        global _acc24_job
+        _acc24_job = {"status": "running", "step": "starting"}
+        t = threading.Thread(target=_run_acc24_import, args=(file_bytes,), daemon=True)
+        t.start()
+        return jsonify({"status": "running"})
+
+    entries = _parse_acc24_sudhir(file_bytes)
+    by_type = {}
+    for e in entries:
+        by_type[e["type"]] = by_type.get(e["type"], 0) + 1
+    by_heading = {}
+    for e in entries:
+        h = e["heading"] or "(none)"
+        by_heading[h] = by_heading.get(h, 0) + 1
+
+    return jsonify({
+        "total": len(entries),
+        "by_type": by_type,
+        "by_heading": dict(sorted(by_heading.items())),
+        "sample": entries[:20],
+    })
+
+
+@app.route("/api/admin/acc24-status", methods=["GET"])
+@login_required
+def api_acc24_status():
+    """Poll import job status."""
+    return jsonify(_acc24_job)
 
 
 @app.route("/health", methods=["GET"])
