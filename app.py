@@ -142,11 +142,17 @@ def logout():
 
 @app.route("/")
 @login_required
+def home():
+    return render_template("home.html", user=session["user"])
+
+
+@app.route("/expenses")
+@login_required
 def index():
     return render_template("index.html", user=session["user"])
 
 
-# Keep old routes redirecting to /
+# Keep old routes redirecting to /expenses
 @app.route("/entry")
 @app.route("/dashboard")
 @app.route("/report")
