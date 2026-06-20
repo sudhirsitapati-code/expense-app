@@ -66,6 +66,7 @@
 <!-- ═══ YEAR BAR ═══ -->
 <div class="year-bar d-flex align-items-center gap-2 px-3 py-2">
   <small class="text-white-50 fw-semibold me-1">Fiscal Year</small>
+  <button class="year-btn" id="yrBtn-FY25" onclick="setYear('FY25')">FY 2024–25</button>
   <button class="year-btn" id="yrBtn-FY26" onclick="setYear('FY26')">FY 2025–26</button>
   <button class="year-btn active" id="yrBtn-FY27" onclick="setYear('FY27')">FY 2026–27</button>
 </div>
@@ -1301,18 +1302,19 @@ async function loadMIS(period, btn) {
     document.getElementById(id)?.classList.remove('active'));
   if (btn) btn.classList.add('active');
 
-  const isFY26 = _activeYear === 'FY26';
-  document.getElementById('misPeriodBtns').style.display = isFY26 ? 'none' : '';
+  const isHistorical = _activeYear !== 'FY27';
+  document.getElementById('misPeriodBtns').style.display = isHistorical ? 'none' : '';
 
   const r = await fetch(`/api/mis?period=${period}&fy=${_activeYear}`);
   const d = await r.json();
 
-  if (isFY26) {
-    document.getElementById('misPeriodLabel').textContent = '(FY 2025–26 Full Year)';
-    document.getElementById('misColFy26Label').textContent = 'FY26 Period';
+  if (isHistorical) {
+    const fyLabel = _activeYear === 'FY25' ? 'FY 2024–25' : 'FY 2025–26';
+    document.getElementById('misPeriodLabel').textContent = `(${fyLabel} Full Year)`;
+    document.getElementById('misColFy26Label').textContent = _activeYear === 'FY25' ? 'FY25 Period' : 'FY26 Period';
     document.getElementById('misColFy26FY').style.display = '';
     document.getElementById('misColBudgetHdr').textContent = 'FY27 Budget';
-    document.getElementById('misColActualHdr').textContent = 'FY26 Actual';
+    document.getElementById('misColActualHdr').textContent = _activeYear === 'FY25' ? 'FY25 Actual' : 'FY26 Actual';
   } else {
     const lbl = period==='month'?'This Month':period==='quarter'?'This Quarter':'Year to Date';
     document.getElementById('misPeriodLabel').textContent = `(${lbl}: ${(d.period_months||[]).join(', ')})`;
@@ -1326,7 +1328,7 @@ async function loadMIS(period, btn) {
     document.getElementById('misColActualHdr').textContent = 'FY27 Actual';
   }
 
-  const isYtd = isFY26 || period === 'ytd';
+  const isYtd = isHistorical || period === 'ytd';
   const cols = isYtd ? 6 : 5;
 
   const tbody = document.getElementById('misBody');

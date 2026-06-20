@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ACC25 Import</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<style>
+body { background:#f8f9fa; padding:20px; font-size:13px; }
+th { white-space:nowrap; }
+</style>
+</head>
+<body>
+<div class="container-xl">
+  <div class="d-flex align-items-center mb-3 gap-3">
+    <h5 class="mb-0 fw-bold"><i class="bi bi-file-earmark-spreadsheet me-2"></i>ACC25 → Master Ledger Import (FY 2024–25)</h5>
+    <a href="/" class="btn btn-sm btn-outline-secondary ms-auto">← Back</a>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div>
+          <label class="form-label small fw-semibold mb-1">Upload ACC 25.xlsx</label>
+          <input type="file" id="xlFile" class="form-control form-control-sm" accept=".xlsx" style="width:300px">
+        </div>
+        <div class="align-self-end">
+          <button class="btn btn-sm btn-primary" onclick="doPreview()"><i class="bi bi-search me-1"></i>Preview uploaded file</button>
+          <button class="btn btn-sm btn-outline-primary ms-2" onclick="doPreviewLocal()"><i class="bi bi-hdd me-1"></i>Use local file</button>
+        </div>
+        <div class="align-self-end ms-2" id="applyZone" style="display:none">
+          <button class="btn btn-sm btn-success" onclick="doApply()"><i class="bi bi-check-circle me-1"></i>Apply to Master Ledger</button>
+        </div>
+      </div>
+      <div id="msg" class="small text-muted mt-2"></div>
+    </div>
+  </div>
+
+  <!-- Summary tiles -->
+  <div class="row g-2 mb-3" id="tiles" style="display:none">
+    <div class="col-6 col-md-3"><div class="card border-0 bg-primary bg-opacity-10"><div class="card-body py-2 px-3">
+      <div class="text-muted small">Total FY25 entries</div><div class="fw-bold" id="tTotal">—</div>
+    </div></div></div>
+  </div>
+
+  <!-- Breakdown tables -->
+  <div id="breakdowns" style="display:none">
+    <div class="row g-3 mb-3">
+      <div class="col-md-4">
+        <h6 class="fw-semibold">By Type</h6>
+        <table class="table table-sm table-bordered"><tbody id="byType"></tbody></table>
+      </div>
+      <div class="col-md-8">
+        <h6 class="fw-semibold">By Heading</h6>
+        <table class="table table-sm table-bordered"><tbody id="byHeading"></tbody></table>
+      </div>
+    </div>
+
+    <h6 class="fw-semibold">Sample entries (first 20)</h6>
+    <div class="table-responsive">
+    <table class="table table-sm table-bordered">
+      <thead class="table-dark">
+        <tr><th>Date</th><th>Account</th><th>Debit</th><th>Credit</th><th>Type</th><th>Heading</th><th>Description</th></tr>
+      </thead>
+      <tbody id="sampleBody"></tbody>
+    </table>
+    </div>
+  </div>
+
+  <div id="resultMsg" class="fw-semibold mt-3"></div>
+</div>
+
+<script>
+const fmt = v => v ? '₹' + Number(v).toLocaleString('en-IN', {maximumFractionDigits:0}) : '—';
+
+async function doPreviewLocal() {
+  document.getElementById('msg').textContent = 'Reading local ACC 25.xlsx…';
+  const fd = new FormData();
+  const r = await fetch('/api/admin/acc25-preview', { method:'POST', body: fd });
+  const d = await r.json();
+  if (d.error) { document.getElementById('msg').textContent = 'Error: ' + d.error; return; }
+  renderPreview(d);
+}
+
+function renderPreview(d) {
+  document.getElementById('tTotal').textContent = d.total;
+  document.getElementById('tiles').style.display = '';
+  document.getElementById('breakdowns').style.display = '';
+  document.getElementById('applyZone').style.display = '';
+  document.getElementById('msg').textContent = `Found ${d.total} FY25 entries from SudhirExpenses sheet.`;
+
+  document.getElementById('byType').innerHTML =
+    Object.entries(d.by_type).map(([k,v]) => `<tr><td>${k}</td><td class="text-end fw-semibold">${v}</td></tr>`).join('');
+
+  document.getElementById('byHeading').innerHTML =
+    Object.entries(d.by_heading).sort((a,b) => b[1]-a[1])
+      .map(([k,v]) => `<tr><td>${k}</td><td class="text-end">${v}</td></tr>`).join('');
+
+  document.getElementById('sampleBody').innerHTML = (d.sample||[]).map(e => `<tr>
+    <td>${e.date}</td>
+    <td><small>${e.account}</small></td>
+    <td class="text-end">${e.debit ? fmt(e.debit) : ''}</td>
+    <td class="text-end text-success">${e.credit ? fmt(e.credit) : ''}</td>
+    <td><span class="badge bg-secondary">${e.type}</span></td>
+    <td>${e.heading||'—'}</td>
+    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.raw_description}">${e.raw_description}</td>
+  </tr>`).join('');
+}
+
+async function doPreview() {
+  const f = document.getElementById('xlFile').files[0];
+  if (!f) { alert('Choose file first'); return; }
+  document.getElementById('msg').textContent = 'Parsing…';
+  const fd = new FormData();
+  fd.append('file', f);
+  const r = await fetch('/api/admin/acc25-preview', { method:'POST', body: fd });
+  const d = await r.json();
+  if (d.error) { document.getElementById('msg').textContent = 'Error: ' + d.error; return; }
+  renderPreview(d);
+}
+
+async function doApply() {
+  if (!confirm('Import all FY25 entries into the master ledger? Duplicates are skipped automatically.')) return;
+  const msg = document.getElementById('resultMsg');
+  msg.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting import…';
+  msg.className = 'fw-semibold text-muted mt-3';
+
+  const fd = new FormData();
+  const f = document.getElementById('xlFile').files[0];
+  if (f) fd.append('file', f);
+  fd.append('apply', '1');
+  const r = await fetch('/api/admin/acc25-preview', { method:'POST', body: fd });
+  const d = await r.json();
+  if (d.error) { msg.textContent = 'Error: ' + d.error; msg.className = 'fw-semibold text-danger mt-3'; return; }
+
+  pollImport(msg);
+}
+
+async function pollImport(msg) {
+  const steps = { starting:'Starting…', parsing:'Parsing Excel…', 'loading ledger':'Loading ledger from DB…', merging:'Merging entries…', saving:'Saving to DB…' };
+  const interval = setInterval(async () => {
+    const r = await fetch('/api/admin/acc25-status');
+    const d = await r.json();
+    if (d.status === 'running') {
+      const label = steps[d.step] || d.step || 'Working…';
+      msg.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${label}`;
+    } else if (d.status === 'done') {
+      clearInterval(interval);
+      msg.textContent = `✓ Added ${d.applied} new entries (${d.total_parsed - d.applied} skipped as duplicates). Ledger now has ${d.ledger_total} entries.`;
+      msg.className = 'fw-semibold text-success mt-3';
+    } else if (d.status === 'error') {
+      clearInterval(interval);
+      msg.textContent = 'Error: ' + d.error;
+      msg.className = 'fw-semibold text-danger mt-3';
+    }
+  }, 3000);
+}
+</script>
+</body>
+</html>

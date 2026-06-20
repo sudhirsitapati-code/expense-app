@@ -223,6 +223,36 @@ def api_mis():
         "Home Loan":      {"Apr":903259,"May":1146721,"Jun":916551,"Jul":1201557,"Aug":554547,"Sep":992227,"Oct":963511,"Nov":1007410,"Dec":1777170,"Jan":1389117,"Feb":928825,"Mar":1285719},
         "Tax":            {"Apr":0,"May":0,"Jun":0,"Jul":13519347,"Aug":0,"Sep":3630000,"Oct":61499379,"Nov":0,"Dec":0,"Jan":0,"Feb":3848950,"Mar":0},
     }
+    FY25_MONTHLY = {
+        "Misc":           {"Apr":6088,"May":8858,"Jun":20244,"Jul":32654,"Aug":20773,"Sep":24987,"Oct":2704,"Nov":5462,"Dec":20402,"Jan":23428,"Feb":6027,"Mar":4321},
+        "Clothes":        {"Apr":106470,"May":30095,"Jun":30780,"Jul":0,"Aug":9899,"Sep":8590,"Oct":0,"Nov":20798,"Dec":48088,"Jan":2490,"Feb":22291,"Mar":14990},
+        "Gifts":          {"Apr":3599,"May":0,"Jun":14285,"Jul":15857,"Aug":5847,"Sep":12462,"Oct":25000,"Nov":44705,"Dec":11270,"Jan":990,"Feb":0,"Mar":0},
+        "Cash":           {"Apr":0,"May":55000,"Jun":10000,"Jul":20000,"Aug":30000,"Sep":40000,"Oct":30000,"Nov":60000,"Dec":30000,"Jan":345500,"Feb":20500,"Mar":20000},
+        "Maintenance Expense": {"Apr":0,"May":5500,"Jun":0,"Jul":0,"Aug":0,"Sep":1902,"Oct":13383,"Nov":4253,"Dec":3124,"Jan":2900,"Feb":0,"Mar":449},
+        "Malhar":         {"Apr":38269,"May":53199,"Jun":91025,"Jul":98388,"Aug":35080,"Sep":74930,"Oct":22000,"Nov":41900,"Dec":41836,"Jan":56530,"Feb":42330,"Mar":83090},
+        "Home office":    {"Apr":30702,"May":13150,"Jun":7000,"Jul":8500,"Aug":9200,"Sep":26914,"Oct":13500,"Nov":13359,"Dec":10000,"Jan":1200,"Feb":1000,"Mar":51000},
+        "Electricity & Gas": {"Apr":18233,"May":50902,"Jun":40791,"Jul":31210,"Aug":27031,"Sep":37216,"Oct":32991,"Nov":34039,"Dec":18101,"Jan":19564,"Feb":22573,"Mar":28734},
+        "Alcohol":        {"Apr":5500,"May":1500,"Jun":0,"Jul":32235,"Aug":0,"Sep":0,"Oct":17089,"Nov":0,"Dec":30235,"Jan":22691,"Feb":0,"Mar":0},
+        "Medical":        {"Apr":25104,"May":17747,"Jun":16695,"Jul":15049,"Aug":34811,"Sep":28366,"Oct":7032,"Nov":6215,"Dec":95127,"Jan":61258,"Feb":260944,"Mar":65715},
+        "Holiday":        {"Apr":331046,"May":388673,"Jun":527589,"Jul":484268,"Aug":82855,"Sep":221069,"Oct":92797,"Nov":0,"Dec":42609,"Jan":0,"Feb":37368,"Mar":66627},
+        "Groceries":      {"Apr":114509,"May":117604,"Jun":108667,"Jul":98176,"Aug":108702,"Sep":81999,"Oct":113779,"Nov":80055,"Dec":85734,"Jan":95234,"Feb":90302,"Mar":67905},
+        "Eating Out":     {"Apr":25839,"May":165938,"Jun":34440,"Jul":119314,"Aug":11086,"Sep":44803,"Oct":5921,"Nov":115949,"Dec":17293,"Jan":73701,"Feb":5160,"Mar":9266},
+        "Amma":           {"Apr":17294,"May":2434,"Jun":7480,"Jul":13736,"Aug":11310,"Sep":20583,"Oct":15262,"Nov":4273,"Dec":6909,"Jan":1939,"Feb":45101,"Mar":588},
+        "Ketki":          {"Apr":74654,"May":60324,"Jun":118994,"Jul":66982,"Aug":162796,"Sep":92541,"Oct":117532,"Nov":84241,"Dec":134245,"Jan":63858,"Feb":73205,"Mar":101126},
+        "Wellness":       {"Apr":4100,"May":1750,"Jun":19762,"Jul":23432,"Aug":1800,"Sep":0,"Oct":15878,"Nov":26884,"Dec":33216,"Jan":17370,"Feb":36550,"Mar":81309},
+        "One Time Charge":{"Apr":2880,"May":7500,"Jun":2850,"Jul":2950,"Aug":7660,"Sep":6800,"Oct":26980,"Nov":20638,"Dec":13460,"Jan":4100,"Feb":13990,"Mar":20650},
+        "Entertainment":  {"Apr":67241,"May":27665,"Jun":7098,"Jul":33295,"Aug":189,"Sep":13232,"Oct":1779,"Nov":7175,"Dec":7009,"Jan":499,"Feb":13645,"Mar":6690},
+        "Staff Salary":   {"Apr":236310,"May":197770,"Jun":175870,"Jul":176370,"Aug":220870,"Sep":209570,"Oct":244730,"Nov":230870,"Dec":385283,"Jan":303020,"Feb":19020,"Mar":175720},
+        "Financial Expense / OD Interest": {"Apr":38529,"May":20146,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":29529,"Mar":0},
+        "Children Education": {"Apr":856197,"May":188432,"Jun":22700,"Jul":78855,"Aug":110550,"Sep":127800,"Oct":56000,"Nov":956923,"Dec":28700,"Jan":28000,"Feb":40400,"Mar":33350},
+        "Kalpataru Maintenance": {"Apr":29421,"May":29421,"Jun":29421,"Jul":29421,"Aug":29421,"Sep":29421,"Oct":158721,"Nov":35879,"Dec":35879,"Jan":31902,"Feb":35879,"Mar":35879},
+        "Charity":        {"Apr":583500,"May":300000,"Jun":13650,"Jul":818250,"Aug":550000,"Sep":118000,"Oct":245247,"Nov":36898,"Dec":118882,"Jan":0,"Feb":100000,"Mar":415585},
+        "Uspaar":         {"Apr":17580,"May":16360,"Jun":157855,"Jul":30000,"Aug":87410,"Sep":90000,"Oct":108790,"Nov":80000,"Dec":111799,"Jan":115080,"Feb":143200,"Mar":151260},
+        "Insurance":      {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":119558,"Dec":168504,"Jan":0,"Feb":0,"Mar":0},
+        "Home Loan":      {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+        "Tax":            {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+    }
+
     # Calendar month number → FY month abbreviation
     CAL_TO_FY_MON = {4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec",1:"Jan",2:"Feb",3:"Mar"}
 
@@ -366,6 +396,48 @@ def api_mis():
         grand["pct"] = round(grand["actual"] / grand["budget"] * 100) if grand["budget"] else 0
         return jsonify({"period": "ytd", "fy": "FY26",
                         "period_months": list(FY26_MONTHLY.get("Groceries", {}).keys()),
+                        "groups": groups, "grand": grand})
+
+    # ── FY25 mode: actuals come from hardcoded FY25_MONTHLY; no live ledger needed ──
+    elif fy == "FY25":
+        all_headings = set(budget_annual.keys()) | set(FY25_MONTHLY.keys())
+        by_super: dict = {s: [] for s in SUPER_ORDER}
+        for heading in sorted(all_headings):
+            super_cat = HEADING_SUPER.get(heading, "Household")
+            monthly = FY25_MONTHLY.get(heading, {})
+            fy25_total = round(max(0, sum(monthly.values())))
+            budget = round(budget_annual.get(heading, 0))
+            row = {
+                "category": heading,
+                "fy26_actual": fy25_total,
+                "fy26_full_year": fy25_total,
+                "fy27_budget": budget,
+                "fy27_actual": fy25_total,
+                "pct": round(fy25_total / budget * 100) if budget else 0,
+            }
+            by_super.setdefault(super_cat, []).append(row)
+
+        groups = []
+        grand = {"fy26": 0, "fy26_full_year": 0, "budget": 0, "actual": 0}
+        for super_cat in SUPER_ORDER:
+            rows = by_super.get(super_cat, [])
+            if not rows:
+                continue
+            sub = {
+                "fy26":          sum(r["fy26_actual"] for r in rows),
+                "fy26_full_year": sum(r["fy26_full_year"] for r in rows),
+                "budget":        sum(r["fy27_budget"] for r in rows),
+                "actual":        sum(r["fy27_actual"] for r in rows),
+            }
+            sub["pct"] = round(sub["actual"] / sub["budget"] * 100) if sub["budget"] else 0
+            grand["fy26"]          += sub["fy26"]
+            grand["fy26_full_year"] += sub["fy26_full_year"]
+            grand["budget"]        += sub["budget"]
+            grand["actual"]        += sub["actual"]
+            groups.append({"super_category": super_cat, "rows": rows, "subtotal": sub})
+        grand["pct"] = round(grand["actual"] / grand["budget"] * 100) if grand["budget"] else 0
+        return jsonify({"period": "ytd", "fy": "FY25",
+                        "period_months": list(FY25_MONTHLY.get("Groceries", {}).keys()),
                         "groups": groups, "grand": grand})
 
     # ── FY27 actual from master ledger ────────────────────────────────────────
@@ -774,7 +846,7 @@ def api_master_ledger():
 
     # Fiscal year filter: FY26=Apr2025-Mar2026, FY27=Apr2026-Mar2027 (default)
     fy = request.args.get("fy", "FY27")
-    _FY_RANGES = {"FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
+    _FY_RANGES = {"FY25": ("2024-04-01","2025-03-31"), "FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
     if fy in _FY_RANGES:
         from src.master_ledger import _parse_date as _ml_pd2
         from datetime import date as _date
@@ -1784,7 +1856,7 @@ def api_transfer_recon():
 
     # Fiscal year filter
     _fy_tr = request.args.get("fy", "FY27")
-    _FY_TR = {"FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
+    _FY_TR = {"FY25": ("2024-04-01","2025-03-31"), "FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
     if _fy_tr in _FY_TR:
         _lo = _date2.fromisoformat(_FY_TR[_fy_tr][0])
         _hi = _date2.fromisoformat(_FY_TR[_fy_tr][1])
@@ -2597,6 +2669,226 @@ def api_acc26_preview():
 def api_acc26_status():
     """Poll import job status."""
     return jsonify(_acc26_job)
+
+
+_ACC25_LOCAL = os.path.join(BASE_DIR, "data", "FY25", "ACC 25.xlsx")
+_acc25_job = {}
+
+
+def _parse_acc25_sudhir(file_bytes):
+    """Parse SudhirExpenses sheet from ACC25 xlsx. Returns list of normalised ledger-ready dicts."""
+    import io, openpyxl
+    from datetime import datetime as _dt
+
+    _ACCT_MAP = {
+        "sbi4852":"SBI-3152","sbi":"SBI-3152",
+        "icic0018":"ICICI-0018","ici0018":"ICICI-0018","icici0018":"ICICI-0018","ICI0018":"ICICI-0018","ICIC0018":"ICICI-0018",
+        "icic7281":"ICICI-7281","ici7281":"ICICI-7281","icici7281":"ICICI-7281","ICIC7281":"ICICI-7281",
+        "icic1331":"ICICI-1331","ici1331":"ICICI-1331","icici1331":"ICICI-1331","icci1331":"ICICI-1331",
+        "ICIC1331":"ICICI-1331","Icici1331":"ICICI-1331",
+        "icic9175":"ICICI-9175","ici9175":"ICICI-9175","icici9175":"ICICI-9175","ICIC9175":"ICICI-9175",
+        "cridit card":"ICICI-CC","credit card":"ICICI-CC",
+    }
+    _TYPE_MAP = {
+        "expense":"expense","official":"official","transfer":"transfer","transfer ":"transfer",
+        "income":"income","tax":"expense","investment":"investment","error":"error",
+    }
+    _HEADING_NORM_ACC25 = {
+        "alchol":"Alcohol","alcohol":"Alcohol",
+        "amma":"Amma","AMMA":"Amma",
+        "birthday parties":"Entertainment","books":"Entertainment","entertaiment":"Entertainment","entertainment":"Entertainment",
+        "cash":"Cash",
+        "charity":"Charity","donation":"Charity",
+        "children education":"Children Education","children education ":"Children Education",
+        "clothes":"Clothes","clothing":"Clothes","dry cleaning":"Clothes",
+        "e&g":"Electricity & Gas","electricity & gas":"Electricity & Gas","electricity":"Electricity & Gas",
+        "eating out":"Eating Out","eating out ":"Eating Out",
+        "financial":"Financial Expense / OD Interest","financial expense":"Financial Expense / OD Interest",
+        "gift":"Gifts","gifts":"Gifts",
+        "groceries":"Groceries","grociries":"Groceries","grocries":"Groceries",
+        "hoilday":"Holiday","holiday":"Holiday",
+        "home office":"Home office","home office ":"Home office",
+        "insurance":"Insurance",
+        "ketki":"Ketki",
+        "maintenance":"Maintenance Expense","maintenance expense":"Maintenance Expense",
+        "malhar":"Malhar","malhar renovation":"Malhar",
+        "medical":"Medical",
+        "misc":"Misc","miscellaneous":"Misc",
+        "one time charge":"One Time Charge","one time":"One Time Charge",
+        "staff salary":"Staff Salary","staff slary":"Staff Salary","salary":"Staff Salary",
+        "tax":"Tax","home loan":"Home Loan",
+        "uspaar":"Uspaar",
+        "wellness":"Wellness",
+        "kalpataru":"Kalpataru Maintenance","kalpataru maintenance":"Kalpataru Maintenance",
+    }
+
+    def _parse_date_acc25(v):
+        if isinstance(v, _dt):
+            return v.strftime("%d/%m/%Y")
+        if isinstance(v, str):
+            v = v.strip()
+            for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%d-%m-%y", "%Y-%m-%d"):
+                try:
+                    return _dt.strptime(v, fmt).strftime("%d/%m/%Y")
+                except ValueError:
+                    pass
+        return None
+
+    def _norm_heading_acc25(h):
+        if not h:
+            return ""
+        return _HEADING_NORM_ACC25.get(str(h).strip().lower(), str(h).strip())
+
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    ws = wb["SudhirExpenses"]
+    rows = list(ws.iter_rows(values_only=True))
+
+    FY25_START = _dt(2024, 4, 1)
+    FY25_END   = _dt(2025, 3, 31, 23, 59, 59)
+
+    entries = []
+    for i, row in enumerate(rows[1:], start=2):
+        raw_date    = row[3]
+        raw_acct    = str(row[2] or "").strip()
+        raw_debit   = row[6]
+        raw_credit  = row[7]
+        raw_type    = str(row[8] or "").strip()
+        raw_desc    = str(row[4] or "").strip()
+        raw_paid    = str(row[5] or "").strip()
+        raw_heading = str(row[10] or "").strip()   # col index 10 (not 9)
+
+        date_str = _parse_date_acc25(raw_date)
+        if not date_str:
+            continue
+
+        try:
+            dt = _dt.strptime(date_str, "%d/%m/%Y")
+        except ValueError:
+            continue
+        if not (FY25_START <= dt <= FY25_END):
+            continue
+
+        typ = _TYPE_MAP.get(raw_type.lower(), "expense")
+        if typ == "error":
+            continue
+
+        debit  = float(raw_debit)  if raw_debit  else 0.0
+        credit = float(raw_credit) if raw_credit else 0.0
+        if debit < 0:
+            credit = abs(debit)
+            debit  = 0.0
+
+        acct = _ACCT_MAP.get(raw_acct, _ACCT_MAP.get(raw_acct.lower(), raw_acct))
+        heading = _norm_heading_acc25(raw_heading) if raw_heading else ""
+
+        entries.append({
+            "date":            date_str,
+            "account":         acct,
+            "raw_description": raw_desc,
+            "paid_to":         raw_paid if raw_paid != "None" else "",
+            "debit":           debit,
+            "credit":          credit,
+            "type":            typ,
+            "heading":         heading,
+            "note":            "",
+            "source":          "acc25_import",
+        })
+
+    return entries
+
+
+def _run_acc25_import(file_bytes):
+    """Background thread: parse + apply ACC25 entries to master ledger."""
+    from src.master_ledger import _assign_seq
+    global _acc25_job
+    try:
+        _acc25_job = {"status": "running", "step": "parsing"}
+        entries = _parse_acc25_sudhir(file_bytes)
+        _acc25_job["step"] = "loading ledger"
+        ledger = load_ledger()
+        existing_ids = {t["txn_id"] for t in ledger}
+        added = 0
+        _acc25_job["step"] = "merging"
+        for e in entries:
+            txn_id = f"acc25-{e['date'].replace('/','')}-{e['account']}-{int(e['debit'] or e['credit'])}"
+            if txn_id in existing_ids:
+                continue
+            existing_ids.add(txn_id)
+            ledger.append({
+                "txn_id":          txn_id,
+                "date":            e["date"],
+                "account":         e["account"],
+                "raw_description": e["raw_description"],
+                "paid_to":         e["paid_to"],
+                "debit":           e["debit"],
+                "credit":          e["credit"],
+                "type":            e["type"],
+                "heading":         e["heading"],
+                "note":            e["note"],
+                "source":          "acc25_import",
+                "uncertain":       False,
+            })
+            added += 1
+        _acc25_job["step"] = "saving"
+        _assign_seq(ledger)
+        _save_json(LEDGER_PATH, ledger)
+        _acc25_job = {"status": "done", "applied": added,
+                      "total_parsed": len(entries), "ledger_total": len(ledger)}
+    except Exception as ex:
+        _acc25_job = {"status": "error", "error": str(ex)}
+
+
+@app.route("/admin/acc25")
+@login_required
+def admin_acc25_page():
+    return render_template("acc25_admin.html")
+
+
+@app.route("/api/admin/acc25-preview", methods=["POST"])
+@login_required
+def api_acc25_preview():
+    """Parse uploaded ACC25 xlsx (or local file if present), return entries for preview."""
+    import threading
+    f = request.files.get("file")
+    if f:
+        file_bytes = f.read()
+    elif os.path.exists(_ACC25_LOCAL):
+        with open(_ACC25_LOCAL, "rb") as fh:
+            file_bytes = fh.read()
+    else:
+        return jsonify({"error": "no file uploaded and local ACC 25.xlsx not found"}), 400
+
+    apply_it = request.form.get("apply", "") == "1"
+
+    if apply_it:
+        global _acc25_job
+        _acc25_job = {"status": "running", "step": "starting"}
+        t = threading.Thread(target=_run_acc25_import, args=(file_bytes,), daemon=True)
+        t.start()
+        return jsonify({"status": "running"})
+
+    entries = _parse_acc25_sudhir(file_bytes)
+    by_type = {}
+    for e in entries:
+        by_type[e["type"]] = by_type.get(e["type"], 0) + 1
+    by_heading = {}
+    for e in entries:
+        h = e["heading"] or "(none)"
+        by_heading[h] = by_heading.get(h, 0) + 1
+
+    return jsonify({
+        "total": len(entries),
+        "by_type": by_type,
+        "by_heading": dict(sorted(by_heading.items())),
+        "sample": entries[:20],
+    })
+
+
+@app.route("/api/admin/acc25-status", methods=["GET"])
+@login_required
+def api_acc25_status():
+    """Poll import job status."""
+    return jsonify(_acc25_job)
 
 
 @app.route("/health", methods=["GET"])
