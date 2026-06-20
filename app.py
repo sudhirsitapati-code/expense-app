@@ -2509,30 +2509,20 @@ def _parse_acc26_sudhir(file_bytes):
 
 
 _ACC26_LOCAL = os.path.join(BASE_DIR, "data", "fy26", "ACC26ver5_MASTER.xlsx")
+_acc26_job = {}   # in-memory job state: {status, applied, total_parsed, ledger_total, error}
 
 
-@app.route("/api/admin/acc26-preview", methods=["POST"])
-@login_required
-def api_acc26_preview():
-    """Parse uploaded ACC26 xlsx (or local file if present), return entries for preview."""
-    import io
-    f = request.files.get("file")
-    if f:
-        file_bytes = f.read()
-    elif os.path.exists(_ACC26_LOCAL):
-        with open(_ACC26_LOCAL, "rb") as fh:
-            file_bytes = fh.read()
-    else:
-        return jsonify({"error": "no file uploaded and local ACC26ver5_MASTER.xlsx not found"}), 400
-
-    entries = _parse_acc26_sudhir(file_bytes)
-    apply_it = request.form.get("apply", "") == "1"
-
-    if apply_it:
+def _run_acc26_import(file_bytes):
+    """Background thread: parse + apply ACC26 entries to master ledger."""
+    global _acc26_job
+    try:
+        _acc26_job = {"status": "running", "step": "parsing"}
+        entries = _parse_acc26_sudhir(file_bytes)
+        _acc26_job["step"] = "loading ledger"
         ledger = load_ledger()
         existing_ids = {t["txn_id"] for t in ledger}
-
         added = 0
+        _acc26_job["step"] = "merging"
         for e in entries:
             txn_id = f"acc26-{e['date'].replace('/','')}-{e['account']}-{int(e['debit'] or e['credit'])}"
             if txn_id in existing_ids:
@@ -2553,16 +2543,44 @@ def api_acc26_preview():
                 "uncertain":       False,
             })
             added += 1
-
+        _acc26_job["step"] = "saving"
         _assign_seq(ledger)
         _save_json(LEDGER_PATH, ledger)
-        return jsonify({"applied": added, "total_parsed": len(entries), "ledger_total": len(ledger)})
+        _acc26_job = {"status": "done", "applied": added,
+                      "total_parsed": len(entries), "ledger_total": len(ledger)}
+    except Exception as ex:
+        _acc26_job = {"status": "error", "error": str(ex)}
 
-    # Preview only
+
+@app.route("/api/admin/acc26-preview", methods=["POST"])
+@login_required
+def api_acc26_preview():
+    """Parse uploaded ACC26 xlsx (or local file if present), return entries for preview."""
+    import threading
+    f = request.files.get("file")
+    if f:
+        file_bytes = f.read()
+    elif os.path.exists(_ACC26_LOCAL):
+        with open(_ACC26_LOCAL, "rb") as fh:
+            file_bytes = fh.read()
+    else:
+        return jsonify({"error": "no file uploaded and local ACC26ver5_MASTER.xlsx not found"}), 400
+
+    apply_it = request.form.get("apply", "") == "1"
+
+    if apply_it:
+        # Fire background thread, return immediately
+        global _acc26_job
+        _acc26_job = {"status": "running", "step": "starting"}
+        t = threading.Thread(target=_run_acc26_import, args=(file_bytes,), daemon=True)
+        t.start()
+        return jsonify({"status": "running"})
+
+    # Preview only — parse now (fast, no DB write)
+    entries = _parse_acc26_sudhir(file_bytes)
     by_type = {}
     for e in entries:
-        t = e["type"]
-        by_type[t] = by_type.get(t, 0) + 1
+        by_type[e["type"]] = by_type.get(e["type"], 0) + 1
     by_heading = {}
     for e in entries:
         h = e["heading"] or "(none)"
@@ -2574,6 +2592,13 @@ def api_acc26_preview():
         "by_heading": dict(sorted(by_heading.items())),
         "sample": entries[:20],
     })
+
+
+@app.route("/api/admin/acc26-status", methods=["GET"])
+@login_required
+def api_acc26_status():
+    """Poll import job status."""
+    return jsonify(_acc26_job)
 
 
 @app.route("/health", methods=["GET"])
