@@ -97,41 +97,37 @@ body {
 <body>
 <div class="user-chip">{{ user }}</div>
 
-<div style="display:flex; align-items:center; gap:2rem; margin-bottom:2.5rem; max-width:780px; width:100%;">
+<div style="display:flex; align-items:flex-start; gap:2.5rem; max-width:1100px; width:100%;">
   <img src="/static/img/shylock.jpeg" alt="Chancellor of the Exchequer"
-       style="height:280px; border-radius:12px; flex-shrink:0;">
-  <div>
-    <div class="page-title" style="text-align:left;">Sudhir Financial Management</div>
-    <div class="page-subtitle" style="text-align:left;">Your personal finance dashboard</div>
-  </div>
-</div>
-
-<div class="card-grid">
-  <a href="/expenses" class="nav-card active-card">
-    <div class="icon">💳</div>
-    <div class="label">Expense Management</div>
-    <div class="desc">Master ledger, budget tracker, transfer reconciliation, and MIS reports across all fiscal years.</div>
-  </a>
-
-  <div class="nav-card" onclick="alert('Tax Management coming soon')">
-    <div class="icon">🧾</div>
-    <div class="label">Tax Management</div>
-    <div class="desc">Income tax planning, advance tax tracking, deductions, and ITR filing support.</div>
-    <span class="placeholder-badge">Coming soon</span>
-  </div>
-
-  <div class="nav-card" onclick="alert('Investment Management coming soon')">
-    <div class="icon">📈</div>
-    <div class="label">Investment Management</div>
-    <div class="desc">Portfolio overview, mutual funds, equities, real estate, and returns analysis.</div>
-    <span class="placeholder-badge">Coming soon</span>
-  </div>
-
-  <div class="nav-card" onclick="alert('Financial Statements coming soon')">
-    <div class="icon">📊</div>
-    <div class="label">Financial Statements</div>
-    <div class="desc">Net worth, income &amp; expenditure statement, balance sheet, and annual summaries.</div>
-    <span class="placeholder-badge">Coming soon</span>
+       style="height:580px; border-radius:14px; flex-shrink:0; object-fit:cover;">
+  <div style="display:flex; flex-direction:column; width:100%;">
+    <div class="page-title" style="margin-bottom:0.25rem;">Sudhir Financial Management</div>
+    <div class="page-subtitle" style="margin-bottom:1.5rem;">Your personal finance dashboard</div>
+    <div class="card-grid" style="max-width:100%;">
+      <a href="/expenses" class="nav-card active-card">
+        <div class="icon">💳</div>
+        <div class="label">Expense Management</div>
+        <div class="desc">Master ledger, budget tracker, transfer reconciliation, and MIS reports across all fiscal years.</div>
+      </a>
+      <div class="nav-card" onclick="alert('Tax Management coming soon')">
+        <div class="icon">🧾</div>
+        <div class="label">Tax Management</div>
+        <div class="desc">Income tax planning, advance tax tracking, deductions, and ITR filing support.</div>
+        <span class="placeholder-badge">Coming soon</span>
+      </div>
+      <div class="nav-card" onclick="alert('Investment Management coming soon')">
+        <div class="icon">📈</div>
+        <div class="label">Investment Management</div>
+        <div class="desc">Portfolio overview, mutual funds, equities, real estate, and returns analysis.</div>
+        <span class="placeholder-badge">Coming soon</span>
+      </div>
+      <div class="nav-card" onclick="alert('Financial Statements coming soon')">
+        <div class="icon">📊</div>
+        <div class="label">Financial Statements</div>
+        <div class="desc">Net worth, income &amp; expenditure statement, balance sheet, and annual summaries.</div>
+        <span class="placeholder-badge">Coming soon</span>
+      </div>
+    </div>
   </div>
 </div>
 </body>
