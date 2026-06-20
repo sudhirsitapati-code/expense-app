@@ -1331,7 +1331,7 @@ async function loadMIS(period, btn) {
 
   const tbody = document.getElementById('misBody');
   let html = '';
-  let opTotal = {fy26:0,fy26fy:0,budget:0,actual:0};
+  let nonFinTotal = {fy26:0, fy26fy:0, budget:0, actual:0};
   (d.groups||[]).forEach(g => {
     html += `<tr class="mis-super"><td colspan="${cols}" class="ps-2">${g.super_category}</td></tr>`;
     (g.rows||[]).forEach(row => {
@@ -1356,12 +1356,18 @@ async function loadMIS(period, btn) {
       <td><span style="font-size:10px">${g.subtotal.pct||0}%</span></td>
     </tr>`;
 
-    if (g.super_category === 'Operating') {
-      html += `<tr class="mis-op"><td class="ps-2">OPERATING EXPENSES TOTAL</td>
-        <td class="text-end">${fmt(g.subtotal.fy26)}</td>
-        ${isYtd ? `<td class="text-end">${fmt(g.subtotal.fy26_full_year||0)}</td>` : ''}
-        <td class="text-end">${fmt(g.subtotal.budget)}</td>
-        <td class="text-end">${fmt(g.subtotal.actual)}</td><td></td></tr>`;
+    if (['Operating','Non-Operating'].includes(g.super_category)) {
+      nonFinTotal.fy26   += g.subtotal.fy26   || 0;
+      nonFinTotal.fy26fy += g.subtotal.fy26_full_year || 0;
+      nonFinTotal.budget += g.subtotal.budget || 0;
+      nonFinTotal.actual += g.subtotal.actual || 0;
+    }
+    if (g.super_category === 'Non-Operating') {
+      html += `<tr class="mis-op"><td class="ps-2">NON FINANCIAL EXPENSE (Operating + Non-Operating)</td>
+        <td class="text-end">${fmt(nonFinTotal.fy26)}</td>
+        ${isYtd ? `<td class="text-end">${fmt(nonFinTotal.fy26fy)}</td>` : ''}
+        <td class="text-end">${fmt(nonFinTotal.budget)}</td>
+        <td class="text-end">${fmt(nonFinTotal.actual)}</td><td></td></tr>`;
     }
   });
 
