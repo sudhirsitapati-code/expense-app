@@ -97,8 +97,14 @@ body {
 <body>
 <div class="user-chip">{{ user }}</div>
 
-<div class="page-title">Sudhir Financial Management</div>
-<div class="page-subtitle">Your personal finance dashboard</div>
+<div style="display:flex; align-items:center; gap:2rem; margin-bottom:2.5rem; max-width:780px; width:100%;">
+  <img src="/static/img/shylock.jpeg" alt="Chancellor of the Exchequer"
+       style="height:160px; border-radius:12px; opacity:0.85; flex-shrink:0;">
+  <div>
+    <div class="page-title" style="text-align:left;">Sudhir Financial Management</div>
+    <div class="page-subtitle" style="text-align:left;">Your personal finance dashboard</div>
+  </div>
+</div>
 
 <div class="card-grid">
   <a href="/expenses" class="nav-card active-card">
