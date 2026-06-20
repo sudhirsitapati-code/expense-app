@@ -2377,6 +2377,197 @@ def api_year_summary():
                     "categories": categories, "multi_year": multi_year})
 
 
+@app.route("/admin/acc26")
+@login_required
+def admin_acc26_page():
+    return render_template("acc26_admin.html")
+
+
+def _parse_acc26_sudhir(file_bytes):
+    """Parse SudhirExpenses sheet from ACC26 xlsx. Returns list of normalised ledger-ready dicts."""
+    import io, openpyxl
+    from datetime import datetime as _dt
+
+    _ACCT_MAP = {
+        "sbi4852":"SBI-3152","sbi":"SBI-3152",
+        "icic0018":"ICICI-0018","ici0018":"ICICI-0018","icici0018":"ICICI-0018","ICI0018":"ICICI-0018","ICIC0018":"ICICI-0018",
+        "icic7281":"ICICI-7281","ici7281":"ICICI-7281","icici7281":"ICICI-7281","ICIC7281":"ICICI-7281",
+        "icic1331":"ICICI-1331","ici1331":"ICICI-1331","icici1331":"ICICI-1331","icci1331":"ICICI-1331",
+        "ICIC1331":"ICICI-1331","Icici1331":"ICICI-1331",
+        "icic9175":"ICICI-9175","ici9175":"ICICI-9175","icici9175":"ICICI-9175","ICIC9175":"ICICI-9175",
+        "cridit card":"ICICI-CC","credit card":"ICICI-CC",
+    }
+    _TYPE_MAP = {
+        "expense":"expense","official":"official","transfer":"transfer","transfer ":"transfer",
+        "income":"income","tax":"expense","investment":"investment","error":"error",
+    }
+    _HEADING_NORM_ACC26 = {
+        "alchol":"Alcohol","alcohol":"Alcohol",
+        "amma":"Amma","AMMA":"Amma",
+        "birthday parties":"Entertainment","books":"Entertainment","entertaiment":"Entertainment","entertainment":"Entertainment",
+        "cash":"Cash",
+        "charity":"Charity","donation":"Charity",
+        "children education":"Children Education","children education ":"Children Education",
+        "clothes":"Clothes","clothing":"Clothes","dry cleaning":"Clothes",
+        "e&g":"Electricity & Gas","electricity & gas":"Electricity & Gas","electricity":"Electricity & Gas",
+        "eating out":"Eating Out","eating out ":"Eating Out",
+        "financial":"Financial Expense / OD Interest","financial expense":"Financial Expense / OD Interest",
+        "gift":"Gifts","gifts":"Gifts",
+        "groceries":"Groceries","grociries":"Groceries","grocries":"Groceries",
+        "hoilday":"Holiday","holiday":"Holiday",
+        "home office":"Home office","home office ":"Home office",
+        "insurance":"Insurance",
+        "ketki":"Ketki",
+        "maintenance":"Maintenance Expense","maintenance expense":"Maintenance Expense",
+        "malhar":"Malhar","malhar renovation":"Malhar",
+        "medical":"Medical",
+        "misc":"Misc","miscellaneous":"Misc",
+        "one time charge":"One Time Charge","one time":"One Time Charge",
+        "staff salary":"Staff Salary","staff slary":"Staff Salary","salary":"Staff Salary",
+        "tax":"Tax","home loan":"Home Loan",
+        "uspaar":"Uspaar",
+        "wellness":"Wellness",
+        "kalpataru":"Kalpataru Maintenance","kalpataru maintenance":"Kalpataru Maintenance",
+    }
+
+    def _parse_date_acc26(v):
+        if isinstance(v, _dt):
+            return v.strftime("%d/%m/%Y")
+        if isinstance(v, str):
+            v = v.strip()
+            for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%d-%m-%y", "%Y-%m-%d"):
+                try:
+                    return _dt.strptime(v, fmt).strftime("%d/%m/%Y")
+                except ValueError:
+                    pass
+        return None
+
+    def _norm_heading_acc26(h):
+        if not h:
+            return ""
+        return _HEADING_NORM_ACC26.get(str(h).strip().lower(), str(h).strip())
+
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    ws = wb["SudhirExpenses"]
+    rows = list(ws.iter_rows(values_only=True))
+
+    FY26_START = _dt(2025, 4, 1)
+    FY26_END   = _dt(2026, 3, 31, 23, 59, 59)
+
+    entries = []
+    for i, row in enumerate(rows[1:], start=2):  # row 1 is header
+        raw_date    = row[3]
+        raw_acct    = str(row[2] or "").strip()
+        raw_debit   = row[6]
+        raw_credit  = row[7]
+        raw_type    = str(row[8] or "").strip()
+        raw_heading = str(row[9] or "").strip()
+        raw_desc    = str(row[4] or "").strip()
+        raw_paid    = str(row[5] or "").strip()
+        raw_note    = str(row[10] or "").strip()
+
+        date_str = _parse_date_acc26(raw_date)
+        if not date_str:
+            continue
+
+        # FY26 filter
+        try:
+            dt = _dt.strptime(date_str, "%d/%m/%Y")
+        except ValueError:
+            continue
+        if not (FY26_START <= dt <= FY26_END):
+            continue
+
+        typ = _TYPE_MAP.get(raw_type.lower(), "expense")
+        if typ == "error":
+            continue   # skip data-entry errors
+
+        debit  = float(raw_debit)  if raw_debit  else 0.0
+        credit = float(raw_credit) if raw_credit else 0.0
+        # Negative debits in this sheet mean credits/returns
+        if debit < 0:
+            credit = abs(debit)
+            debit  = 0.0
+
+        acct = _ACCT_MAP.get(raw_acct, _ACCT_MAP.get(raw_acct.lower(), raw_acct))
+        heading = _norm_heading_acc26(raw_heading) if raw_heading else ""
+
+        entries.append({
+            "date":            date_str,
+            "account":         acct,
+            "raw_description": raw_desc,
+            "paid_to":         raw_paid if raw_paid != "None" else "",
+            "debit":           debit,
+            "credit":          credit,
+            "type":            typ,
+            "heading":         heading,
+            "note":            raw_note if raw_note != "None" else "",
+            "source":          "acc26_import",
+        })
+
+    return entries
+
+
+@app.route("/api/admin/acc26-preview", methods=["POST"])
+@login_required
+def api_acc26_preview():
+    """Parse uploaded ACC26 xlsx, return entries grouped by type/heading for preview."""
+    import io
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "no file"}), 400
+
+    entries = _parse_acc26_sudhir(f.read())
+    apply_it = request.form.get("apply", "") == "1"
+
+    if apply_it:
+        ledger = load_ledger()
+        existing_ids = {t["txn_id"] for t in ledger}
+
+        added = 0
+        for e in entries:
+            txn_id = f"acc26-{e['date'].replace('/','')}-{e['account']}-{int(e['debit'] or e['credit'])}"
+            if txn_id in existing_ids:
+                continue
+            existing_ids.add(txn_id)
+            ledger.append({
+                "txn_id":          txn_id,
+                "date":            e["date"],
+                "account":         e["account"],
+                "raw_description": e["raw_description"],
+                "paid_to":         e["paid_to"],
+                "debit":           e["debit"],
+                "credit":          e["credit"],
+                "type":            e["type"],
+                "heading":         e["heading"],
+                "note":            e["note"],
+                "source":          "acc26_import",
+                "uncertain":       False,
+            })
+            added += 1
+
+        _assign_seq(ledger)
+        _save_json(LEDGER_PATH, ledger)
+        return jsonify({"applied": added, "total_parsed": len(entries), "ledger_total": len(ledger)})
+
+    # Preview only
+    by_type = {}
+    for e in entries:
+        t = e["type"]
+        by_type[t] = by_type.get(t, 0) + 1
+    by_heading = {}
+    for e in entries:
+        h = e["heading"] or "(none)"
+        by_heading[h] = by_heading.get(h, 0) + 1
+
+    return jsonify({
+        "total": len(entries),
+        "by_type": by_type,
+        "by_heading": dict(sorted(by_heading.items())),
+        "sample": entries[:20],
+    })
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
