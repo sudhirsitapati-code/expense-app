@@ -26,7 +26,8 @@ th { white-space:nowrap; }
           <input type="file" id="xlFile" class="form-control form-control-sm" accept=".xlsx" style="width:300px">
         </div>
         <div class="align-self-end">
-          <button class="btn btn-sm btn-primary" onclick="doPreview()"><i class="bi bi-search me-1"></i>Preview</button>
+          <button class="btn btn-sm btn-primary" onclick="doPreview()"><i class="bi bi-search me-1"></i>Preview uploaded file</button>
+          <button class="btn btn-sm btn-outline-primary ms-2" onclick="doPreviewLocal()"><i class="bi bi-hdd me-1"></i>Use local file</button>
         </div>
         <div class="align-self-end ms-2" id="applyZone" style="display:none">
           <button class="btn btn-sm btn-success" onclick="doApply()"><i class="bi bi-check-circle me-1"></i>Apply to Master Ledger</button>
@@ -73,16 +74,16 @@ th { white-space:nowrap; }
 <script>
 const fmt = v => v ? '₹' + Number(v).toLocaleString('en-IN', {maximumFractionDigits:0}) : '—';
 
-async function doPreview() {
-  const f = document.getElementById('xlFile').files[0];
-  if (!f) { alert('Choose file first'); return; }
-  document.getElementById('msg').textContent = 'Parsing…';
-  const fd = new FormData();
-  fd.append('file', f);
+async function doPreviewLocal() {
+  document.getElementById('msg').textContent = 'Reading local ACC26ver5_MASTER.xlsx…';
+  const fd = new FormData();  // no file — backend uses local path
   const r = await fetch('/api/admin/acc26-preview', { method:'POST', body: fd });
   const d = await r.json();
   if (d.error) { document.getElementById('msg').textContent = 'Error: ' + d.error; return; }
+  renderPreview(d);
+}
 
+function renderPreview(d) {
   document.getElementById('tTotal').textContent = d.total;
   document.getElementById('tiles').style.display = '';
   document.getElementById('breakdowns').style.display = '';
@@ -107,17 +108,29 @@ async function doPreview() {
   </tr>`).join('');
 }
 
+async function doPreview() {
+  const f = document.getElementById('xlFile').files[0];
+  if (!f) { alert('Choose file first'); return; }
+  document.getElementById('msg').textContent = 'Parsing…';
+  const fd = new FormData();
+  fd.append('file', f);
+  const r = await fetch('/api/admin/acc26-preview', { method:'POST', body: fd });
+  const d = await r.json();
+  if (d.error) { document.getElementById('msg').textContent = 'Error: ' + d.error; return; }
+  renderPreview(d);
+}
+
 async function doApply() {
   if (!confirm('Import all FY26 entries into the master ledger? Duplicates are skipped automatically.')) return;
-  const f = document.getElementById('xlFile').files[0];
-  if (!f) { alert('Re-select file'); return; }
   const msg = document.getElementById('resultMsg');
   msg.textContent = 'Applying…'; msg.className = 'fw-semibold text-muted mt-3';
   const fd = new FormData();
-  fd.append('file', f);
+  const f = document.getElementById('xlFile').files[0];
+  if (f) fd.append('file', f);  // if no file, backend uses local path
   fd.append('apply', '1');
   const r = await fetch('/api/admin/acc26-preview', { method:'POST', body: fd });
   const d = await r.json();
+  if (d.error) { msg.textContent = 'Error: ' + d.error; msg.className = 'fw-semibold text-danger mt-3'; return; }
   msg.textContent = `✓ Added ${d.applied} new entries (${d.total_parsed - d.applied} skipped as duplicates). Ledger now has ${d.ledger_total} entries.`;
   msg.className = 'fw-semibold text-success mt-3';
 }

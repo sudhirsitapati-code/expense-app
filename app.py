@@ -2508,16 +2508,24 @@ def _parse_acc26_sudhir(file_bytes):
     return entries
 
 
+_ACC26_LOCAL = os.path.join(BASE_DIR, "data", "fy26", "ACC26ver5_MASTER.xlsx")
+
+
 @app.route("/api/admin/acc26-preview", methods=["POST"])
 @login_required
 def api_acc26_preview():
-    """Parse uploaded ACC26 xlsx, return entries grouped by type/heading for preview."""
+    """Parse uploaded ACC26 xlsx (or local file if present), return entries for preview."""
     import io
     f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "no file"}), 400
+    if f:
+        file_bytes = f.read()
+    elif os.path.exists(_ACC26_LOCAL):
+        with open(_ACC26_LOCAL, "rb") as fh:
+            file_bytes = fh.read()
+    else:
+        return jsonify({"error": "no file uploaded and local ACC26ver5_MASTER.xlsx not found"}), 400
 
-    entries = _parse_acc26_sudhir(f.read())
+    entries = _parse_acc26_sudhir(file_bytes)
     apply_it = request.form.get("apply", "") == "1"
 
     if apply_it:
