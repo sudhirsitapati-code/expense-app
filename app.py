@@ -263,24 +263,21 @@ def api_mis():
     # FY month names covered by this period (for FY26 lookup)
     fy_mon_names = [CAL_TO_FY_MON[int(m.split("-")[1])] for m in period_months]
 
-    # ── Heading → super-category (mirrors ACC26 Summaryexpenses structure) ────
+    # ── Heading → super-category ──────────────────────────────────────────────
     HEADING_SUPER = {
-        # Operating
-        "Misc":"Operating","Clothes":"Operating","Gifts":"Operating","Cash":"Operating",
-        "Maintenance Expense":"Operating","Malhar":"Operating","Home office":"Operating",
-        "Electricity & Gas":"Operating","Alcohol":"Operating","Medical":"Operating",
-        "Holiday":"Operating","Groceries":"Operating","Eating Out":"Operating",
-        "Amma":"Operating","Wellness":"Operating","Ketki":"Operating",
-        "Staff Salary":"Operating","Financial Expense / OD Interest":"Operating",
-        "Financial Expense":"Operating","Entertainment":"Operating",
-        "One Time Charge":"Operating",
-        # Non-Operating
-        "Children Education":"Non-Operating","Kalpataru Maintenance":"Non-Operating",
-        "Charity":"Non-Operating","Uspaar":"Non-Operating","Insurance":"Non-Operating",
-        # Financial
-        "Home Loan":"Financial","Tax":"Financial",
+        "Groceries":"Household","Staff Salary":"Household","Electricity & Gas":"Household",
+        "Misc":"Household","Cash":"Household",
+        "Alcohol":"Personal","Wellness":"Personal","Clothes":"Personal",
+        "Gifts":"Family","Medical":"Family","Amma":"Family","Ketki":"Family",
+        "Children Education":"Family",
+        "Charity":"Giving","Uspaar":"Giving",
+        "Holiday":"Lifestyle","Eating Out":"Lifestyle","Entertainment":"Lifestyle",
+        "Malhar":"Property","Maintenance Expense":"Property","Home office":"Property",
+        "One Time Charge":"Property","Kalpataru Maintenance":"Property",
+        "Financial Expense / OD Interest":"Financial","Financial Expense":"Financial",
+        "Insurance":"Financial","Home Loan":"Financial","Tax":"Financial",
     }
-    SUPER_ORDER = ["Operating","Non-Operating","Financial"]
+    SUPER_ORDER = ["Household","Personal","Family","Giving","Lifestyle","Property","Financial"]
 
     # App category → ACC26 heading (for FY27 actual from approval log)
     APP_TO_HEADING = {
@@ -334,7 +331,7 @@ def api_mis():
         all_headings = _CANONICAL
         by_super: dict = {s: [] for s in SUPER_ORDER}
         for heading in sorted(all_headings):
-            super_cat = HEADING_SUPER.get(heading, "Operating")
+            super_cat = HEADING_SUPER.get(heading, "Household")
             fy26_total = round(_fy26_full_year(heading))
             fy26_period_val = round(_fy26_period(heading))
             budget = round(budget_annual.get(heading, 0))
@@ -399,7 +396,7 @@ def api_mis():
     by_super: dict = {s: [] for s in SUPER_ORDER}
 
     for heading in sorted(all_headings):
-        super_cat = HEADING_SUPER.get(heading, "Operating")
+        super_cat = HEADING_SUPER.get(heading, "Household")
         fy26 = round(_fy26_period(heading))
         budget = _budget(heading)
         actual = round(fy27_actual.get(heading, 0))
