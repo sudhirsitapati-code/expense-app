@@ -301,6 +301,30 @@ def api_mis():
         annual = budget_annual.get(heading, 0)
         return annual if period == "ytd" else round(annual / 12 * n_months)
 
+    # ── Heading normalisation: non-canonical → canonical ─────────────────────
+    # Headings that are investments/transfers — exclude from budget tracker
+    _INVESTMENT_HEADINGS = {"Art","Investment","Short Term Advance","Credit Card Loan"}
+    # Canonical set (only these appear as rows)
+    _CANONICAL = set(budget_annual.keys()) | set(FY26_MONTHLY.keys())
+    # Case-insensitive + common variant → canonical
+    _HEADING_NORM = {h.lower(): h for h in _CANONICAL}
+    _HEADING_NORM.update({
+        "malhar renovation": "Malhar",
+        "interbank": "Misc",
+        "offical": "Misc", "official": "Misc",
+        "eating out": "Eating Out",
+        "children education": "Children Education",
+        "staff salary": "Staff Salary",
+        "electricity & gas": "Electricity & Gas",
+        "financial expense": "Financial Expense / OD Interest",
+    })
+
+    def _norm_heading(h):
+        if not h: return "Misc"
+        if h in _INVESTMENT_HEADINGS: return None          # exclude
+        if h in _CANONICAL: return h
+        return _HEADING_NORM.get(h.lower().strip(), "Misc")  # roll unknown → Misc
+
     # ── FY27 actual from master ledger ────────────────────────────────────────
     from src.master_ledger import _parse_date as _ml_parse_date
     fy27_actual: dict = {}
@@ -316,13 +340,16 @@ def api_mis():
         ym = dt.strftime("%Y-%m")
         if ym not in period_months:
             continue
-        heading = txn.get("heading", "Misc") or "Misc"
+        raw_heading = txn.get("heading", "") or ""
+        heading = _norm_heading(raw_heading)
+        if heading is None:
+            continue   # investment heading — skip
         amt = float(txn.get("debit", 0) or 0)
         if amt > 0:
             fy27_actual[heading] = fy27_actual.get(heading, 0) + amt
 
-    # ── Build grouped rows ────────────────────────────────────────────────────
-    all_headings = set(budget_annual.keys()) | set(FY26_MONTHLY.keys()) | set(fy27_actual.keys())
+    # ── Build grouped rows — only canonical headings ──────────────────────────
+    all_headings = _CANONICAL
     by_super: dict = {s: [] for s in SUPER_ORDER}
 
     for heading in sorted(all_headings):
