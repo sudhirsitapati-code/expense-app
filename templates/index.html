@@ -671,7 +671,8 @@ function switchReport(name, el) {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-const fmt = n => n ? '₹' + Math.abs(n).toLocaleString('en-IN', {maximumFractionDigits:0}) : '—';
+const fmt    = n => n ? '₹' + Math.abs(n).toLocaleString('en-IN', {maximumFractionDigits:0}) : '—';
+const fmtCr  = n => n != null ? '₹' + (Math.abs(n)/1e7).toLocaleString('en-IN', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' Cr' : '—';
 
 function typeBadge(t) {
   const cls = {
@@ -1021,8 +1022,8 @@ async function loadLedger() {
   const r = await fetch('/api/master-ledger' + qs);
   const d = await r.json();
 
-  document.getElementById('lTotalDebit').textContent  = fmt(d.total_debit);
-  document.getElementById('lTotalCredit').textContent = fmt(d.total_credit);
+  document.getElementById('lTotalDebit').textContent  = fmtCr(d.total_debit);
+  document.getElementById('lTotalCredit').textContent = fmtCr(d.total_credit);
   document.getElementById('lUncertain').textContent   = d.uncertain;
   document.getElementById('lCount').textContent       = d.count;
   document.getElementById('notSureBadge').textContent = d.uncertain;
