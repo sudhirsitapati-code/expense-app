@@ -122,25 +122,25 @@ body { background:#f8f9fa; font-size:14px; }
   <div class="kpi-row" id="bs-kpis"></div>
   <table class="fs-table"><thead><tr>
     <th>Category</th>
-    <th class="r">FY23 (₹ L)</th>
-    <th class="r">FY24 (₹ L)</th>
-    <th class="r">FY25 (₹ L)</th>
-    <th class="r">FY26 (₹ L)</th>
+    <th class="r">FY23 (₹ Cr)</th>
+    <th class="r">FY24 (₹ Cr)</th>
+    <th class="r">FY25 (₹ Cr)</th>
+    <th class="r">FY26 (₹ Cr)</th>
   </tr></thead><tbody id="bs-body"></tbody></table>
 </div>
 
 <!-- Assets & Liabilities Detail Tab -->
 <div id="tab-detail" class="tab-panel">
-  <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#64748b; margin-bottom:8px;">Assets — Market Value (₹ Lakhs)</div>
+  <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#64748b; margin-bottom:8px;">Assets — Market Value (₹ Crores)</div>
   <table class="fs-table"><thead><tr>
     <th>Asset</th><th>Type</th>
-    <th class="r">FY24</th><th class="r">FY25</th><th class="r">FY26</th>
+    <th class="r">FY24 (₹ Cr)</th><th class="r">FY25 (₹ Cr)</th><th class="r">FY26 (₹ Cr)</th>
   </tr></thead><tbody id="assets-body"></tbody></table>
 
-  <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#64748b; margin:20px 0 8px;">Liabilities (₹ Lakhs)</div>
+  <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#64748b; margin:20px 0 8px;">Liabilities (₹ Crores)</div>
   <table class="fs-table"><thead><tr>
     <th>Liability</th><th>Type</th>
-    <th class="r">FY24</th><th class="r">FY25</th><th class="r">FY26</th>
+    <th class="r">FY24 (₹ Cr)</th><th class="r">FY25 (₹ Cr)</th><th class="r">FY26 (₹ Cr)</th>
   </tr></thead><tbody id="liabilities-body"></tbody></table>
 </div>
 
@@ -150,8 +150,11 @@ let _activeYear = 'FY26';
 const ALL_FY = ['FY24','FY25','FY26'];
 let _visibleFY = new Set(['FY24','FY25','FY26']);
 
-const fmt = v => v != null ? v.toLocaleString('en-IN', {maximumFractionDigits:1}) : '—';
+const fmt  = v => v != null ? v.toLocaleString('en-IN', {maximumFractionDigits:1}) : '—';
 const fmtL = v => v != null ? '₹' + v.toLocaleString('en-IN', {maximumFractionDigits:0}) + ' L' : '—';
+// Balance sheet values stored in Lakhs → display in Crores
+const fmtCr  = v => v != null ? (v/100).toLocaleString('en-IN', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' Cr' : '—';
+const fmtCrK = v => v != null ? '₹' + (v/100).toLocaleString('en-IN', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' Cr' : '—';
 
 function switchTab(name, el) {
   document.querySelectorAll('.fs-tab').forEach(t => t.classList.remove('active'));
@@ -296,13 +299,13 @@ function renderBS(d) {
   const nw24 = bs.FY24.net_worth;
 
   document.getElementById('bs-kpis').innerHTML = `
-    <div class="kpi"><div class="kpi-label">FY24 Net Worth</div><div class="kpi-val">${fmtL(nw24)}</div></div>
-    <div class="kpi"><div class="kpi-label">FY25 Net Worth</div><div class="kpi-val">${fmtL(nw25)}</div></div>
-    <div class="kpi"><div class="kpi-label">FY26 Net Worth</div><div class="kpi-val blue">${fmtL(nw)}</div></div>
-    <div class="kpi"><div class="kpi-label">3-Year Growth</div><div class="kpi-val green">+${fmtL(nw - bs.FY23.net_worth)}</div></div>`;
+    <div class="kpi"><div class="kpi-label">FY24 Net Worth</div><div class="kpi-val">${fmtCrK(nw24)}</div></div>
+    <div class="kpi"><div class="kpi-label">FY25 Net Worth</div><div class="kpi-val">${fmtCrK(nw25)}</div></div>
+    <div class="kpi"><div class="kpi-label">FY26 Net Worth</div><div class="kpi-val blue">${fmtCrK(nw)}</div></div>
+    <div class="kpi"><div class="kpi-label">3-Year Growth</div><div class="kpi-val green">+${fmtCrK(nw - bs.FY23.net_worth)}</div></div>`;
 
   const g = k => fys.map(f => bs[f] ? bs[f][k] : null);
-  const r4 = (label, key, cls='') => `<tr class="${cls}"><td${cls?'':' class="i"'}>${label}</td>${g(key).map(v => `<td class="r">${fmt(v)}</td>`).join('')}</tr>`;
+  const r4 = (label, key, cls='') => `<tr class="${cls}"><td${cls?'':' class="i"'}>${label}</td>${g(key).map(v => `<td class="r">${fmtCr(v)}</td>`).join('')}</tr>`;
   const s4 = (label, key, cls='sub') => r4(label, key, cls);
 
   let html = '';
@@ -332,7 +335,7 @@ function renderBS(d) {
     if (i === 0) { html += `<td class="r">—</td>`; return; }
     const prev = fys[i-1];
     const chg = bs[f] && bs[prev] ? bs[f].net_worth - bs[prev].net_worth : null;
-    html += `<td class="r">${chg != null ? '+' + fmt(chg) : '—'}</td>`;
+    html += `<td class="r">${chg != null ? '+' + fmtCr(chg) : '—'}</td>`;
   });
   html += `</tr>`;
 
@@ -341,22 +344,21 @@ function renderBS(d) {
 
 function renderDetail(d) {
   const typeColor2 = t => `<span class="badge ${typeColor(t)}">${t}</span>`;
-  const v = x => x != null ? fmt(x) : '<span style="color:#cbd5e1">—</span>';
+  const v = x => x != null ? fmtCr(x) : '<span style="color:#cbd5e1">—</span>';
 
   document.getElementById('assets-body').innerHTML = d.assets.map(a => {
-    // group header rows
     return `<tr><td class="i">${a.name}</td><td>${typeColor2(a.type)}</td><td class="r">${v(a.fy24)}</td><td class="r">${v(a.fy25)}</td><td class="r">${v(a.fy26)}</td></tr>`;
   }).join('') + `<tr class="tot"><td colspan="2">Total Assets</td>
-    <td class="r">${fmt(d.balance_sheet.FY24.total_assets)}</td>
-    <td class="r">${fmt(d.balance_sheet.FY25.total_assets)}</td>
-    <td class="r">${fmt(d.balance_sheet.FY26.total_assets)}</td></tr>`;
+    <td class="r">${fmtCr(d.balance_sheet.FY24.total_assets)}</td>
+    <td class="r">${fmtCr(d.balance_sheet.FY25.total_assets)}</td>
+    <td class="r">${fmtCr(d.balance_sheet.FY26.total_assets)}</td></tr>`;
 
   document.getElementById('liabilities-body').innerHTML = d.liabilities.map(l =>
     `<tr><td class="i">${l.name}</td><td>${typeColor2(l.type)}</td><td class="r">${v(l.fy24)}</td><td class="r">${v(l.fy25)}</td><td class="r">${v(l.fy26)}</td></tr>`
   ).join('') + `<tr class="totr"><td colspan="2">Total Liabilities</td>
-    <td class="r">${fmt(d.balance_sheet.FY24.total_liabilities)}</td>
-    <td class="r">${fmt(d.balance_sheet.FY25.total_liabilities)}</td>
-    <td class="r">${fmt(d.balance_sheet.FY26.total_liabilities)}</td></tr>`;
+    <td class="r">${fmtCr(d.balance_sheet.FY24.total_liabilities)}</td>
+    <td class="r">${fmtCr(d.balance_sheet.FY25.total_liabilities)}</td>
+    <td class="r">${fmtCr(d.balance_sheet.FY26.total_liabilities)}</td></tr>`;
 }
 
 function renderAll() {
