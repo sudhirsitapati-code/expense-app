@@ -253,10 +253,11 @@ function renderPL(d) {
 
   // Tax — expandable
   const taxId = 'tax-exp';
+  const estTag = `<span style="font-size:10px;color:#f59e0b;font-weight:600;margin-left:4px;">(est.)</span>`;
   html += sh('Tax', cols);
-  html += expandRow(taxId, 'Total Tax', fy.map(f => p[f].total_tax));
+  html += expandRow(taxId, 'Total Tax', fy.map(f => p[f].total_tax), '', fy.map(f => p[f].fin_detail.tax_total_estimated ? estTag : ''));
   html += childRow(taxId, 'Tax Paid (advance / self-assessment)', fy.map(f => p[f].fin_detail.tax_paid));
-  html += childRow(taxId, 'Tax DAS (deducted at source by employer)', fy.map(f => p[f].fin_detail.tax_das));
+  html += childRow(taxId, 'Tax DAS (deducted at source by employer)', fy.map(f => p[f].fin_detail.tax_das), false, fy.map(f => p[f].fin_detail.tax_total_estimated ? estTag : ''));
 
   html += subrow('Total Expenditure (incl. tax)', fy.map(f => p[f].total_expenditure), 'totr');
   html += subrow('Net Surplus / (Deficit)', fy.map(f => p[f].net_surplus), 'totp');
@@ -274,18 +275,15 @@ function row(label, vals) {
 function subrow(label, vals, cls='sub') {
   return `<tr class="${cls}"><td>${label}</td>${vals.map((v, i) => `<td class="r pl-col-${ALL_FY[i]}">${fmt(v)}</td>`).join('')}</tr>`;
 }
-function expandRow(id, label, vals, cls='') {
+function expandRow(id, label, vals, cls='', suffixes=[]) {
   const open = !!_expandState[id];
   const btnCls = open ? 'expand-btn open' : 'expand-btn';
   const btnTxt = open ? '−' : '+';
-  return `<tr class="${cls}"><td class="i" style="display:flex;align-items:center;"><span class="${btnCls}" id="btn-${id}" onclick="toggleExpand('${id}')">${btnTxt}</span>${label}</td>${vals.map((v, i) => `<td class="r pl-col-${ALL_FY[i]}">${fmt(v)}</td>`).join('')}</tr>`;
+  return `<tr class="${cls}"><td class="i" style="display:flex;align-items:center;"><span class="${btnCls}" id="btn-${id}" onclick="toggleExpand('${id}')">${btnTxt}</span>${label}</td>${vals.map((v, i) => `<td class="r pl-col-${ALL_FY[i]}">${fmt(v)}${suffixes[i]||''}</td>`).join('')}</tr>`;
 }
-function childRow(parentId, label, vals, dedup=false) {
-  if (dedup) {
-    // only emit once (called once per heading across all FY — handled above)
-  }
+function childRow(parentId, label, vals, dedup=false, suffixes=[]) {
   const vis = _expandState[parentId] ? ' visible' : '';
-  return `<tr class="child-row child-of-${parentId}${vis}"><td class="i">${label}</td>${vals.map((v, i) => `<td class="r pl-col-${ALL_FY[i]}">${fmt(v)}</td>`).join('')}</tr>`;
+  return `<tr class="child-row child-of-${parentId}${vis}"><td class="i">${label}</td>${vals.map((v, i) => `<td class="r pl-col-${ALL_FY[i]}">${fmt(v)}${suffixes[i]||''}</td>`).join('')}</tr>`;
 }
 
 function renderBS(d) {

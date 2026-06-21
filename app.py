@@ -667,7 +667,9 @@ def api_financial_statements():
         "FY26": {"salary": 1122, "esop": 1958, "dividends": 55, "interest": 12, "capital_gains": 87, "other": 7},
     }
     # Total tax = Tax DAS (TDS by employer) + Tax Paid (advance/self-assessment in ledger)
-    tax_total = {"FY24": 92, "FY25": 1634, "FY26": 1200}
+    # FY26: estimated from income (new regime: 30% slab + 25% surcharge + 4% cess on 3154L, LTCG 12.5% on 87L)
+    # UPDATE FY26 with actual figure from Form 16 once available
+    tax_total = {"FY24": 92, "FY25": 1634, "FY26": 1237}
 
     # ── Balance sheet (net worth) ────────────────────────────────────────────
     balance_sheet = {
@@ -740,8 +742,8 @@ def api_financial_statements():
         od_interest = round(
             fin_detail.get("Financial Expense / OD Interest", 0) +
             fin_detail.get("Financial Expense", 0), 2)
-        tax_paid = fin_detail.get("Tax", 0)          # advance/self-assessment tax in ledger
-        tax_das = round(tax_total[fy] - tax_paid, 2) # TDS deducted at source by employer
+        tax_paid = fin_detail.get("Tax", 0)                       # advance/self-assessment in ledger
+        tax_das = round(max(0, tax_total[fy] - tax_paid), 2)      # TDS by employer (floor 0 for slight overpayments)
         fin_excl_tax = round(home_loan + insurance + od_interest, 2)
         total_tax = round(tax_paid + tax_das, 2)
         total_exp = round(non_fin + fin_excl_tax + total_tax, 2)
@@ -757,6 +759,7 @@ def api_financial_statements():
                 "od_interest": od_interest,
                 "tax_paid": tax_paid,
                 "tax_das": tax_das,
+                "tax_total_estimated": fy == "FY26",  # flag to show (est.) in UI until Form 16 loaded
             },
             "financial_total": fin_excl_tax,
             "total_tax": total_tax,
