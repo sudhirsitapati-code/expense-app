@@ -240,8 +240,8 @@ MIS_FY25_MONTHLY = {
     "Charity":        {"Apr":583500,"May":300000,"Jun":13650,"Jul":818250,"Aug":550000,"Sep":118000,"Oct":245247,"Nov":36898,"Dec":118882,"Jan":0,"Feb":100000,"Mar":415585},
     "Uspaar":         {"Apr":17580,"May":16360,"Jun":157855,"Jul":30000,"Aug":87410,"Sep":90000,"Oct":108790,"Nov":80000,"Dec":111799,"Jan":115080,"Feb":143200,"Mar":151260},
     "Insurance":      {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":119558,"Dec":168504,"Jan":0,"Feb":0,"Mar":0},
-    "Home Loan":      {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
-    "Tax":            {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+    "Home Loan":      {"Apr":587781,"May":417556,"Jun":352171,"Jul":250748,"Aug":283686,"Sep":175803,"Oct":316059,"Nov":333238,"Dec":640435,"Jan":210055,"Feb":361851,"Mar":429844},
+    "Tax":            {"Apr":1620,"May":0,"Jun":23038641,"Jul":385000,"Aug":0,"Sep":0,"Oct":83751,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
 }
 MIS_FY24_MONTHLY = {
     "Misc":           {"Apr":10612,"May":7412,"Jun":5604,"Jul":3779,"Aug":3872,"Sep":1709,"Oct":690,"Nov":0,"Dec":0,"Jan":23492,"Feb":5290,"Mar":7080},
@@ -270,7 +270,7 @@ MIS_FY24_MONTHLY = {
     "Uspaar":         {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
     "Insurance":      {"Apr":0,"May":0,"Jun":0,"Jul":342056,"Aug":0,"Sep":0,"Oct":148374,"Nov":22189,"Dec":168504,"Jan":0,"Feb":0,"Mar":138429},
     "Home Loan":      {"Apr":598843,"May":430433,"Jun":474414,"Jul":426159,"Aug":136367,"Sep":323197,"Oct":0,"Nov":593591,"Dec":411966,"Jan":590471,"Feb":600440,"Mar":575024},
-    "Tax":            {"Apr":1620,"May":2112347,"Jun":4598,"Jul":7103283,"Aug":0,"Sep":0,"Oct":61394,"Nov":0,"Dec":100,"Jan":800,"Feb":0,"Mar":0},
+    "Tax":            {"Apr":1620,"May":2112347,"Jun":4598,"Jul":7103283,"Aug":0,"Sep":0,"Oct":61394,"Nov":-87840,"Dec":100,"Jan":800,"Feb":0,"Mar":0},
 }
 
 
