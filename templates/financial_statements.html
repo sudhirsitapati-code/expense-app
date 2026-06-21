@@ -305,26 +305,75 @@ function renderBS(d) {
     <div class="kpi"><div class="kpi-label">3-Year Growth</div><div class="kpi-val green">+${fmtCrK(nw - bs.FY23.net_worth)}</div></div>`;
 
   const g = k => fys.map(f => bs[f] ? bs[f][k] : null);
-  const r4 = (label, key, cls='') => `<tr class="${cls}"><td${cls?'':' class="i"'}>${label}</td>${g(key).map(v => `<td class="r">${fmtCr(v)}</td>`).join('')}</tr>`;
-  const s4 = (label, key, cls='sub') => r4(label, key, cls);
+
+  // Custom filter functions per BS row key
+  const CHILD_FILTER = {
+    company_shares: x => x.type === 'Listed Equity' && x.name.includes('GCPL'),
+    property:       x => x.type === 'Property',
+    equity:         x => x.type === 'Mutual Fund' || x.type === 'AIF' || (x.type === 'Listed Equity' && !x.name.includes('GCPL')),
+    gold_bond:      x => x.type === 'Gold',
+    nps:            x => x.type === 'Retirement' && x.name.includes('NPS'),
+    pf:             x => x.type === 'Retirement' && x.name.includes('EPF'),
+    gratuity:       x => x.type === 'Retirement' && x.name.includes('Gratuity'),
+    private_eq:     x => x.type === 'Private Eq.',
+    art_jewellery:  x => x.type === 'Alternative',
+    home_loans:     x => x.type === 'Home Loan',
+    od:             x => x.type === 'Credit Line',
+    loan_shares:    x => x.type === 'Pledge Loan',
+  };
+
+  function bsChildren(key, pool) {
+    const fn = CHILD_FILTER[key];
+    return fn ? pool.filter(fn) : [];
+  }
+
+  function expandBsRow(id, label, key, cls='') {
+    const children = bsChildren(key, id.startsWith('bs-l') ? d.liabilities : d.assets);
+    const hasChildren = children.length > 0;
+    const open = !!_expandState[id];
+    const vals = g(key);
+    let row = `<tr class="${cls}"><td class="i" style="display:flex;align-items:center;">`;
+    if (hasChildren) {
+      row += `<span class="${open ? 'expand-btn open' : 'expand-btn'}" id="btn-${id}" onclick="toggleExpand('${id}')">${open ? '−' : '+'}</span>`;
+    } else {
+      row += `<span style="width:22px;display:inline-block;"></span>`;
+    }
+    row += `${label}</td>`;
+    row += vals.map(v => `<td class="r">${fmtCr(v)}</td>`).join('');
+    row += `</tr>`;
+    if (hasChildren) {
+      children.forEach(item => {
+        const vis = open ? ' visible' : '';
+        row += `<tr class="child-row child-of-${id}${vis}"><td class="i" style="padding-left:36px;">${item.name}</td>`;
+        row += `<td class="r">—</td>`; // FY23 not in detail data
+        row += ['fy24','fy25','fy26'].map(f => `<td class="r">${fmtCr(item[f])}</td>`).join('');
+        row += `</tr>`;
+      });
+    }
+    return row;
+  }
+
+  function s4(label, key, cls='sub') {
+    return `<tr class="${cls}"><td>${label}</td>${g(key).map(v => `<td class="r">${fmtCr(v)}</td>`).join('')}</tr>`;
+  }
 
   let html = '';
   html += `<tr class="sh"><td colspan="5">Assets</td></tr>`;
-  html += r4('Company Shares (GCPL)','company_shares');
-  html += r4('Property (C34, C51, Malhar, Uspaar)','property');
-  html += r4('Equity (MF / PMS / AIF)','equity');
-  html += r4('Gold Bonds (SGB)','gold_bond');
-  html += r4('NPS','nps');
-  html += r4('EPF / PF','pf');
-  html += r4('Gratuity','gratuity');
-  html += r4('Private Equity','private_eq');
-  html += r4('Art & Jewellery','art_jewellery');
+  html += expandBsRow('bs-a-shares',   'Company Shares (GCPL)',            'company_shares');
+  html += expandBsRow('bs-a-property', 'Property (C34, C51, Malhar, Uspaar)', 'property');
+  html += expandBsRow('bs-a-equity',   'Equity (MF / PMS / AIF)',          'equity');
+  html += expandBsRow('bs-a-gold',     'Gold Bonds (SGB)',                  'gold_bond');
+  html += expandBsRow('bs-a-nps',      'NPS',                               'nps');
+  html += expandBsRow('bs-a-pf',       'EPF / PF',                          'pf');
+  html += expandBsRow('bs-a-gratuity', 'Gratuity',                          'gratuity');
+  html += expandBsRow('bs-a-pe',       'Private Equity',                    'private_eq');
+  html += expandBsRow('bs-a-art',      'Art & Jewellery',                   'art_jewellery');
   html += s4('Total Assets','total_assets','tot');
 
   html += `<tr class="sh"><td colspan="5">Liabilities</td></tr>`;
-  html += r4('Home Loans','home_loans');
-  html += r4('OD / Credit Lines (ICICI 9175)','od');
-  html += r4('Loan against Shares','loan_shares');
+  html += expandBsRow('bs-l-hl',    'Home Loans',                   'home_loans');
+  html += expandBsRow('bs-l-od',    'OD / Credit Lines (ICICI 9175)','od');
+  html += expandBsRow('bs-l-las',   'Loan against Shares',           'loan_shares');
   html += s4('Total Liabilities','total_liabilities','totr');
 
   html += s4('Net Worth','net_worth','totp');
