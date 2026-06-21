@@ -210,11 +210,15 @@ function renderPL(d) {
   html += subrow('Total Non-Financial Expense', fy.map(f => p[f].non_financial_total));
 
   html += sh('Expenditure — Financial', cols);
-  html += row('Home Loan, Insurance, OD interest', fy.map(f => p[f].expenses['Financial']));
+  html += row('Home Loan EMI', fy.map(f => p[f].fin_detail.home_loan));
+  html += row('Insurance', fy.map(f => p[f].fin_detail.insurance));
+  html += row('OD / Financial Expense Interest', fy.map(f => p[f].fin_detail.od_interest));
   html += subrow('Total Financial Expense', fy.map(f => p[f].financial_total));
 
   html += sh('Tax', cols);
-  html += row('Income Tax', fy.map(f => p[f].tax));
+  html += row('Tax Paid (advance / self-assessment)', fy.map(f => p[f].fin_detail.tax_paid));
+  html += row('Tax DAS (deducted at source by employer)', fy.map(f => p[f].fin_detail.tax_das));
+  html += subrow('Total Tax', fy.map(f => p[f].total_tax));
 
   html += subrow('Total Expenditure (incl. tax)', fy.map(f => p[f].total_expenditure), 'totr');
   html += subrow('Net Surplus / (Deficit)', fy.map(f => p[f].net_surplus), 'totp');

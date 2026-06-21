@@ -630,16 +630,27 @@ def api_financial_statements():
     NON_FIN = ["Household","Personal","Family","Giving","Lifestyle","Property"]
 
     # ── Expenses from MIS monthly dicts (same source as budget tracker) ────────
-    def mis_super_totals(monthly_dict):
-        totals = {cat: 0 for cat in SUPER_ORDER}
+    FIN_HEADINGS = ["Home Loan", "Insurance", "Financial Expense / OD Interest",
+                    "Financial Expense", "Tax"]
+
+    def mis_expenses(monthly_dict):
+        """Return super-category totals AND individual Financial heading totals."""
+        super_totals = {cat: 0 for cat in SUPER_ORDER}
+        fin_detail = {h: 0 for h in FIN_HEADINGS}
         for heading, months in monthly_dict.items():
             super_cat = HEADING_SUPER.get(heading, "Household")
-            totals[super_cat] += sum(v for v in months.values() if v and v > 0)
-        return {k: round(v / 100000, 2) for k, v in totals.items()}
+            val = sum(v for v in months.values() if v and v > 0)
+            super_totals[super_cat] += val
+            if heading in fin_detail:
+                fin_detail[heading] += val
+        return (
+            {k: round(v / 100000, 2) for k, v in super_totals.items()},
+            {k: round(v / 100000, 2) for k, v in fin_detail.items()},
+        )
 
-    exp_fy24 = mis_super_totals(MIS_FY24_MONTHLY)
-    exp_fy25 = mis_super_totals(MIS_FY25_MONTHLY)
-    exp_fy26 = mis_super_totals(MIS_FY26_MONTHLY)
+    exp_fy24, fin_fy24 = mis_expenses(MIS_FY24_MONTHLY)
+    exp_fy25, fin_fy25 = mis_expenses(MIS_FY25_MONTHLY)
+    exp_fy26, fin_fy26 = mis_expenses(MIS_FY26_MONTHLY)
 
     # ── Hardcoded income / tax from tax files ────────────────────────────────
     income = {
@@ -647,7 +658,8 @@ def api_financial_statements():
         "FY25": {"salary": 1873, "esop": 1604, "dividends": 53, "interest": 0, "capital_gains": 256, "other": 14},
         "FY26": {"salary": 1122, "esop": 1958, "dividends": 55, "interest": 12, "capital_gains": 87, "other": 7},
     }
-    tax = {"FY24": 92, "FY25": 1634, "FY26": 1200}
+    # Total tax = Tax DAS (TDS by employer) + Tax Paid (advance/self-assessment in ledger)
+    tax_total = {"FY24": 92, "FY25": 1634, "FY26": 1200}
 
     # ── Balance sheet (net worth) ────────────────────────────────────────────
     balance_sheet = {
@@ -710,28 +722,44 @@ def api_financial_statements():
         {"name":"Loan against shares","type":"Pledge Loan","fy24":440,"fy25":840,"fy26":None},
     ]
 
-    def pl_for_fy(fy, exp):
+    def pl_for_fy(fy, exp, fin_detail):
         inc = income[fy]
         total_inc = inc["salary"] + inc["esop"] + inc["dividends"] + inc["interest"] + inc["capital_gains"] + inc["other"]
         non_fin = sum(exp.get(s, 0) for s in NON_FIN)
-        fin = exp.get("Financial", 0)
-        total_exp = non_fin + fin + tax[fy]
+        # Financial = Home Loan + Insurance + OD Interest (Tax handled separately below)
+        home_loan = fin_detail.get("Home Loan", 0)
+        insurance = fin_detail.get("Insurance", 0)
+        od_interest = round(
+            fin_detail.get("Financial Expense / OD Interest", 0) +
+            fin_detail.get("Financial Expense", 0), 2)
+        tax_paid = fin_detail.get("Tax", 0)          # advance/self-assessment tax in ledger
+        tax_das = round(tax_total[fy] - tax_paid, 2) # TDS deducted at source by employer
+        fin_excl_tax = round(home_loan + insurance + od_interest, 2)
+        total_tax = round(tax_paid + tax_das, 2)
+        total_exp = round(non_fin + fin_excl_tax + total_tax, 2)
         return {
             "income": inc,
             "total_income": round(total_inc, 2),
             "expenses": exp,
             "non_financial_total": round(non_fin, 2),
-            "financial_total": round(fin, 2),
-            "tax": tax[fy],
-            "total_expenditure": round(total_exp, 2),
+            "fin_detail": {
+                "home_loan": home_loan,
+                "insurance": insurance,
+                "od_interest": od_interest,
+                "tax_paid": tax_paid,
+                "tax_das": tax_das,
+            },
+            "financial_total": fin_excl_tax,
+            "total_tax": total_tax,
+            "total_expenditure": total_exp,
             "net_surplus": round(total_inc - total_exp, 2),
         }
 
     return jsonify({
         "pl": {
-            "FY24": pl_for_fy("FY24", exp_fy24),
-            "FY25": pl_for_fy("FY25", exp_fy25),
-            "FY26": pl_for_fy("FY26", exp_fy26),
+            "FY24": pl_for_fy("FY24", exp_fy24, fin_fy24),
+            "FY25": pl_for_fy("FY25", exp_fy25, fin_fy25),
+            "FY26": pl_for_fy("FY26", exp_fy26, fin_fy26),
         },
         "balance_sheet": balance_sheet,
         "assets": assets,
