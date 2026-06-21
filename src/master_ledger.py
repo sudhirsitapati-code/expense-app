@@ -177,7 +177,7 @@ def _assign_seq(ledger: list) -> bool:
 
 
 def _parse_date(s: str) -> Optional[datetime]:
-    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y", "%Y-%m-%d"):
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y", "%Y-%m-%d", "%d-%b-%y", "%d-%b-%Y"):
         try:
             return datetime.strptime(s.strip(), fmt)
         except ValueError:
