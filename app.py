@@ -694,11 +694,12 @@ def api_financial_statements():
         "FY23": {"company_shares":550,"property":1990,"equity":930,"gold_bond":100,"nps":310,"pf":75,"gratuity":0,"private_eq":289,"art_jewellery":92,"total_assets":4336,"home_loans":0,"od":640,"loan_shares":0,"total_liabilities":640,"net_worth":3696},
         "FY24": {"company_shares":1800,"property":2140,"equity":1277,"gold_bond":135,"nps":370,"pf":150,"gratuity":0,"private_eq":289,"art_jewellery":92,"total_assets":6253,"home_loans":200,"od":495,"loan_shares":440,"total_liabilities":1135,"net_worth":5133},
         "FY25": {"company_shares":3400,"property":2740,"equity":1380,"gold_bond":300,"nps":470,"pf":234,"gratuity":0,"private_eq":346,"art_jewellery":115,"total_assets":8985,"home_loans":200,"od":538,"loan_shares":840,"total_liabilities":1578,"net_worth":7445},
-        # FY26 equity: Solidarity 785+PPFAS 165+Marcellus IB 302+SBI ETF 90+Latent 187=1529
+        # FY26 equity (domestic): Solidarity 671+PPFAS 165+SBI ETF 90+Latent 187=1113
+        # international_equity: Marcellus IB 342 (USD 360K×95)+StanChart equity 320 (USD 336K×95)=662
+        # bank: StanChart cash 150 (USD 158K×95)+ICICI 1331 15+other 5=170
         # gold_bond: SGB 314+Nippon Gold ETF 68=382  art_jewellery: 115+Mizugami 10+Cartier 4.51=130
-        # international_equity: StanChart USD 494K×86=425  art_jewellery updated to 130
-        # total_assets: 3500+4080+1529+382+478+306+350+346+130+425=11526  net_worth: 11526-1352=10174
-        "FY26": {"company_shares":3500,"property":4080,"equity":1529,"gold_bond":382,"nps":478,"pf":306,"gratuity":350,"private_eq":346,"art_jewellery":130,"international_equity":425,"total_assets":11526,"home_loans":782,"od":570,"loan_shares":0,"total_liabilities":1352,"net_worth":10174},
+        # total: 3500+4080+1113+662+382+478+306+350+346+130+170=11517  net_worth: 11517-1352=10165
+        "FY26": {"company_shares":3500,"property":4080,"equity":1113,"gold_bond":382,"nps":478,"pf":306,"gratuity":350,"private_eq":346,"art_jewellery":130,"international_equity":662,"bank":170,"total_assets":11517,"home_loans":782,"od":570,"loan_shares":0,"total_liabilities":1352,"net_worth":10165},
     }
 
     # ── Asset detail ─────────────────────────────────────────────────────────
@@ -723,12 +724,14 @@ def api_financial_statements():
     # Build unified asset detail list across all years
     assets = [
         {"name":"GCPL Shares","type":"Listed Equity","fy24":2000,"fy25":3400,"fy26":3500},
-        {"name":"Solidarity PMS","type":"Listed Equity","fy24":644,"fy25":724,"fy26":785},
+        {"name":"Solidarity PMS","type":"Listed Equity","fy24":644,"fy25":724,"fy26":671},
         {"name":"PPFAS MF","type":"Mutual Fund","fy24":150,"fy25":164,"fy26":165},
-        {"name":"Marcellus IB (USD)","type":"Mutual Fund","fy24":241,"fy25":302,"fy26":302},
         {"name":"SBI ETF Nifty Next 50","type":"Mutual Fund","fy24":None,"fy25":107,"fy26":90},
         {"name":"Latent AIF","type":"AIF","fy24":None,"fy25":107,"fy26":187},
-        {"name":"StanChart International","type":"International Equity","fy24":None,"fy25":None,"fy26":425},
+        {"name":"Marcellus IB (USD)","type":"International Equity","fy24":241,"fy25":302,"fy26":342},
+        {"name":"StanChart Equity Portfolio","type":"International Equity","fy24":None,"fy25":None,"fy26":320},
+        {"name":"StanChart Cash / Savings","type":"Bank Account","fy24":None,"fy25":None,"fy26":150},
+        {"name":"ICICI 1331","type":"Bank Account","fy24":None,"fy25":None,"fy26":15},
         {"name":"Nippon Gold ETF (GOLDBEES)","type":"Gold","fy24":None,"fy25":None,"fy26":68},
         {"name":"Gold Bonds (SGB)","type":"Gold","fy24":135,"fy25":301,"fy26":314},
         {"name":"Godrej Pet (GPA)","type":"Private Eq.","fy24":None,"fy25":164,"fy26":164},

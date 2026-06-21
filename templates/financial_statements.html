@@ -312,6 +312,7 @@ function renderBS(d) {
     property:             x => x.type === 'Property',
     equity:               x => x.type === 'Mutual Fund' || x.type === 'AIF' || (x.type === 'Listed Equity' && !x.name.includes('GCPL')),
     international_equity: x => x.type === 'International Equity',
+    bank:                 x => x.type === 'Bank Account',
     gold_bond:            x => x.type === 'Gold',
     nps:                  x => x.type === 'Retirement' && x.name.includes('NPS'),
     pf:                   x => x.type === 'Retirement' && x.name.includes('EPF'),
@@ -370,6 +371,7 @@ function renderBS(d) {
   html += expandBsRow('bs-a-gratuity', 'Gratuity',                          'gratuity');
   html += expandBsRow('bs-a-pe',       'Private Equity',                    'private_eq');
   html += expandBsRow('bs-a-art',      'Art & Jewellery',                   'art_jewellery');
+  html += expandBsRow('bs-a-bank',     'Bank Accounts (ICICI / SBI / StanChart)', 'bank');
   html += s4('Total Assets','total_assets','tot');
 
   html += `<tr class="sh"><td colspan="5">Liabilities</td></tr>`;
