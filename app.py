@@ -694,7 +694,11 @@ def api_financial_statements():
         "FY23": {"company_shares":550,"property":1990,"equity":930,"gold_bond":100,"nps":310,"pf":75,"gratuity":0,"private_eq":289,"art_jewellery":92,"total_assets":4336,"home_loans":0,"od":640,"loan_shares":0,"total_liabilities":640,"net_worth":3696},
         "FY24": {"company_shares":1800,"property":2140,"equity":1277,"gold_bond":135,"nps":370,"pf":150,"gratuity":0,"private_eq":289,"art_jewellery":92,"total_assets":6253,"home_loans":200,"od":495,"loan_shares":440,"total_liabilities":1135,"net_worth":5133},
         "FY25": {"company_shares":3400,"property":2740,"equity":1380,"gold_bond":300,"nps":470,"pf":234,"gratuity":0,"private_eq":346,"art_jewellery":115,"total_assets":8985,"home_loans":200,"od":538,"loan_shares":840,"total_liabilities":1578,"net_worth":7445},
-        "FY26": {"company_shares":3500,"property":4080,"equity":1609,"gold_bond":314,"nps":478,"pf":306,"gratuity":350,"private_eq":346,"art_jewellery":115,"total_assets":11098,"home_loans":782,"od":570,"loan_shares":0,"total_liabilities":1352,"net_worth":9961},
+        # FY26 equity: Solidarity 785+PPFAS 165+Marcellus IB 302+SBI ETF 90+Latent 187=1529
+        # gold_bond: SGB 314+Nippon Gold ETF 68=382  art_jewellery: 115+Mizugami 10+Cartier 4.51=130
+        # international_equity: StanChart USD 494K×86=425  art_jewellery updated to 130
+        # total_assets: 3500+4080+1529+382+478+306+350+346+130+425=11526  net_worth: 11526-1352=10174
+        "FY26": {"company_shares":3500,"property":4080,"equity":1529,"gold_bond":382,"nps":478,"pf":306,"gratuity":350,"private_eq":346,"art_jewellery":130,"international_equity":425,"total_assets":11526,"home_loans":782,"od":570,"loan_shares":0,"total_liabilities":1352,"net_worth":10174},
     }
 
     # ── Asset detail ─────────────────────────────────────────────────────────
@@ -721,10 +725,11 @@ def api_financial_statements():
         {"name":"GCPL Shares","type":"Listed Equity","fy24":2000,"fy25":3400,"fy26":3500},
         {"name":"Solidarity PMS","type":"Listed Equity","fy24":644,"fy25":724,"fy26":785},
         {"name":"PPFAS MF","type":"Mutual Fund","fy24":150,"fy25":164,"fy26":165},
-        {"name":"Marcellus","type":"Mutual Fund","fy24":241,"fy25":302,"fy26":None},
-        {"name":"SBI MF","type":"Mutual Fund","fy24":None,"fy25":107,"fy26":103},
+        {"name":"Marcellus IB (USD)","type":"Mutual Fund","fy24":241,"fy25":302,"fy26":302},
+        {"name":"SBI ETF Nifty Next 50","type":"Mutual Fund","fy24":None,"fy25":107,"fy26":90},
         {"name":"Latent AIF","type":"AIF","fy24":None,"fy25":107,"fy26":187},
-        {"name":"Nippon MF","type":"Mutual Fund","fy24":None,"fy25":None,"fy26":70},
+        {"name":"StanChart International","type":"International Equity","fy24":None,"fy25":None,"fy26":425},
+        {"name":"Nippon Gold ETF (GOLDBEES)","type":"Gold","fy24":None,"fy25":None,"fy26":68},
         {"name":"Gold Bonds (SGB)","type":"Gold","fy24":135,"fy25":301,"fy26":314},
         {"name":"Godrej Pet (GPA)","type":"Private Eq.","fy24":None,"fy25":164,"fy26":164},
         {"name":"LO Foods","type":"Private Eq.","fy24":20,"fy25":20,"fy26":20},
@@ -738,7 +743,7 @@ def api_financial_statements():
         {"name":"NPS","type":"Retirement","fy24":370,"fy25":470,"fy26":478},
         {"name":"EPF","type":"Retirement","fy24":150,"fy25":234,"fy26":306},
         {"name":"Gratuity","type":"Retirement","fy24":None,"fy25":None,"fy26":350},
-        {"name":"Art & Jewellery","type":"Alternative","fy24":93,"fy25":106,"fy26":115},
+        {"name":"Art & Jewellery","type":"Alternative","fy24":93,"fy25":106,"fy26":130},
     ]
 
     liabilities = [

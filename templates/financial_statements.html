@@ -308,18 +308,19 @@ function renderBS(d) {
 
   // Custom filter functions per BS row key
   const CHILD_FILTER = {
-    company_shares: x => x.type === 'Listed Equity' && x.name.includes('GCPL'),
-    property:       x => x.type === 'Property',
-    equity:         x => x.type === 'Mutual Fund' || x.type === 'AIF' || (x.type === 'Listed Equity' && !x.name.includes('GCPL')),
-    gold_bond:      x => x.type === 'Gold',
-    nps:            x => x.type === 'Retirement' && x.name.includes('NPS'),
-    pf:             x => x.type === 'Retirement' && x.name.includes('EPF'),
-    gratuity:       x => x.type === 'Retirement' && x.name.includes('Gratuity'),
-    private_eq:     x => x.type === 'Private Eq.',
-    art_jewellery:  x => x.type === 'Alternative',
-    home_loans:     x => x.type === 'Home Loan',
-    od:             x => x.type === 'Credit Line',
-    loan_shares:    x => x.type === 'Pledge Loan',
+    company_shares:       x => x.type === 'Listed Equity' && x.name.includes('GCPL'),
+    property:             x => x.type === 'Property',
+    equity:               x => x.type === 'Mutual Fund' || x.type === 'AIF' || (x.type === 'Listed Equity' && !x.name.includes('GCPL')),
+    international_equity: x => x.type === 'International Equity',
+    gold_bond:            x => x.type === 'Gold',
+    nps:                  x => x.type === 'Retirement' && x.name.includes('NPS'),
+    pf:                   x => x.type === 'Retirement' && x.name.includes('EPF'),
+    gratuity:             x => x.type === 'Retirement' && x.name.includes('Gratuity'),
+    private_eq:           x => x.type === 'Private Eq.',
+    art_jewellery:        x => x.type === 'Alternative',
+    home_loans:           x => x.type === 'Home Loan',
+    od:                   x => x.type === 'Credit Line',
+    loan_shares:          x => x.type === 'Pledge Loan',
   };
 
   function bsChildren(key, pool) {
@@ -362,7 +363,8 @@ function renderBS(d) {
   html += expandBsRow('bs-a-shares',   'Company Shares (GCPL)',            'company_shares');
   html += expandBsRow('bs-a-property', 'Property (C34, C51, Malhar, Uspaar)', 'property');
   html += expandBsRow('bs-a-equity',   'Equity (MF / PMS / AIF)',          'equity');
-  html += expandBsRow('bs-a-gold',     'Gold Bonds (SGB)',                  'gold_bond');
+  html += expandBsRow('bs-a-intl',     'International Equity (StanChart)',  'international_equity');
+  html += expandBsRow('bs-a-gold',     'Gold (SGB + ETF)',                  'gold_bond');
   html += expandBsRow('bs-a-nps',      'NPS',                               'nps');
   html += expandBsRow('bs-a-pf',       'EPF / PF',                          'pf');
   html += expandBsRow('bs-a-gratuity', 'Gratuity',                          'gratuity');
