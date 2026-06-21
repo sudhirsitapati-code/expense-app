@@ -108,9 +108,9 @@ body { background:#f8f9fa; font-size:14px; }
     <colgroup><col class="cat-col"><col><col><col></colgroup>
     <thead><tr id="pl-thead">
       <th>Category</th>
-      <th class="r pl-col-FY24">FY24 (₹ L)</th>
-      <th class="r pl-col-FY25">FY25 (₹ L)</th>
-      <th class="r pl-col-FY26">FY26 (₹ L)</th>
+      <th class="r pl-col-FY24">FY24 (₹ Cr)</th>
+      <th class="r pl-col-FY25">FY25 (₹ Cr)</th>
+      <th class="r pl-col-FY26">FY26 (₹ Cr)</th>
     </tr></thead>
     <tbody id="pl-body"></tbody>
   </table>
@@ -150,11 +150,11 @@ let _activeYear = 'FY26';
 const ALL_FY = ['FY24','FY25','FY26'];
 let _visibleFY = new Set(['FY24','FY25','FY26']);
 
-const fmt  = v => v != null ? v.toLocaleString('en-IN', {maximumFractionDigits:1}) : '—';
-const fmtL = v => v != null ? '₹' + v.toLocaleString('en-IN', {maximumFractionDigits:0}) + ' L' : '—';
-// Balance sheet values stored in Lakhs → display in Crores
+// All financial values stored in Lakhs → display in Crores throughout
 const fmtCr  = v => v != null ? (v/100).toLocaleString('en-IN', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' Cr' : '—';
 const fmtCrK = v => v != null ? '₹' + (v/100).toLocaleString('en-IN', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' Cr' : '—';
+const fmt    = fmtCr;   // P&L table cells reuse same formatter
+const fmtL   = fmtCrK;  // P&L KPI cards
 
 function switchTab(name, el) {
   document.querySelectorAll('.fs-tab').forEach(t => t.classList.remove('active'));
