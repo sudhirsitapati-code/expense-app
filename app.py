@@ -249,7 +249,10 @@ MIS_FY24_MONTHLY = {
     "Gifts":          {"Apr":798,"May":6017,"Jun":1499,"Jul":95214,"Aug":0,"Sep":28468,"Oct":0,"Nov":81000,"Dec":2847,"Jan":3448,"Feb":0,"Mar":0},
     "Cash":           {"Apr":20000,"May":0,"Jun":118169,"Jul":6000,"Aug":13500,"Sep":25046,"Oct":5000,"Nov":0,"Dec":10000,"Jan":0,"Feb":10000,"Mar":0},
     "Maintenance Expense": {"Apr":121359,"May":178721,"Jun":222206,"Jul":193185,"Aug":241423,"Sep":186081,"Oct":251831,"Nov":351996,"Dec":177411,"Jan":219494,"Feb":99367,"Mar":182662},
-    "Malhar":         {"Apr":46717,"May":25616,"Jun":41806,"Jul":137102,"Aug":56668,"Sep":35621,"Oct":49810,"Nov":18800,"Dec":42843,"Jan":85470,"Feb":27870,"Mar":49750},
+    "Malhar":         {"Apr":24679,"May":25616,"Jun":41806,"Jul":89882,"Aug":37696,"Sep":27621,"Oct":40210,"Nov":0,"Dec":22173,"Jan":26590,"Feb":27870,"Mar":49750},
+    "Kashid":         {"Apr":22038,"May":0,"Jun":0,"Jul":47220,"Aug":18972,"Sep":8000,"Oct":9600,"Nov":18800,"Dec":20670,"Jan":58880,"Feb":0,"Mar":0},
+    "Rent":           {"Apr":0,"May":141487,"Jun":0,"Jul":327673,"Aug":29000,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+    "Personal Loans": {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":192436,"Oct":74250,"Nov":0,"Dec":117000,"Jan":2067919,"Feb":0,"Mar":0},
     "Home office":    {"Apr":13782,"May":53133,"Jun":12792,"Jul":30412,"Aug":11812,"Sep":31167,"Oct":6206,"Nov":33010,"Dec":13500,"Jan":7000,"Feb":6000,"Mar":5000},
     "Electricity & Gas": {"Apr":15383,"May":28199,"Jun":20582,"Jul":14461,"Aug":12563,"Sep":18634,"Oct":14635,"Nov":23979,"Dec":14912,"Jan":14781,"Feb":12491,"Mar":16975},
     "Alcohol":        {"Apr":2800,"May":0,"Jun":19700,"Jul":19598,"Aug":18314,"Sep":0,"Oct":0,"Nov":0,"Dec":11610,"Jan":0,"Feb":0,"Mar":0},
@@ -350,8 +353,10 @@ def api_mis():
         "Holiday":"Lifestyle","Eating Out":"Lifestyle","Entertainment":"Lifestyle",
         "Malhar":"Property","Maintenance Expense":"Property","Home office":"Property",
         "One Time Charge":"Property","Kalpataru Maintenance":"Property",
+        "Kashid":"Property","Rent":"Property",
         "Financial Expense / OD Interest":"Financial","Financial Expense":"Financial",
         "Insurance":"Financial","Home Loan":"Financial","Tax":"Financial",
+        "Personal Loans":"Financial",
     }
     SUPER_ORDER = ["Household","Personal","Family","Giving","Lifestyle","Property","Financial"]
 
@@ -623,8 +628,10 @@ def api_financial_statements():
         "Holiday":"Lifestyle","Eating Out":"Lifestyle","Entertainment":"Lifestyle",
         "Malhar":"Property","Maintenance Expense":"Property","Home office":"Property",
         "One Time Charge":"Property","Kalpataru Maintenance":"Property",
+        "Kashid":"Property","Rent":"Property",
         "Financial Expense / OD Interest":"Financial","Financial Expense":"Financial",
         "Insurance":"Financial","Home Loan":"Financial","Tax":"Financial",
+        "Personal Loans":"Financial",
     }
     SUPER_ORDER = ["Household","Personal","Family","Giving","Lifestyle","Property","Financial"]
     NON_FIN = ["Household","Personal","Family","Giving","Lifestyle","Property"]
@@ -662,17 +669,24 @@ def api_financial_statements():
 
     # ── Hardcoded income / tax from tax files ────────────────────────────────
     income = {
-        "FY24": {"salary": 1002, "esop": 870, "dividends": 0, "interest": 0.25, "capital_gains": 0, "other": 0},
+        # FY24 from ITR AY2024-25: salary 1002.8L, ESOP perq 867.7L, divs 11.4L, interest 6.9L, foreign profit 2.1L
+        # Capital gains: net losses (STCG -12.8L, LTCG -6.1L) carried forward to AY2025-26
+        "FY24": {"salary": 1002, "esop": 870, "dividends": 11, "interest": 7, "capital_gains": 0, "other": 2},
         "FY25": {"salary": 1873, "esop": 1604, "dividends": 53, "interest": 0, "capital_gains": 256, "other": 14},
         # FY26 dividends: 4 GCPL interim dividends from ICICI Demat statement (59.43L)
-        # FY26 capital_gains: 91,659 GCPL shares sold (64,659 May-25, 27,000 Feb-26) — pending trade confirmation for exact gain
-        "FY26": {"salary": 1122, "esop": 1958, "dividends": 59, "interest": 12, "capital_gains": 87, "other": 7},
+        # FY26 ESOP: batch7 29417sh perq 346.6L + batch8 141732sh perq 1573.3L = 1920L (from ESGS Perquisite Tax Details)
+        # FY26 capital_gains: FIFO over full holding (incl pledged) —
+        #   May-25: 60364sh (Nov-22 @ 815.45) + 4295sh (Apr-23 @ 962.38) = 300L LTCG
+        #   Feb-26: 1333sh (Apr-23) + 4598sh + 12017sh (Aug-23) + 9052sh (Oct-23) = 52.2L LTCG → total 352L
+        "FY26": {"salary": 1122, "esop": 1920, "dividends": 59, "interest": 12, "capital_gains": 352, "other": 7},
     }
     # Total tax = Tax DAS (employer TDS on salary) + Tax Paid (advance in ledger for ESOP/CG/other)
     # FY26 Tax DAS: salary 1122L × 39% effective (30% slab + 25% surcharge + 4% cess) = 438L
     # FY26 Advance: 825L (ledger) covers ESOP perquisite tax + capital gains + dividends
     # UPDATE FY26 with Form 16 actual once available
-    tax_total = {"FY24": 92, "FY25": 1634, "FY26": 1263}
+    # FY24: GCPL TDS 716.7L (from ITR) + ledger advance 92L = 809L total
+    # tax_das computed as tax_total - tax_paid(ledger); 809 - 92 = 717L matches ITR GCPL TDS
+    tax_total = {"FY24": 809, "FY25": 1634, "FY26": 1263}
 
     # ── Balance sheet (net worth) ────────────────────────────────────────────
     balance_sheet = {
