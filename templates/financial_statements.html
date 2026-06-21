@@ -250,6 +250,7 @@ function renderPL(d) {
   html += childRow(finId, 'Home Loan EMI', fy.map(f => p[f].fin_detail.home_loan));
   html += childRow(finId, 'Insurance', fy.map(f => p[f].fin_detail.insurance));
   html += childRow(finId, 'OD / Financial Expense Interest', fy.map(f => p[f].fin_detail.od_interest));
+  html += childRow(finId, 'Personal Loans', fy.map(f => p[f].fin_detail.personal_loans));
 
   // Tax — expandable
   const taxId = 'tax-exp';

@@ -273,6 +273,7 @@ MIS_FY24_MONTHLY = {
     "Uspaar":         {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
     "Insurance":      {"Apr":0,"May":0,"Jun":0,"Jul":342056,"Aug":0,"Sep":0,"Oct":148374,"Nov":22189,"Dec":168504,"Jan":0,"Feb":0,"Mar":138429},
     "Home Loan":      {"Apr":598843,"May":430433,"Jun":474414,"Jul":426159,"Aug":136367,"Sep":323197,"Oct":0,"Nov":593591,"Dec":411966,"Jan":590471,"Feb":600440,"Mar":575024},
+    "Club":           {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":3405002,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
     "Tax":            {"Apr":1620,"May":2112347,"Jun":4598,"Jul":7103283,"Aug":0,"Sep":0,"Oct":61394,"Nov":-87840,"Dec":100,"Jan":800,"Feb":0,"Mar":0},
 }
 
@@ -350,7 +351,7 @@ def api_mis():
         "Gifts":"Family","Medical":"Family","Amma":"Family","Ketki":"Family",
         "Children Education":"Family",
         "Charity":"Giving","Uspaar":"Giving",
-        "Holiday":"Lifestyle","Eating Out":"Lifestyle","Entertainment":"Lifestyle",
+        "Holiday":"Lifestyle","Eating Out":"Lifestyle","Entertainment":"Lifestyle","Club":"Lifestyle",
         "Malhar":"Property","Maintenance Expense":"Property","Home office":"Property",
         "One Time Charge":"Property","Kalpataru Maintenance":"Property",
         "Kashid":"Property","Rent":"Property",
@@ -625,7 +626,7 @@ def api_financial_statements():
         "Gifts":"Family","Medical":"Family","Amma":"Family","Ketki":"Family",
         "Children Education":"Family",
         "Charity":"Giving","Uspaar":"Giving",
-        "Holiday":"Lifestyle","Eating Out":"Lifestyle","Entertainment":"Lifestyle",
+        "Holiday":"Lifestyle","Eating Out":"Lifestyle","Entertainment":"Lifestyle","Club":"Lifestyle",
         "Malhar":"Property","Maintenance Expense":"Property","Home office":"Property",
         "One Time Charge":"Property","Kalpataru Maintenance":"Property",
         "Kashid":"Property","Rent":"Property",
@@ -638,7 +639,7 @@ def api_financial_statements():
 
     # ── Expenses from MIS monthly dicts (same source as budget tracker) ────────
     FIN_HEADINGS = ["Home Loan", "Insurance", "Financial Expense / OD Interest",
-                    "Financial Expense", "Tax"]
+                    "Financial Expense", "Tax", "Personal Loans"]
 
     def mis_expenses(monthly_dict):
         """Return super-category totals, per-heading detail, AND individual Financial heading totals."""
@@ -759,9 +760,10 @@ def api_financial_statements():
         od_interest = round(
             fin_detail.get("Financial Expense / OD Interest", 0) +
             fin_detail.get("Financial Expense", 0), 2)
+        personal_loans = fin_detail.get("Personal Loans", 0)
         tax_paid = fin_detail.get("Tax", 0)                       # advance/self-assessment in ledger
         tax_das = round(max(0, tax_total[fy] - tax_paid), 2)      # TDS by employer (floor 0 for slight overpayments)
-        fin_excl_tax = round(home_loan + insurance + od_interest, 2)
+        fin_excl_tax = round(home_loan + insurance + od_interest + personal_loans, 2)
         total_tax = round(tax_paid + tax_das, 2)
         total_exp = round(non_fin + fin_excl_tax + total_tax, 2)
         return {
@@ -774,6 +776,7 @@ def api_financial_statements():
                 "home_loan": home_loan,
                 "insurance": insurance,
                 "od_interest": od_interest,
+                "personal_loans": personal_loans,
                 "tax_paid": tax_paid,
                 "tax_das": tax_das,
                 "tax_total_estimated": fy == "FY26",  # flag to show (est.) in UI until Form 16 loaded
