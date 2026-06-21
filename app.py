@@ -664,12 +664,15 @@ def api_financial_statements():
     income = {
         "FY24": {"salary": 1002, "esop": 870, "dividends": 0, "interest": 0.25, "capital_gains": 0, "other": 0},
         "FY25": {"salary": 1873, "esop": 1604, "dividends": 53, "interest": 0, "capital_gains": 256, "other": 14},
-        "FY26": {"salary": 1122, "esop": 1958, "dividends": 55, "interest": 12, "capital_gains": 87, "other": 7},
+        # FY26 dividends: 4 GCPL interim dividends from ICICI Demat statement (59.43L)
+        # FY26 capital_gains: 91,659 GCPL shares sold (64,659 May-25, 27,000 Feb-26) — pending trade confirmation for exact gain
+        "FY26": {"salary": 1122, "esop": 1958, "dividends": 59, "interest": 12, "capital_gains": 87, "other": 7},
     }
-    # Total tax = Tax DAS (TDS by employer) + Tax Paid (advance/self-assessment in ledger)
-    # FY26: estimated from income (new regime: 30% slab + 25% surcharge + 4% cess on 3154L, LTCG 12.5% on 87L)
-    # UPDATE FY26 with actual figure from Form 16 once available
-    tax_total = {"FY24": 92, "FY25": 1634, "FY26": 1237}
+    # Total tax = Tax DAS (employer TDS on salary) + Tax Paid (advance in ledger for ESOP/CG/other)
+    # FY26 Tax DAS: salary 1122L × 39% effective (30% slab + 25% surcharge + 4% cess) = 438L
+    # FY26 Advance: 825L (ledger) covers ESOP perquisite tax + capital gains + dividends
+    # UPDATE FY26 with Form 16 actual once available
+    tax_total = {"FY24": 92, "FY25": 1634, "FY26": 1263}
 
     # ── Balance sheet (net worth) ────────────────────────────────────────────
     balance_sheet = {
