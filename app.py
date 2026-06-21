@@ -184,6 +184,96 @@ def api_reconcile_log():
     return jsonify(_load_json(RECONCILE_LOG))
 
 
+# ── MIS monthly data — module-level so both api_mis and api_financial_statements can use them ──
+MIS_FY26_MONTHLY = {
+    "Misc":           {"Apr":16685,"May":836,"Jun":16239,"Jul":6208,"Aug":59760,"Sep":625,"Oct":34168,"Nov":16938,"Dec":2676,"Jan":6562,"Feb":16537,"Mar":11382},
+    "Clothes":        {"Apr":0,"May":25990,"Jun":54219,"Jul":66865,"Aug":64337,"Sep":0,"Oct":57982,"Nov":38164,"Dec":19461,"Jan":8290,"Feb":47896,"Mar":7652},
+    "Gifts":          {"Apr":6500,"May":3950,"Jun":0,"Jul":0,"Aug":8825,"Sep":0,"Oct":40000,"Nov":33099,"Dec":0,"Jan":3540,"Feb":1571,"Mar":2863},
+    "Cash":           {"Apr":10000,"May":0,"Jun":20000,"Jul":25000,"Aug":50000,"Sep":10000,"Oct":10000,"Nov":80000,"Dec":0,"Jan":11600,"Feb":31000,"Mar":10000},
+    "Maintenance Expense": {"Apr":17440,"May":9814,"Jun":12775,"Jul":2411,"Aug":3029,"Sep":750,"Oct":22850,"Nov":5887,"Dec":0,"Jan":2500,"Feb":6243,"Mar":4404},
+    "Malhar":         {"Apr":40800,"May":53930,"Jun":93923,"Jul":89728,"Aug":51314,"Sep":91350,"Oct":177919,"Nov":165493,"Dec":0,"Jan":81581,"Feb":88880,"Mar":30382},
+    "Home office":    {"Apr":88350,"May":25461,"Jun":10450,"Jul":23057,"Aug":24447,"Sep":11933,"Oct":9455,"Nov":24783,"Dec":0,"Jan":7430,"Feb":3096,"Mar":5320},
+    "Electricity & Gas": {"Apr":50780,"May":52723,"Jun":52068,"Jul":31128,"Aug":25843,"Sep":24863,"Oct":47174,"Nov":38834,"Dec":0,"Jan":37325,"Feb":24186,"Mar":7616},
+    "Alcohol":        {"Apr":14900,"May":0,"Jun":0,"Jul":9400,"Aug":1450,"Sep":0,"Oct":0,"Nov":48700,"Dec":0,"Jan":0,"Feb":0,"Mar":500},
+    "Medical":        {"Apr":14143,"May":96808,"Jun":27382,"Jul":77477,"Aug":56988,"Sep":77126,"Oct":72143,"Nov":45345,"Dec":1210,"Jan":57526,"Feb":20200,"Mar":45100},
+    "Holiday":        {"Apr":17031,"May":486489,"Jun":132378,"Jul":952200,"Aug":73464,"Sep":4218,"Oct":93531,"Nov":149259,"Dec":0,"Jan":8128,"Feb":56366,"Mar":215510},
+    "Groceries":      {"Apr":89175,"May":120368,"Jun":90011,"Jul":106208,"Aug":135331,"Sep":172407,"Oct":155555,"Nov":253751,"Dec":5404,"Jan":220193,"Feb":140067,"Mar":200420},
+    "Eating Out":     {"Apr":46057,"May":27258,"Jun":25723,"Jul":48862,"Aug":49917,"Sep":51657,"Oct":69146,"Nov":48007,"Dec":20773,"Jan":53623,"Feb":36546,"Mar":42347},
+    "Amma":           {"Apr":27679,"May":16458,"Jun":7276,"Jul":10068,"Aug":12826,"Sep":52229,"Oct":1375,"Nov":-1356,"Dec":0,"Jan":15595,"Feb":-26776,"Mar":-1823},
+    "Wellness":       {"Apr":63157,"May":22672,"Jun":38199,"Jul":46159,"Aug":13292,"Sep":59132,"Oct":52176,"Nov":61175,"Dec":0,"Jan":7745,"Feb":13545,"Mar":10649},
+    "Ketki":          {"Apr":426656,"May":115151,"Jun":-15927,"Jul":78940,"Aug":126146,"Sep":50147,"Oct":326622,"Nov":203580,"Dec":65053,"Jan":40084,"Feb":27653,"Mar":101024},
+    "Staff Salary":   {"Apr":118522,"May":258292,"Jun":269854,"Jul":195408,"Aug":178854,"Sep":176859,"Oct":188398,"Nov":419898,"Dec":99438,"Jan":279669,"Feb":224518,"Mar":221018},
+    "Financial Expense / OD Interest": {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":360000},
+    "Entertainment":  {"Apr":1148,"May":5278,"Jun":68503,"Jul":40408,"Aug":14280,"Sep":21692,"Oct":19600,"Nov":15839,"Dec":9485,"Jan":4214,"Feb":649,"Mar":25143},
+    "One Time Charge":{"Apr":45325,"May":12530,"Jun":4750,"Jul":79984,"Aug":76574,"Sep":149914,"Oct":64441,"Nov":199349,"Dec":71035,"Jan":24050,"Feb":31250,"Mar":11850},
+    "Children Education": {"Apr":981577,"May":68350,"Jun":550856,"Jul":101149,"Aug":124383,"Sep":54100,"Oct":38700,"Nov":514160,"Dec":0,"Jan":29700,"Feb":45500,"Mar":524550},
+    "Kalpataru Maintenance": {"Apr":35997,"May":35933,"Jun":35879,"Jul":-7041,"Aug":197231,"Sep":36587,"Oct":35879,"Nov":71168,"Dec":0,"Jan":35879,"Feb":35879,"Mar":35933},
+    "Charity":        {"Apr":20000,"May":0,"Jun":0,"Jul":167800,"Aug":105725,"Sep":24048,"Oct":300000,"Nov":115000,"Dec":150000,"Jan":625100,"Feb":0,"Mar":18000},
+    "Uspaar":         {"Apr":133783,"May":140978,"Jun":214372,"Jul":97910,"Aug":204600,"Sep":72828,"Oct":38984,"Nov":170003,"Dec":0,"Jan":103660,"Feb":40350,"Mar":86325},
+    "Insurance":      {"Apr":118000,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":102820,"Nov":0,"Dec":142800,"Jan":0,"Feb":0,"Mar":0},
+    "Home Loan":      {"Apr":903259,"May":1146721,"Jun":916551,"Jul":1201557,"Aug":554547,"Sep":992227,"Oct":963511,"Nov":1007410,"Dec":1777170,"Jan":1389117,"Feb":928825,"Mar":1285719},
+    "Tax":            {"Apr":0,"May":0,"Jun":0,"Jul":13519347,"Aug":0,"Sep":3630000,"Oct":61499379,"Nov":0,"Dec":0,"Jan":0,"Feb":3848950,"Mar":0},
+}
+MIS_FY25_MONTHLY = {
+    "Misc":           {"Apr":6088,"May":8858,"Jun":20244,"Jul":32654,"Aug":20773,"Sep":24987,"Oct":2704,"Nov":5462,"Dec":20402,"Jan":23428,"Feb":6027,"Mar":4321},
+    "Clothes":        {"Apr":106470,"May":30095,"Jun":30780,"Jul":0,"Aug":9899,"Sep":8590,"Oct":0,"Nov":20798,"Dec":48088,"Jan":2490,"Feb":22291,"Mar":14990},
+    "Gifts":          {"Apr":3599,"May":0,"Jun":14285,"Jul":15857,"Aug":5847,"Sep":12462,"Oct":25000,"Nov":44705,"Dec":11270,"Jan":990,"Feb":0,"Mar":0},
+    "Cash":           {"Apr":0,"May":55000,"Jun":10000,"Jul":20000,"Aug":30000,"Sep":40000,"Oct":30000,"Nov":60000,"Dec":30000,"Jan":345500,"Feb":20500,"Mar":20000},
+    "Maintenance Expense": {"Apr":0,"May":5500,"Jun":0,"Jul":0,"Aug":0,"Sep":1902,"Oct":13383,"Nov":4253,"Dec":3124,"Jan":2900,"Feb":0,"Mar":449},
+    "Malhar":         {"Apr":38269,"May":53199,"Jun":91025,"Jul":98388,"Aug":35080,"Sep":74930,"Oct":22000,"Nov":41900,"Dec":41836,"Jan":56530,"Feb":42330,"Mar":83090},
+    "Home office":    {"Apr":30702,"May":13150,"Jun":7000,"Jul":8500,"Aug":9200,"Sep":26914,"Oct":13500,"Nov":13359,"Dec":10000,"Jan":1200,"Feb":1000,"Mar":51000},
+    "Electricity & Gas": {"Apr":18233,"May":50902,"Jun":40791,"Jul":31210,"Aug":27031,"Sep":37216,"Oct":32991,"Nov":34039,"Dec":18101,"Jan":19564,"Feb":22573,"Mar":28734},
+    "Alcohol":        {"Apr":5500,"May":1500,"Jun":0,"Jul":32235,"Aug":0,"Sep":0,"Oct":17089,"Nov":0,"Dec":30235,"Jan":22691,"Feb":0,"Mar":0},
+    "Medical":        {"Apr":25104,"May":17747,"Jun":16695,"Jul":15049,"Aug":34811,"Sep":28366,"Oct":7032,"Nov":6215,"Dec":95127,"Jan":61258,"Feb":260944,"Mar":65715},
+    "Holiday":        {"Apr":331046,"May":388673,"Jun":527589,"Jul":484268,"Aug":82855,"Sep":221069,"Oct":92797,"Nov":0,"Dec":42609,"Jan":0,"Feb":37368,"Mar":66627},
+    "Groceries":      {"Apr":114509,"May":117604,"Jun":108667,"Jul":98176,"Aug":108702,"Sep":81999,"Oct":113779,"Nov":80055,"Dec":85734,"Jan":95234,"Feb":90302,"Mar":67905},
+    "Eating Out":     {"Apr":25839,"May":165938,"Jun":34440,"Jul":119314,"Aug":11086,"Sep":44803,"Oct":5921,"Nov":115949,"Dec":17293,"Jan":73701,"Feb":5160,"Mar":9266},
+    "Amma":           {"Apr":17294,"May":2434,"Jun":7480,"Jul":13736,"Aug":11310,"Sep":20583,"Oct":15262,"Nov":4273,"Dec":6909,"Jan":1939,"Feb":45101,"Mar":588},
+    "Ketki":          {"Apr":74654,"May":60324,"Jun":118994,"Jul":66982,"Aug":162796,"Sep":92541,"Oct":117532,"Nov":84241,"Dec":134245,"Jan":63858,"Feb":73205,"Mar":101126},
+    "Wellness":       {"Apr":4100,"May":1750,"Jun":19762,"Jul":23432,"Aug":1800,"Sep":0,"Oct":15878,"Nov":26884,"Dec":33216,"Jan":17370,"Feb":36550,"Mar":81309},
+    "One Time Charge":{"Apr":2880,"May":7500,"Jun":2850,"Jul":2950,"Aug":7660,"Sep":6800,"Oct":26980,"Nov":20638,"Dec":13460,"Jan":4100,"Feb":13990,"Mar":20650},
+    "Entertainment":  {"Apr":67241,"May":27665,"Jun":7098,"Jul":33295,"Aug":189,"Sep":13232,"Oct":1779,"Nov":7175,"Dec":7009,"Jan":499,"Feb":13645,"Mar":6690},
+    "Staff Salary":   {"Apr":236310,"May":197770,"Jun":175870,"Jul":176370,"Aug":220870,"Sep":209570,"Oct":244730,"Nov":230870,"Dec":385283,"Jan":303020,"Feb":19020,"Mar":175720},
+    "Financial Expense / OD Interest": {"Apr":38529,"May":20146,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":29529,"Mar":0},
+    "Children Education": {"Apr":856197,"May":188432,"Jun":22700,"Jul":78855,"Aug":110550,"Sep":127800,"Oct":56000,"Nov":956923,"Dec":28700,"Jan":28000,"Feb":40400,"Mar":33350},
+    "Kalpataru Maintenance": {"Apr":29421,"May":29421,"Jun":29421,"Jul":29421,"Aug":29421,"Sep":29421,"Oct":158721,"Nov":35879,"Dec":35879,"Jan":31902,"Feb":35879,"Mar":35879},
+    "Charity":        {"Apr":583500,"May":300000,"Jun":13650,"Jul":818250,"Aug":550000,"Sep":118000,"Oct":245247,"Nov":36898,"Dec":118882,"Jan":0,"Feb":100000,"Mar":415585},
+    "Uspaar":         {"Apr":17580,"May":16360,"Jun":157855,"Jul":30000,"Aug":87410,"Sep":90000,"Oct":108790,"Nov":80000,"Dec":111799,"Jan":115080,"Feb":143200,"Mar":151260},
+    "Insurance":      {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":119558,"Dec":168504,"Jan":0,"Feb":0,"Mar":0},
+    "Home Loan":      {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+    "Tax":            {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+}
+MIS_FY24_MONTHLY = {
+    "Misc":           {"Apr":10612,"May":7412,"Jun":5604,"Jul":3779,"Aug":3872,"Sep":1709,"Oct":690,"Nov":0,"Dec":0,"Jan":23492,"Feb":5290,"Mar":7080},
+    "Clothes":        {"Apr":8912,"May":41188,"Jun":1999,"Jul":13493,"Aug":0,"Sep":0,"Oct":6689,"Nov":4998,"Dec":1778,"Jan":0,"Feb":0,"Mar":41753},
+    "Gifts":          {"Apr":798,"May":6017,"Jun":1499,"Jul":95214,"Aug":0,"Sep":28468,"Oct":0,"Nov":81000,"Dec":2847,"Jan":3448,"Feb":0,"Mar":0},
+    "Cash":           {"Apr":20000,"May":0,"Jun":118169,"Jul":6000,"Aug":13500,"Sep":25046,"Oct":5000,"Nov":0,"Dec":10000,"Jan":0,"Feb":10000,"Mar":0},
+    "Maintenance Expense": {"Apr":121359,"May":178721,"Jun":222206,"Jul":193185,"Aug":241423,"Sep":186081,"Oct":251831,"Nov":351996,"Dec":177411,"Jan":219494,"Feb":99367,"Mar":182662},
+    "Malhar":         {"Apr":46717,"May":25616,"Jun":41806,"Jul":137102,"Aug":56668,"Sep":35621,"Oct":49810,"Nov":18800,"Dec":42843,"Jan":85470,"Feb":27870,"Mar":49750},
+    "Home office":    {"Apr":13782,"May":53133,"Jun":12792,"Jul":30412,"Aug":11812,"Sep":31167,"Oct":6206,"Nov":33010,"Dec":13500,"Jan":7000,"Feb":6000,"Mar":5000},
+    "Electricity & Gas": {"Apr":15383,"May":28199,"Jun":20582,"Jul":14461,"Aug":12563,"Sep":18634,"Oct":14635,"Nov":23979,"Dec":14912,"Jan":14781,"Feb":12491,"Mar":16975},
+    "Alcohol":        {"Apr":2800,"May":0,"Jun":19700,"Jul":19598,"Aug":18314,"Sep":0,"Oct":0,"Nov":0,"Dec":11610,"Jan":0,"Feb":0,"Mar":0},
+    "Medical":        {"Apr":0,"May":27400,"Jun":4000,"Jul":34500,"Aug":15297,"Sep":90264,"Oct":11746,"Nov":2313,"Dec":20138,"Jan":0,"Feb":1500,"Mar":74140},
+    "Holiday":        {"Apr":81805,"May":299243,"Jun":232239,"Jul":46421,"Aug":9250,"Sep":6800,"Oct":0,"Nov":49154,"Dec":164904,"Jan":27688,"Feb":296465,"Mar":73302},
+    "Groceries":      {"Apr":114558,"May":86085,"Jun":96964,"Jul":157379,"Aug":67436,"Sep":113728,"Oct":89000,"Nov":93120,"Dec":98000,"Jan":111205,"Feb":70000,"Mar":85000},
+    "Eating Out":     {"Apr":22416,"May":20065,"Jun":166419,"Jul":30346,"Aug":24036,"Sep":34605,"Oct":6549,"Nov":88444,"Dec":1980,"Jan":6779,"Feb":60212,"Mar":16879},
+    "Amma":           {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":21000,"Nov":37486,"Dec":3198,"Jan":9826,"Feb":10999,"Mar":12901},
+    "Ketki":          {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":145000,"Jan":1500,"Feb":0,"Mar":0},
+    "Wellness":       {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+    "One Time Charge":{"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+    "Entertainment":  {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+    "Staff Salary":   {"Apr":222000,"May":94500,"Jun":125000,"Jul":142000,"Aug":128000,"Sep":152000,"Oct":153100,"Nov":149000,"Dec":133000,"Jan":127000,"Feb":151000,"Mar":117100},
+    "Financial Expense / OD Interest": {"Apr":9000,"May":0,"Jun":0,"Jul":0,"Aug":50000,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":1525,"Feb":0,"Mar":0},
+    "Children Education": {"Apr":0,"May":756000,"Jun":21990,"Jul":196068,"Aug":73518,"Sep":12780,"Oct":2800,"Nov":7200,"Dec":770655,"Jan":209300,"Feb":5349,"Mar":16099},
+    "Kalpataru Maintenance": {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":26256,"Oct":28193,"Nov":28225,"Dec":28349,"Jan":28225,"Feb":28225,"Mar":151067},
+    "Charity":        {"Apr":0,"May":50000,"Jun":40000,"Jul":21040,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":50000,"Jan":100000,"Feb":100000,"Mar":0},
+    "Uspaar":         {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
+    "Insurance":      {"Apr":0,"May":0,"Jun":0,"Jul":342056,"Aug":0,"Sep":0,"Oct":148374,"Nov":22189,"Dec":168504,"Jan":0,"Feb":0,"Mar":138429},
+    "Home Loan":      {"Apr":598843,"May":430433,"Jun":474414,"Jul":426159,"Aug":136367,"Sep":323197,"Oct":0,"Nov":593591,"Dec":411966,"Jan":590471,"Feb":600440,"Mar":575024},
+    "Tax":            {"Apr":1620,"May":2112347,"Jun":4598,"Jul":7103283,"Aug":0,"Sep":0,"Oct":61394,"Nov":0,"Dec":100,"Jan":800,"Feb":0,"Mar":0},
+}
+
+
 @app.route("/api/mis", methods=["GET"])
 @login_required
 def api_mis():
@@ -204,96 +294,10 @@ def api_mis():
     budget_annual = _bfile["annual"]   # FY27 annual by ACC26 heading (Blueprint)
     budget_monthly_app = _bfile["monthly"]  # monthly by app category (approval engine)
 
-    # ── FY26 monthly data — from Summaryexpenses sheet, ACC26ver5_MASTER.xlsx ──
-    # Calendar month abbreviations: Apr=FY1, May=FY2 … Mar=FY12
-    FY26_MONTHLY = {
-        "Misc":           {"Apr":16685,"May":836,"Jun":16239,"Jul":6208,"Aug":59760,"Sep":625,"Oct":34168,"Nov":16938,"Dec":2676,"Jan":6562,"Feb":16537,"Mar":11382},
-        "Clothes":        {"Apr":0,"May":25990,"Jun":54219,"Jul":66865,"Aug":64337,"Sep":0,"Oct":57982,"Nov":38164,"Dec":19461,"Jan":8290,"Feb":47896,"Mar":7652},
-        "Gifts":          {"Apr":6500,"May":3950,"Jun":0,"Jul":0,"Aug":8825,"Sep":0,"Oct":40000,"Nov":33099,"Dec":0,"Jan":3540,"Feb":1571,"Mar":2863},
-        "Cash":           {"Apr":10000,"May":0,"Jun":20000,"Jul":25000,"Aug":50000,"Sep":10000,"Oct":10000,"Nov":80000,"Dec":0,"Jan":11600,"Feb":31000,"Mar":10000},
-        "Maintenance Expense": {"Apr":17440,"May":9814,"Jun":12775,"Jul":2411,"Aug":3029,"Sep":750,"Oct":22850,"Nov":5887,"Dec":0,"Jan":2500,"Feb":6243,"Mar":4404},
-        "Malhar":         {"Apr":40800,"May":53930,"Jun":93923,"Jul":89728,"Aug":51314,"Sep":91350,"Oct":177919,"Nov":165493,"Dec":0,"Jan":81581,"Feb":88880,"Mar":30382},
-        "Home office":    {"Apr":88350,"May":25461,"Jun":10450,"Jul":23057,"Aug":24447,"Sep":11933,"Oct":9455,"Nov":24783,"Dec":0,"Jan":7430,"Feb":3096,"Mar":5320},
-        "Electricity & Gas": {"Apr":50780,"May":52723,"Jun":52068,"Jul":31128,"Aug":25843,"Sep":24863,"Oct":47174,"Nov":38834,"Dec":0,"Jan":37325,"Feb":24186,"Mar":7616},
-        "Alcohol":        {"Apr":14900,"May":0,"Jun":0,"Jul":9400,"Aug":1450,"Sep":0,"Oct":0,"Nov":48700,"Dec":0,"Jan":0,"Feb":0,"Mar":500},
-        "Medical":        {"Apr":14143,"May":96808,"Jun":27382,"Jul":77477,"Aug":56988,"Sep":77126,"Oct":72143,"Nov":45345,"Dec":1210,"Jan":57526,"Feb":20200,"Mar":45100},
-        "Holiday":        {"Apr":17031,"May":486489,"Jun":132378,"Jul":952200,"Aug":73464,"Sep":4218,"Oct":93531,"Nov":149259,"Dec":0,"Jan":8128,"Feb":56366,"Mar":215510},
-        "Groceries":      {"Apr":89175,"May":120368,"Jun":90011,"Jul":106208,"Aug":135331,"Sep":172407,"Oct":155555,"Nov":253751,"Dec":5404,"Jan":220193,"Feb":140067,"Mar":200420},
-        "Eating Out":     {"Apr":46057,"May":27258,"Jun":25723,"Jul":48862,"Aug":49917,"Sep":51657,"Oct":69146,"Nov":48007,"Dec":20773,"Jan":53623,"Feb":36546,"Mar":42347},
-        "Amma":           {"Apr":27679,"May":16458,"Jun":7276,"Jul":10068,"Aug":12826,"Sep":52229,"Oct":1375,"Nov":-1356,"Dec":0,"Jan":15595,"Feb":-26776,"Mar":-1823},
-        "Wellness":       {"Apr":63157,"May":22672,"Jun":38199,"Jul":46159,"Aug":13292,"Sep":59132,"Oct":52176,"Nov":61175,"Dec":0,"Jan":7745,"Feb":13545,"Mar":10649},
-        "Ketki":          {"Apr":426656,"May":115151,"Jun":-15927,"Jul":78940,"Aug":126146,"Sep":50147,"Oct":326622,"Nov":203580,"Dec":65053,"Jan":40084,"Feb":27653,"Mar":101024},
-        "Staff Salary":   {"Apr":118522,"May":258292,"Jun":269854,"Jul":195408,"Aug":178854,"Sep":176859,"Oct":188398,"Nov":419898,"Dec":99438,"Jan":279669,"Feb":224518,"Mar":221018},
-        "Financial Expense / OD Interest": {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":360000},
-        "Entertainment":  {"Apr":1148,"May":5278,"Jun":68503,"Jul":40408,"Aug":14280,"Sep":21692,"Oct":19600,"Nov":15839,"Dec":9485,"Jan":4214,"Feb":649,"Mar":25143},
-        "One Time Charge":{"Apr":45325,"May":12530,"Jun":4750,"Jul":79984,"Aug":76574,"Sep":149914,"Oct":64441,"Nov":199349,"Dec":71035,"Jan":24050,"Feb":31250,"Mar":11850},
-        "Children Education": {"Apr":981577,"May":68350,"Jun":550856,"Jul":101149,"Aug":124383,"Sep":54100,"Oct":38700,"Nov":514160,"Dec":0,"Jan":29700,"Feb":45500,"Mar":524550},
-        "Kalpataru Maintenance": {"Apr":35997,"May":35933,"Jun":35879,"Jul":-7041,"Aug":197231,"Sep":36587,"Oct":35879,"Nov":71168,"Dec":0,"Jan":35879,"Feb":35879,"Mar":35933},
-        "Charity":        {"Apr":20000,"May":0,"Jun":0,"Jul":167800,"Aug":105725,"Sep":24048,"Oct":300000,"Nov":115000,"Dec":150000,"Jan":625100,"Feb":0,"Mar":18000},
-        "Uspaar":         {"Apr":133783,"May":140978,"Jun":214372,"Jul":97910,"Aug":204600,"Sep":72828,"Oct":38984,"Nov":170003,"Dec":0,"Jan":103660,"Feb":40350,"Mar":86325},
-        "Insurance":      {"Apr":118000,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":102820,"Nov":0,"Dec":142800,"Jan":0,"Feb":0,"Mar":0},
-        "Home Loan":      {"Apr":903259,"May":1146721,"Jun":916551,"Jul":1201557,"Aug":554547,"Sep":992227,"Oct":963511,"Nov":1007410,"Dec":1777170,"Jan":1389117,"Feb":928825,"Mar":1285719},
-        "Tax":            {"Apr":0,"May":0,"Jun":0,"Jul":13519347,"Aug":0,"Sep":3630000,"Oct":61499379,"Nov":0,"Dec":0,"Jan":0,"Feb":3848950,"Mar":0},
-    }
-    FY25_MONTHLY = {
-        "Misc":           {"Apr":6088,"May":8858,"Jun":20244,"Jul":32654,"Aug":20773,"Sep":24987,"Oct":2704,"Nov":5462,"Dec":20402,"Jan":23428,"Feb":6027,"Mar":4321},
-        "Clothes":        {"Apr":106470,"May":30095,"Jun":30780,"Jul":0,"Aug":9899,"Sep":8590,"Oct":0,"Nov":20798,"Dec":48088,"Jan":2490,"Feb":22291,"Mar":14990},
-        "Gifts":          {"Apr":3599,"May":0,"Jun":14285,"Jul":15857,"Aug":5847,"Sep":12462,"Oct":25000,"Nov":44705,"Dec":11270,"Jan":990,"Feb":0,"Mar":0},
-        "Cash":           {"Apr":0,"May":55000,"Jun":10000,"Jul":20000,"Aug":30000,"Sep":40000,"Oct":30000,"Nov":60000,"Dec":30000,"Jan":345500,"Feb":20500,"Mar":20000},
-        "Maintenance Expense": {"Apr":0,"May":5500,"Jun":0,"Jul":0,"Aug":0,"Sep":1902,"Oct":13383,"Nov":4253,"Dec":3124,"Jan":2900,"Feb":0,"Mar":449},
-        "Malhar":         {"Apr":38269,"May":53199,"Jun":91025,"Jul":98388,"Aug":35080,"Sep":74930,"Oct":22000,"Nov":41900,"Dec":41836,"Jan":56530,"Feb":42330,"Mar":83090},
-        "Home office":    {"Apr":30702,"May":13150,"Jun":7000,"Jul":8500,"Aug":9200,"Sep":26914,"Oct":13500,"Nov":13359,"Dec":10000,"Jan":1200,"Feb":1000,"Mar":51000},
-        "Electricity & Gas": {"Apr":18233,"May":50902,"Jun":40791,"Jul":31210,"Aug":27031,"Sep":37216,"Oct":32991,"Nov":34039,"Dec":18101,"Jan":19564,"Feb":22573,"Mar":28734},
-        "Alcohol":        {"Apr":5500,"May":1500,"Jun":0,"Jul":32235,"Aug":0,"Sep":0,"Oct":17089,"Nov":0,"Dec":30235,"Jan":22691,"Feb":0,"Mar":0},
-        "Medical":        {"Apr":25104,"May":17747,"Jun":16695,"Jul":15049,"Aug":34811,"Sep":28366,"Oct":7032,"Nov":6215,"Dec":95127,"Jan":61258,"Feb":260944,"Mar":65715},
-        "Holiday":        {"Apr":331046,"May":388673,"Jun":527589,"Jul":484268,"Aug":82855,"Sep":221069,"Oct":92797,"Nov":0,"Dec":42609,"Jan":0,"Feb":37368,"Mar":66627},
-        "Groceries":      {"Apr":114509,"May":117604,"Jun":108667,"Jul":98176,"Aug":108702,"Sep":81999,"Oct":113779,"Nov":80055,"Dec":85734,"Jan":95234,"Feb":90302,"Mar":67905},
-        "Eating Out":     {"Apr":25839,"May":165938,"Jun":34440,"Jul":119314,"Aug":11086,"Sep":44803,"Oct":5921,"Nov":115949,"Dec":17293,"Jan":73701,"Feb":5160,"Mar":9266},
-        "Amma":           {"Apr":17294,"May":2434,"Jun":7480,"Jul":13736,"Aug":11310,"Sep":20583,"Oct":15262,"Nov":4273,"Dec":6909,"Jan":1939,"Feb":45101,"Mar":588},
-        "Ketki":          {"Apr":74654,"May":60324,"Jun":118994,"Jul":66982,"Aug":162796,"Sep":92541,"Oct":117532,"Nov":84241,"Dec":134245,"Jan":63858,"Feb":73205,"Mar":101126},
-        "Wellness":       {"Apr":4100,"May":1750,"Jun":19762,"Jul":23432,"Aug":1800,"Sep":0,"Oct":15878,"Nov":26884,"Dec":33216,"Jan":17370,"Feb":36550,"Mar":81309},
-        "One Time Charge":{"Apr":2880,"May":7500,"Jun":2850,"Jul":2950,"Aug":7660,"Sep":6800,"Oct":26980,"Nov":20638,"Dec":13460,"Jan":4100,"Feb":13990,"Mar":20650},
-        "Entertainment":  {"Apr":67241,"May":27665,"Jun":7098,"Jul":33295,"Aug":189,"Sep":13232,"Oct":1779,"Nov":7175,"Dec":7009,"Jan":499,"Feb":13645,"Mar":6690},
-        "Staff Salary":   {"Apr":236310,"May":197770,"Jun":175870,"Jul":176370,"Aug":220870,"Sep":209570,"Oct":244730,"Nov":230870,"Dec":385283,"Jan":303020,"Feb":19020,"Mar":175720},
-        "Financial Expense / OD Interest": {"Apr":38529,"May":20146,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":29529,"Mar":0},
-        "Children Education": {"Apr":856197,"May":188432,"Jun":22700,"Jul":78855,"Aug":110550,"Sep":127800,"Oct":56000,"Nov":956923,"Dec":28700,"Jan":28000,"Feb":40400,"Mar":33350},
-        "Kalpataru Maintenance": {"Apr":29421,"May":29421,"Jun":29421,"Jul":29421,"Aug":29421,"Sep":29421,"Oct":158721,"Nov":35879,"Dec":35879,"Jan":31902,"Feb":35879,"Mar":35879},
-        "Charity":        {"Apr":583500,"May":300000,"Jun":13650,"Jul":818250,"Aug":550000,"Sep":118000,"Oct":245247,"Nov":36898,"Dec":118882,"Jan":0,"Feb":100000,"Mar":415585},
-        "Uspaar":         {"Apr":17580,"May":16360,"Jun":157855,"Jul":30000,"Aug":87410,"Sep":90000,"Oct":108790,"Nov":80000,"Dec":111799,"Jan":115080,"Feb":143200,"Mar":151260},
-        "Insurance":      {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":119558,"Dec":168504,"Jan":0,"Feb":0,"Mar":0},
-        "Home Loan":      {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
-        "Tax":            {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
-    }
-
-    FY24_MONTHLY = {
-        "Misc":           {"Apr":10612,"May":7412,"Jun":5604,"Jul":3779,"Aug":3872,"Sep":1709,"Oct":690,"Nov":0,"Dec":0,"Jan":23492,"Feb":5290,"Mar":7080},
-        "Clothes":        {"Apr":8912,"May":41188,"Jun":1999,"Jul":13493,"Aug":0,"Sep":0,"Oct":6689,"Nov":4998,"Dec":1778,"Jan":0,"Feb":0,"Mar":41753},
-        "Gifts":          {"Apr":798,"May":6017,"Jun":1499,"Jul":95214,"Aug":0,"Sep":28468,"Oct":0,"Nov":81000,"Dec":2847,"Jan":3448,"Feb":0,"Mar":0},
-        "Cash":           {"Apr":20000,"May":0,"Jun":118169,"Jul":6000,"Aug":13500,"Sep":25046,"Oct":5000,"Nov":0,"Dec":10000,"Jan":0,"Feb":10000,"Mar":0},
-        "Maintenance Expense": {"Apr":121359,"May":178721,"Jun":222206,"Jul":193185,"Aug":241423,"Sep":186081,"Oct":251831,"Nov":351996,"Dec":177411,"Jan":219494,"Feb":99367,"Mar":182662},
-        "Malhar":         {"Apr":46717,"May":25616,"Jun":41806,"Jul":137102,"Aug":56668,"Sep":35621,"Oct":49810,"Nov":18800,"Dec":42843,"Jan":85470,"Feb":27870,"Mar":49750},
-        "Home office":    {"Apr":13782,"May":53133,"Jun":12792,"Jul":30412,"Aug":11812,"Sep":31167,"Oct":6206,"Nov":33010,"Dec":13500,"Jan":7000,"Feb":6000,"Mar":5000},
-        "Electricity & Gas": {"Apr":15383,"May":28199,"Jun":20582,"Jul":14461,"Aug":12563,"Sep":18634,"Oct":14635,"Nov":23979,"Dec":14912,"Jan":14781,"Feb":12491,"Mar":16975},
-        "Alcohol":        {"Apr":2800,"May":0,"Jun":19700,"Jul":19598,"Aug":18314,"Sep":0,"Oct":0,"Nov":0,"Dec":11610,"Jan":0,"Feb":0,"Mar":0},
-        "Medical":        {"Apr":0,"May":27400,"Jun":4000,"Jul":34500,"Aug":15297,"Sep":90264,"Oct":11746,"Nov":2313,"Dec":20138,"Jan":0,"Feb":1500,"Mar":74140},
-        "Holiday":        {"Apr":81805,"May":299243,"Jun":232239,"Jul":46421,"Aug":9250,"Sep":6800,"Oct":0,"Nov":49154,"Dec":164904,"Jan":27688,"Feb":296465,"Mar":73302},
-        "Groceries":      {"Apr":114558,"May":86085,"Jun":96964,"Jul":157379,"Aug":67436,"Sep":113728,"Oct":89000,"Nov":93120,"Dec":98000,"Jan":111205,"Feb":70000,"Mar":85000},
-        "Eating Out":     {"Apr":22416,"May":20065,"Jun":166419,"Jul":30346,"Aug":24036,"Sep":34605,"Oct":6549,"Nov":88444,"Dec":1980,"Jan":6779,"Feb":60212,"Mar":16879},
-        "Amma":           {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":21000,"Nov":37486,"Dec":3198,"Jan":9826,"Feb":10999,"Mar":12901},
-        "Ketki":          {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":145000,"Jan":1500,"Feb":0,"Mar":0},
-        "Wellness":       {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
-        "One Time Charge":{"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
-        "Entertainment":  {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
-        "Staff Salary":   {"Apr":222000,"May":94500,"Jun":125000,"Jul":142000,"Aug":128000,"Sep":152000,"Oct":153100,"Nov":149000,"Dec":133000,"Jan":127000,"Feb":151000,"Mar":117100},
-        "Financial Expense / OD Interest": {"Apr":9000,"May":0,"Jun":0,"Jul":0,"Aug":50000,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":1525,"Feb":0,"Mar":0},
-        "Children Education": {"Apr":0,"May":756000,"Jun":21990,"Jul":196068,"Aug":73518,"Sep":12780,"Oct":2800,"Nov":7200,"Dec":770655,"Jan":209300,"Feb":5349,"Mar":16099},
-        "Kalpataru Maintenance": {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":26256,"Oct":28193,"Nov":28225,"Dec":28349,"Jan":28225,"Feb":28225,"Mar":151067},
-        "Charity":        {"Apr":0,"May":50000,"Jun":40000,"Jul":21040,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":50000,"Jan":100000,"Feb":100000,"Mar":0},
-        "Uspaar":         {"Apr":0,"May":0,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":0,"Mar":0},
-        "Insurance":      {"Apr":0,"May":0,"Jun":0,"Jul":342056,"Aug":0,"Sep":0,"Oct":148374,"Nov":22189,"Dec":168504,"Jan":0,"Feb":0,"Mar":138429},
-        "Home Loan":      {"Apr":598843,"May":430433,"Jun":474414,"Jul":426159,"Aug":136367,"Sep":323197,"Oct":0,"Nov":593591,"Dec":411966,"Jan":590471,"Feb":600440,"Mar":575024},
-        "Tax":            {"Apr":1620,"May":2112347,"Jun":4598,"Jul":7103283,"Aug":0,"Sep":0,"Oct":61394,"Nov":0,"Dec":100,"Jan":800,"Feb":0,"Mar":0},
-    }
+    # ── FY monthly data — from module-level constants ───────────────────────────
+    FY26_MONTHLY = MIS_FY26_MONTHLY
+    FY25_MONTHLY = MIS_FY25_MONTHLY
+    FY24_MONTHLY = MIS_FY24_MONTHLY
 
     # Calendar month number → FY month abbreviation
     CAL_TO_FY_MON = {4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec",1:"Jan",2:"Feb",3:"Mar"}
@@ -625,31 +629,17 @@ def api_financial_statements():
     SUPER_ORDER = ["Household","Personal","Family","Giving","Lifestyle","Property","Financial"]
     NON_FIN = ["Household","Personal","Family","Giving","Lifestyle","Property"]
 
-    _FY_RANGES = {
-        "FY24": ("2023-04-01","2024-03-31"),
-        "FY25": ("2024-04-01","2025-03-31"),
-        "FY26": ("2025-04-01","2026-03-31"),
-    }
-
-    # ── Expenses from ledger per FY ──────────────────────────────────────────
-    ledger = load_ledger()
-    def ledger_expenses(fy):
-        s, e = _FY_RANGES[fy]
+    # ── Expenses from MIS monthly dicts (same source as budget tracker) ────────
+    def mis_super_totals(monthly_dict):
         totals = {cat: 0 for cat in SUPER_ORDER}
-        for t in ledger:
-            d = t.get("date","")
-            if not (s <= d <= e):
-                continue
-            if t.get("credit") and not t.get("debit"):
-                continue
-            heading = t.get("heading") or ""
+        for heading, months in monthly_dict.items():
             super_cat = HEADING_SUPER.get(heading, "Household")
-            totals[super_cat] += t.get("debit", 0) or 0
-        return {k: round(v / 100000, 2) for k, v in totals.items()}  # convert to lakhs
+            totals[super_cat] += sum(v for v in months.values() if v and v > 0)
+        return {k: round(v / 100000, 2) for k, v in totals.items()}
 
-    exp_fy24 = ledger_expenses("FY24")
-    exp_fy25 = ledger_expenses("FY25")
-    exp_fy26 = ledger_expenses("FY26")
+    exp_fy24 = mis_super_totals(MIS_FY24_MONTHLY)
+    exp_fy25 = mis_super_totals(MIS_FY25_MONTHLY)
+    exp_fy26 = mis_super_totals(MIS_FY26_MONTHLY)
 
     # ── Hardcoded income / tax from tax files ────────────────────────────────
     income = {
