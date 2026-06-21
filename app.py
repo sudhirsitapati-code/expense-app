@@ -152,6 +152,12 @@ def index():
     return render_template("index.html", user=session["user"])
 
 
+@app.route("/financial-statements")
+@login_required
+def financial_statements():
+    return render_template("financial_statements.html", user=session["user"])
+
+
 # Keep old routes redirecting to /expenses
 @app.route("/entry")
 @app.route("/dashboard")
@@ -595,6 +601,153 @@ def api_mis():
         "period_months": period_months,
         "groups": groups,
         "grand": grand,
+    })
+
+
+@app.route("/api/financial-statements", methods=["GET"])
+@login_required
+def api_financial_statements():
+    """Return P&L, Balance Sheet, and Asset detail for FY24/FY25/FY26."""
+
+    HEADING_SUPER = {
+        "Groceries":"Household","Staff Salary":"Household","Electricity & Gas":"Household",
+        "Misc":"Household","Cash":"Household",
+        "Alcohol":"Personal","Wellness":"Personal","Clothes":"Personal",
+        "Gifts":"Family","Medical":"Family","Amma":"Family","Ketki":"Family",
+        "Children Education":"Family",
+        "Charity":"Giving","Uspaar":"Giving",
+        "Holiday":"Lifestyle","Eating Out":"Lifestyle","Entertainment":"Lifestyle",
+        "Malhar":"Property","Maintenance Expense":"Property","Home office":"Property",
+        "One Time Charge":"Property","Kalpataru Maintenance":"Property",
+        "Financial Expense / OD Interest":"Financial","Financial Expense":"Financial",
+        "Insurance":"Financial","Home Loan":"Financial","Tax":"Financial",
+    }
+    SUPER_ORDER = ["Household","Personal","Family","Giving","Lifestyle","Property","Financial"]
+    NON_FIN = ["Household","Personal","Family","Giving","Lifestyle","Property"]
+
+    _FY_RANGES = {
+        "FY24": ("2023-04-01","2024-03-31"),
+        "FY25": ("2024-04-01","2025-03-31"),
+        "FY26": ("2025-04-01","2026-03-31"),
+    }
+
+    # ── Expenses from ledger per FY ──────────────────────────────────────────
+    ledger = load_ledger()
+    def ledger_expenses(fy):
+        s, e = _FY_RANGES[fy]
+        totals = {cat: 0 for cat in SUPER_ORDER}
+        for t in ledger:
+            d = t.get("date","")
+            if not (s <= d <= e):
+                continue
+            if t.get("credit") and not t.get("debit"):
+                continue
+            heading = t.get("heading") or ""
+            super_cat = HEADING_SUPER.get(heading, "Household")
+            totals[super_cat] += t.get("debit", 0) or 0
+        return {k: round(v / 100000, 2) for k, v in totals.items()}  # convert to lakhs
+
+    exp_fy24 = ledger_expenses("FY24")
+    exp_fy25 = ledger_expenses("FY25")
+    exp_fy26 = ledger_expenses("FY26")
+
+    # ── Hardcoded income / tax from tax files ────────────────────────────────
+    income = {
+        "FY24": {"salary": 1002, "esop": 870, "dividends": 0, "interest": 0.25, "capital_gains": 0, "other": 0},
+        "FY25": {"salary": 1873, "esop": 1604, "dividends": 53, "interest": 0, "capital_gains": 256, "other": 14},
+        "FY26": {"salary": 1122, "esop": 1958, "dividends": 55, "interest": 12, "capital_gains": 87, "other": 7},
+    }
+    tax = {"FY24": 92, "FY25": 1634, "FY26": 1200}
+
+    # ── Balance sheet (net worth) ────────────────────────────────────────────
+    balance_sheet = {
+        "FY23": {"company_shares":550,"property":1990,"equity":930,"gold_bond":100,"nps":310,"pf":75,"gratuity":0,"private_eq":289,"art_jewellery":92,"total_assets":4336,"home_loans":0,"od":640,"loan_shares":0,"total_liabilities":640,"net_worth":3696},
+        "FY24": {"company_shares":1800,"property":2140,"equity":1277,"gold_bond":135,"nps":370,"pf":150,"gratuity":0,"private_eq":289,"art_jewellery":92,"total_assets":6253,"home_loans":200,"od":495,"loan_shares":440,"total_liabilities":1135,"net_worth":5133},
+        "FY25": {"company_shares":3400,"property":2740,"equity":1380,"gold_bond":300,"nps":470,"pf":234,"gratuity":0,"private_eq":346,"art_jewellery":115,"total_assets":8985,"home_loans":200,"od":538,"loan_shares":840,"total_liabilities":1578,"net_worth":7445},
+        "FY26": {"company_shares":3500,"property":4080,"equity":1609,"gold_bond":314,"nps":478,"pf":306,"gratuity":350,"private_eq":346,"art_jewellery":115,"total_assets":11098,"home_loans":782,"od":570,"loan_shares":0,"total_liabilities":1352,"net_worth":9961},
+    }
+
+    # ── Asset detail ─────────────────────────────────────────────────────────
+    assets_detail = {
+        "FY24": [
+            {"name":"GCPL Shares","type":"Listed Equity","fy24":2000,"fy25":None,"fy26":None},
+            {"name":"Solidarity PMS","type":"Listed Equity","fy24":644,"fy25":None,"fy26":None},
+            {"name":"PPFAS MF","type":"Mutual Fund","fy24":150,"fy25":None,"fy26":None},
+            {"name":"Marcellus","type":"Mutual Fund","fy24":241,"fy25":None,"fy26":None},
+            {"name":"Gold Bonds (SGB)","type":"Gold","fy24":135,"fy25":None,"fy26":None},
+            {"name":"C34 Kalpataru","type":"Property","fy24":1200,"fy25":None,"fy26":None},
+            {"name":"C51 Kalpataru","type":"Property","fy24":200,"fy25":None,"fy26":None},
+            {"name":"Malhar Land","type":"Property","fy24":400,"fy25":None,"fy26":None},
+            {"name":"Uspaar / Sarve","type":"Property","fy24":340,"fy25":None,"fy26":None},
+            {"name":"NPS","type":"Retirement","fy24":370,"fy25":None,"fy26":None},
+            {"name":"EPF","type":"Retirement","fy24":150,"fy25":None,"fy26":None},
+            {"name":"Private Equity (LO Foods, LocalBuy, Licious etc.)","type":"Private Eq.","fy24":182,"fy25":None,"fy26":None},
+            {"name":"Art & Jewellery","type":"Alternative","fy24":93,"fy25":None,"fy26":None},
+        ]
+    }
+
+    # Build unified asset detail list across all years
+    assets = [
+        {"name":"GCPL Shares","type":"Listed Equity","fy24":2000,"fy25":3400,"fy26":3500},
+        {"name":"Solidarity PMS","type":"Listed Equity","fy24":644,"fy25":724,"fy26":785},
+        {"name":"PPFAS MF","type":"Mutual Fund","fy24":150,"fy25":164,"fy26":165},
+        {"name":"Marcellus","type":"Mutual Fund","fy24":241,"fy25":302,"fy26":None},
+        {"name":"SBI MF","type":"Mutual Fund","fy24":None,"fy25":107,"fy26":103},
+        {"name":"Latent AIF","type":"AIF","fy24":None,"fy25":107,"fy26":187},
+        {"name":"Nippon MF","type":"Mutual Fund","fy24":None,"fy25":None,"fy26":70},
+        {"name":"Gold Bonds (SGB)","type":"Gold","fy24":135,"fy25":301,"fy26":314},
+        {"name":"Godrej Pet (GPA)","type":"Private Eq.","fy24":None,"fy25":164,"fy26":164},
+        {"name":"LO Foods","type":"Private Eq.","fy24":20,"fy25":20,"fy26":20},
+        {"name":"LocalBuy (Superk)","type":"Private Eq.","fy24":100,"fy25":100,"fy26":100},
+        {"name":"Licious","type":"Private Eq.","fy24":52,"fy25":52,"fy26":52},
+        {"name":"X to 10X","type":"Private Eq.","fy24":10,"fy25":10,"fy26":10},
+        {"name":"C34 Kalpataru","type":"Property","fy24":1200,"fy25":1200,"fy26":1300},
+        {"name":"C51 Kalpataru","type":"Property","fy24":200,"fy25":800,"fy26":880},
+        {"name":"Malhar Land","type":"Property","fy24":400,"fy25":400,"fy26":900},
+        {"name":"Uspaar / Sarve Land","type":"Property","fy24":340,"fy25":340,"fy26":1000},
+        {"name":"NPS","type":"Retirement","fy24":370,"fy25":470,"fy26":478},
+        {"name":"EPF","type":"Retirement","fy24":150,"fy25":234,"fy26":306},
+        {"name":"Gratuity","type":"Retirement","fy24":None,"fy25":None,"fy26":350},
+        {"name":"Art & Jewellery","type":"Alternative","fy24":93,"fy25":106,"fy26":115},
+    ]
+
+    liabilities = [
+        {"name":"HL1 — C51 Kalpataru (top-up) XX99508","type":"Home Loan","fy24":None,"fy25":None,"fy26":440},
+        {"name":"HL2 — C34 Kalpataru (top-up) XX00382","type":"Home Loan","fy24":None,"fy25":None,"fy26":342},
+        {"name":"HL3 — C34 HomeSaver","type":"Home Loan","fy24":None,"fy25":200,"fy26":None},
+        {"name":"HL4 — C51 original XX42596","type":"Home Loan","fy24":200,"fy25":None,"fy26":191},
+        {"name":"OD — ICICI 9175","type":"Credit Line","fy24":495,"fy25":538,"fy26":570},
+        {"name":"Loan against shares","type":"Pledge Loan","fy24":440,"fy25":840,"fy26":None},
+    ]
+
+    def pl_for_fy(fy, exp):
+        inc = income[fy]
+        total_inc = inc["salary"] + inc["esop"] + inc["dividends"] + inc["interest"] + inc["capital_gains"] + inc["other"]
+        non_fin = sum(exp.get(s, 0) for s in NON_FIN)
+        fin = exp.get("Financial", 0)
+        total_exp = non_fin + fin + tax[fy]
+        return {
+            "income": inc,
+            "total_income": round(total_inc, 2),
+            "expenses": exp,
+            "non_financial_total": round(non_fin, 2),
+            "financial_total": round(fin, 2),
+            "tax": tax[fy],
+            "total_expenditure": round(total_exp, 2),
+            "net_surplus": round(total_inc - total_exp, 2),
+        }
+
+    return jsonify({
+        "pl": {
+            "FY24": pl_for_fy("FY24", exp_fy24),
+            "FY25": pl_for_fy("FY25", exp_fy25),
+            "FY26": pl_for_fy("FY26", exp_fy26),
+        },
+        "balance_sheet": balance_sheet,
+        "assets": assets,
+        "liabilities": liabilities,
+        "super_order": SUPER_ORDER,
+        "non_fin_supers": NON_FIN,
     })
 
 
