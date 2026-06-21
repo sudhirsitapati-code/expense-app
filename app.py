@@ -634,23 +634,31 @@ def api_financial_statements():
                     "Financial Expense", "Tax"]
 
     def mis_expenses(monthly_dict):
-        """Return super-category totals AND individual Financial heading totals."""
+        """Return super-category totals, per-heading detail, AND individual Financial heading totals."""
         super_totals = {cat: 0 for cat in SUPER_ORDER}
+        heading_totals = {}
         fin_detail = {h: 0 for h in FIN_HEADINGS}
         for heading, months in monthly_dict.items():
             super_cat = HEADING_SUPER.get(heading, "Household")
             val = sum(v for v in months.values() if v and v > 0)
             super_totals[super_cat] += val
+            heading_totals[heading] = round(val / 100000, 2)
             if heading in fin_detail:
                 fin_detail[heading] += val
+        # group headings by super-category for drilldown
+        detail_by_super = {cat: {} for cat in SUPER_ORDER}
+        for heading, val in heading_totals.items():
+            super_cat = HEADING_SUPER.get(heading, "Household")
+            detail_by_super[super_cat][heading] = val
         return (
             {k: round(v / 100000, 2) for k, v in super_totals.items()},
             {k: round(v / 100000, 2) for k, v in fin_detail.items()},
+            detail_by_super,
         )
 
-    exp_fy24, fin_fy24 = mis_expenses(MIS_FY24_MONTHLY)
-    exp_fy25, fin_fy25 = mis_expenses(MIS_FY25_MONTHLY)
-    exp_fy26, fin_fy26 = mis_expenses(MIS_FY26_MONTHLY)
+    exp_fy24, fin_fy24, det_fy24 = mis_expenses(MIS_FY24_MONTHLY)
+    exp_fy25, fin_fy25, det_fy25 = mis_expenses(MIS_FY25_MONTHLY)
+    exp_fy26, fin_fy26, det_fy26 = mis_expenses(MIS_FY26_MONTHLY)
 
     # ── Hardcoded income / tax from tax files ────────────────────────────────
     income = {
@@ -722,7 +730,7 @@ def api_financial_statements():
         {"name":"Loan against shares","type":"Pledge Loan","fy24":440,"fy25":840,"fy26":None},
     ]
 
-    def pl_for_fy(fy, exp, fin_detail):
+    def pl_for_fy(fy, exp, fin_detail, det):
         inc = income[fy]
         total_inc = inc["salary"] + inc["esop"] + inc["dividends"] + inc["interest"] + inc["capital_gains"] + inc["other"]
         non_fin = sum(exp.get(s, 0) for s in NON_FIN)
@@ -741,6 +749,7 @@ def api_financial_statements():
             "income": inc,
             "total_income": round(total_inc, 2),
             "expenses": exp,
+            "expense_detail": det,
             "non_financial_total": round(non_fin, 2),
             "fin_detail": {
                 "home_loan": home_loan,
@@ -757,9 +766,9 @@ def api_financial_statements():
 
     return jsonify({
         "pl": {
-            "FY24": pl_for_fy("FY24", exp_fy24, fin_fy24),
-            "FY25": pl_for_fy("FY25", exp_fy25, fin_fy25),
-            "FY26": pl_for_fy("FY26", exp_fy26, fin_fy26),
+            "FY24": pl_for_fy("FY24", exp_fy24, fin_fy24, det_fy24),
+            "FY25": pl_for_fy("FY25", exp_fy25, fin_fy25, det_fy25),
+            "FY26": pl_for_fy("FY26", exp_fy26, fin_fy26, det_fy26),
         },
         "balance_sheet": balance_sheet,
         "assets": assets,

@@ -47,6 +47,14 @@ body { background:#f8f9fa; font-size:14px; }
 .fs-table tr.tot td { font-weight:700; background:#eff6ff; color:#1d4ed8; border-top:1px solid #bfdbfe; font-size:14px; }
 .fs-table tr.totp td { font-weight:700; background:#f0fdf4; color:#15803d; border-top:1px solid #bbf7d0; font-size:15px; }
 .fs-table tr.totr td { font-weight:700; background:#fff1f2; color:#be123c; border-top:1px solid #fecdd3; font-size:14px; }
+/* Expandable rows */
+.expand-btn { display:inline-flex; align-items:center; justify-content:center; width:17px; height:17px; border-radius:4px; background:#e2e8f0; color:#475569; font-size:12px; font-weight:700; cursor:pointer; margin-right:6px; user-select:none; flex-shrink:0; line-height:1; transition:background .1s; }
+.expand-btn:hover { background:#cbd5e1; }
+.expand-btn.open { background:#3b82f6; color:#fff; }
+.fs-table tr.child-row td { background:#fafbff; font-size:13px; color:#475569; }
+.fs-table tr.child-row td.i { padding-left:46px; }
+.fs-table tr.child-row { display:none; }
+.fs-table tr.child-row.visible { display:table-row; }
 
 .badge { display:inline-block; font-size:11px; padding:2px 9px; border-radius:10px; font-weight:500; }
 .bg { background:#dcfce7; color:#16a34a; }
@@ -178,6 +186,15 @@ function applyColVisibility() {
   });
 }
 
+let _expandState = {};
+
+function toggleExpand(id) {
+  _expandState[id] = !_expandState[id];
+  const btn = document.getElementById('btn-' + id);
+  if (btn) { btn.classList.toggle('open', _expandState[id]); btn.textContent = _expandState[id] ? '−' : '+'; }
+  document.querySelectorAll('.child-of-' + id).forEach(tr => tr.classList.toggle('visible', !!_expandState[id]));
+}
+
 function renderPL(d) {
   const p = d.pl;
   const fy = ALL_FY;
@@ -188,37 +205,58 @@ function renderPL(d) {
     <div class="kpi"><div class="kpi-label">FY26 Net Surplus</div><div class="kpi-val ${p.FY26.net_surplus>=0?'green':'red'}">${fmtL(p.FY26.net_surplus)}</div></div>
     <div class="kpi"><div class="kpi-label">FY26 Total Income</div><div class="kpi-val blue">${fmtL(p.FY26.total_income)}</div></div>`;
 
-  const NON_FIN = d.non_fin_supers;
+  const NON_FIN = ['Household','Personal','Family','Giving','Lifestyle','Property'];
   const cols = fy.length + 1;
   let html = '';
 
+  // Income sections — expandable
+  const incId = 'emp-income';
   html += sh('Employment Income', cols);
-  html += row('Salary (incl. PLVR / bonus)', fy.map(f => p[f].income.salary));
-  html += row('ESOP / Perquisite value', fy.map(f => p[f].income.esop));
-  html += subrow('Total Employment Income', fy.map(f => p[f].income.salary + p[f].income.esop));
+  html += expandRow(incId, 'Employment Income', fy.map(f => p[f].income.salary + p[f].income.esop));
+  html += childRow(incId, 'Salary (incl. PLVR / bonus)', fy.map(f => p[f].income.salary));
+  html += childRow(incId, 'ESOP / Perquisite value', fy.map(f => p[f].income.esop));
 
+  const invId = 'inv-income';
   html += sh('Investment Income', cols);
-  html += row('Dividends (GCPL + PMS)', fy.map(f => p[f].income.dividends));
-  html += row('Interest (SGB + savings)', fy.map(f => p[f].income.interest));
-  html += row('Capital Gains', fy.map(f => p[f].income.capital_gains));
-  html += row('Other Income', fy.map(f => p[f].income.other));
-  html += subrow('Total Investment Income', fy.map(f => p[f].income.dividends + p[f].income.interest + p[f].income.capital_gains + p[f].income.other));
+  html += expandRow(invId, 'Investment Income', fy.map(f => p[f].income.dividends + p[f].income.interest + p[f].income.capital_gains + p[f].income.other));
+  html += childRow(invId, 'Dividends (GCPL + PMS)', fy.map(f => p[f].income.dividends));
+  html += childRow(invId, 'Interest (SGB + savings)', fy.map(f => p[f].income.interest));
+  html += childRow(invId, 'Capital Gains', fy.map(f => p[f].income.capital_gains));
+  html += childRow(invId, 'Other Income', fy.map(f => p[f].income.other));
   html += subrow('Total Income', fy.map(f => p[f].total_income), 'tot');
 
+  // Non-financial expense — each super-category expandable
   html += sh('Expenditure — Non-Financial', cols);
-  NON_FIN.forEach(s => { html += row(s, fy.map(f => p[f].expenses[s])); });
+  NON_FIN.forEach(s => {
+    const sid = 'nf-' + s.toLowerCase().replace(/\s+/g,'-');
+    html += expandRow(sid, s, fy.map(f => p[f].expenses[s]));
+    // child rows: individual headings in this super-category
+    fy.forEach((f, fi) => {
+      const detail = p[f].expense_detail[s] || {};
+      if (fi === 0) {
+        Object.keys(detail).forEach(heading => {
+          const vals = fy.map(ff => (p[ff].expense_detail[s] || {})[heading]);
+          html += childRow(sid, heading, vals, true);
+        });
+      }
+    });
+  });
   html += subrow('Total Non-Financial Expense', fy.map(f => p[f].non_financial_total));
 
+  // Financial expense — expandable
+  const finId = 'fin-exp';
   html += sh('Expenditure — Financial', cols);
-  html += row('Home Loan EMI', fy.map(f => p[f].fin_detail.home_loan));
-  html += row('Insurance', fy.map(f => p[f].fin_detail.insurance));
-  html += row('OD / Financial Expense Interest', fy.map(f => p[f].fin_detail.od_interest));
-  html += subrow('Total Financial Expense', fy.map(f => p[f].financial_total));
+  html += expandRow(finId, 'Financial Expense', fy.map(f => p[f].financial_total));
+  html += childRow(finId, 'Home Loan EMI', fy.map(f => p[f].fin_detail.home_loan));
+  html += childRow(finId, 'Insurance', fy.map(f => p[f].fin_detail.insurance));
+  html += childRow(finId, 'OD / Financial Expense Interest', fy.map(f => p[f].fin_detail.od_interest));
 
+  // Tax — expandable
+  const taxId = 'tax-exp';
   html += sh('Tax', cols);
-  html += row('Tax Paid (advance / self-assessment)', fy.map(f => p[f].fin_detail.tax_paid));
-  html += row('Tax DAS (deducted at source by employer)', fy.map(f => p[f].fin_detail.tax_das));
-  html += subrow('Total Tax', fy.map(f => p[f].total_tax));
+  html += expandRow(taxId, 'Total Tax', fy.map(f => p[f].total_tax));
+  html += childRow(taxId, 'Tax Paid (advance / self-assessment)', fy.map(f => p[f].fin_detail.tax_paid));
+  html += childRow(taxId, 'Tax DAS (deducted at source by employer)', fy.map(f => p[f].fin_detail.tax_das));
 
   html += subrow('Total Expenditure (incl. tax)', fy.map(f => p[f].total_expenditure), 'totr');
   html += subrow('Net Surplus / (Deficit)', fy.map(f => p[f].net_surplus), 'totp');
@@ -235,6 +273,19 @@ function row(label, vals) {
 }
 function subrow(label, vals, cls='sub') {
   return `<tr class="${cls}"><td>${label}</td>${vals.map((v, i) => `<td class="r pl-col-${ALL_FY[i]}">${fmt(v)}</td>`).join('')}</tr>`;
+}
+function expandRow(id, label, vals, cls='') {
+  const open = !!_expandState[id];
+  const btnCls = open ? 'expand-btn open' : 'expand-btn';
+  const btnTxt = open ? '−' : '+';
+  return `<tr class="${cls}"><td class="i" style="display:flex;align-items:center;"><span class="${btnCls}" id="btn-${id}" onclick="toggleExpand('${id}')">${btnTxt}</span>${label}</td>${vals.map((v, i) => `<td class="r pl-col-${ALL_FY[i]}">${fmt(v)}</td>`).join('')}</tr>`;
+}
+function childRow(parentId, label, vals, dedup=false) {
+  if (dedup) {
+    // only emit once (called once per heading across all FY — handled above)
+  }
+  const vis = _expandState[parentId] ? ' visible' : '';
+  return `<tr class="child-row child-of-${parentId}${vis}"><td class="i">${label}</td>${vals.map((v, i) => `<td class="r pl-col-${ALL_FY[i]}">${fmt(v)}</td>`).join('')}</tr>`;
 }
 
 function renderBS(d) {
