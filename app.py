@@ -234,7 +234,7 @@ MIS_FY25_MONTHLY = {
     "One Time Charge":{"Apr":2880,"May":7500,"Jun":2850,"Jul":2950,"Aug":7660,"Sep":6800,"Oct":26980,"Nov":20638,"Dec":13460,"Jan":4100,"Feb":13990,"Mar":20650},
     "Entertainment":  {"Apr":67241,"May":27665,"Jun":7098,"Jul":33295,"Aug":189,"Sep":13232,"Oct":1779,"Nov":7175,"Dec":7009,"Jan":499,"Feb":13645,"Mar":6690},
     "Staff Salary":   {"Apr":236310,"May":197770,"Jun":175870,"Jul":176370,"Aug":220870,"Sep":209570,"Oct":244730,"Nov":230870,"Dec":385283,"Jan":303020,"Feb":19020,"Mar":175720},
-    "Financial Expense / OD Interest": {"Apr":38529,"May":20146,"Jun":0,"Jul":0,"Aug":0,"Sep":0,"Oct":0,"Nov":0,"Dec":0,"Jan":0,"Feb":29529,"Mar":0},
+    "Financial Expense / OD Interest": {"Apr":38529,"May":20146,"Jun":0,"Jul":0,"Aug":0,"Sep":74667,"Oct":0,"Nov":2058164,"Dec":0,"Jan":234937,"Feb":29529,"Mar":0},
     "Children Education": {"Apr":856197,"May":188432,"Jun":22700,"Jul":78855,"Aug":110550,"Sep":127800,"Oct":56000,"Nov":956923,"Dec":28700,"Jan":28000,"Feb":40400,"Mar":33350},
     "Kalpataru Maintenance": {"Apr":29421,"May":29421,"Jun":29421,"Jul":29421,"Aug":29421,"Sep":29421,"Oct":158721,"Nov":35879,"Dec":35879,"Jan":31902,"Feb":35879,"Mar":35879},
     "Charity":        {"Apr":583500,"May":300000,"Jun":13650,"Jul":818250,"Aug":550000,"Sep":118000,"Oct":245247,"Nov":36898,"Dec":118882,"Jan":0,"Feb":100000,"Mar":415585},
