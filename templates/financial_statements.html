@@ -6,44 +6,49 @@
 <title>Financial Statements</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 <style>
-body { background:#f8f9fa; font-size:13px; }
+body { background:#f8f9fa; font-size:14px; }
 
 /* ── Top bar ── */
 .topbar { background:#1e293b; color:#f1f5f9; padding:10px 20px; display:flex; align-items:center; gap:16px; }
 .topbar a { color:#94a3b8; text-decoration:none; font-size:12px; }
 .topbar a:hover { color:#f1f5f9; }
 
-/* ── Year bar ── */
-.year-bar { background:#0f172a; padding:6px 20px; display:flex; align-items:center; gap:8px; }
-.year-btn { background:#1e293b; color:#64748b; border:1px solid #334155; border-radius:20px; padding:3px 14px; font-size:11px; cursor:pointer; }
-.year-btn.active { background:#3b82f6; color:#fff; border-color:#3b82f6; }
-
 /* ── Nav tabs ── */
 .fs-tabs { display:flex; background:#fff; border-bottom:1px solid #e2e8f0; padding:0 20px; }
-.fs-tab { padding:10px 18px; font-size:12px; font-weight:500; color:#64748b; border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; }
+.fs-tab { padding:11px 20px; font-size:13px; font-weight:500; color:#64748b; border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; }
 .fs-tab.active { color:#3b82f6; border-bottom-color:#3b82f6; }
 
 /* ── KPI cards ── */
-.kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
-.kpi { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; }
-.kpi-label { font-size:10px; color:#64748b; margin-bottom:4px; }
-.kpi-val { font-size:16px; font-weight:700; color:#1e293b; }
+.kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:18px; }
+.kpi { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; }
+.kpi-label { font-size:11px; color:#64748b; margin-bottom:5px; }
+.kpi-val { font-size:20px; font-weight:700; color:#1e293b; }
 .kpi-val.green { color:#16a34a; } .kpi-val.red { color:#dc2626; } .kpi-val.blue { color:#2563eb; }
 
-/* ── Tables ── */
-.fs-table { width:100%; border-collapse:collapse; font-size:12px; background:#fff; }
-.fs-table th { text-align:left; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:#94a3b8; padding:7px 10px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
-.fs-table th.r { text-align:right; }
-.fs-table td { padding:6px 10px; border-bottom:0.5px solid #f1f5f9; color:#1e293b; }
-.fs-table td.r { text-align:right; font-variant-numeric:tabular-nums; }
-.fs-table td.i { padding-left:24px; color:#475569; }
-.fs-table tr.sh td { background:#f8fafc; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; color:#94a3b8; padding:5px 10px; }
-.fs-table tr.sub td { font-weight:600; background:#f8fafc; }
-.fs-table tr.tot td { font-weight:700; background:#eff6ff; color:#1d4ed8; border-top:1px solid #bfdbfe; }
-.fs-table tr.totp td { font-weight:700; background:#f0fdf4; color:#15803d; border-top:1px solid #bbf7d0; }
-.fs-table tr.totr td { font-weight:700; background:#fff1f2; color:#be123c; border-top:1px solid #fecdd3; }
+/* ── Year toggle checkboxes (P&L only) ── */
+.pl-year-bar { display:flex; align-items:center; gap:6px; margin-bottom:14px; }
+.pl-year-bar label { font-size:11px; color:#64748b; margin-right:10px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; }
+.yr-check { display:flex; align-items:center; gap:5px; background:#fff; border:1px solid #e2e8f0; border-radius:20px; padding:4px 12px; cursor:pointer; font-size:12px; color:#475569; font-weight:500; user-select:none; transition:all .15s; }
+.yr-check input { display:none; }
+.yr-check.on { background:#3b82f6; border-color:#3b82f6; color:#fff; }
+.yr-check .tick { font-size:11px; opacity:0; }
+.yr-check.on .tick { opacity:1; }
 
-.badge { display:inline-block; font-size:10px; padding:1px 8px; border-radius:10px; font-weight:500; }
+/* ── Tables ── */
+.fs-table { width:100%; border-collapse:collapse; background:#fff; }
+.fs-table th { text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:#94a3b8; padding:8px 12px; border-bottom:1px solid #e2e8f0; background:#f8fafc; white-space:nowrap; }
+.fs-table th.r { text-align:right; }
+.fs-table td { padding:7px 12px; border-bottom:0.5px solid #f1f5f9; color:#1e293b; font-size:14px; }
+.fs-table td.r { text-align:right; font-variant-numeric:tabular-nums; min-width:100px; }
+.fs-table td.i { padding-left:28px; color:#475569; }
+.fs-table col.cat-col { width:340px; }
+.fs-table tr.sh td { background:#f8fafc; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; color:#64748b; padding:6px 12px; }
+.fs-table tr.sub td { font-weight:600; background:#f8fafc; font-size:14px; }
+.fs-table tr.tot td { font-weight:700; background:#eff6ff; color:#1d4ed8; border-top:1px solid #bfdbfe; font-size:14px; }
+.fs-table tr.totp td { font-weight:700; background:#f0fdf4; color:#15803d; border-top:1px solid #bbf7d0; font-size:15px; }
+.fs-table tr.totr td { font-weight:700; background:#fff1f2; color:#be123c; border-top:1px solid #fecdd3; font-size:14px; }
+
+.badge { display:inline-block; font-size:11px; padding:2px 9px; border-radius:10px; font-weight:500; }
 .bg { background:#dcfce7; color:#16a34a; }
 .br { background:#fee2e2; color:#dc2626; }
 .bb { background:#dbeafe; color:#1d4ed8; }
@@ -51,8 +56,8 @@ body { background:#f8f9fa; font-size:13px; }
 .bpu { background:#ede9fe; color:#7c3aed; }
 .bam { background:#fef3c7; color:#92400e; }
 
-.note { font-size:11px; color:#94a3b8; margin-top:10px; padding:8px 12px; background:#f8fafc; border-radius:6px; border-left:3px solid #e2e8f0; }
-.tab-panel { display:none; padding:16px 20px; }
+.note { font-size:12px; color:#94a3b8; margin-top:12px; padding:8px 14px; background:#f8fafc; border-radius:6px; border-left:3px solid #e2e8f0; }
+.tab-panel { display:none; padding:18px 20px; }
 .tab-panel.active { display:block; }
 </style>
 </head>
@@ -66,12 +71,6 @@ body { background:#f8f9fa; font-size:13px; }
   <span class="ms-auto" style="font-size:11px; color:#475569;">{{ user }}</span>
 </div>
 
-<div class="year-bar">
-  <small style="color:#475569; font-size:11px; margin-right:4px;">Fiscal Year</small>
-  <button class="year-btn" id="yrBtn-FY24" onclick="setYear('FY24')">FY 2023–24</button>
-  <button class="year-btn" id="yrBtn-FY25" onclick="setYear('FY25')">FY 2024–25</button>
-  <button class="year-btn active" id="yrBtn-FY26" onclick="setYear('FY26')">FY 2025–26</button>
-</div>
 
 <div class="fs-tabs">
   <div class="fs-tab active" onclick="switchTab('pl', this)">P&amp;L</div>
@@ -82,13 +81,32 @@ body { background:#f8f9fa; font-size:13px; }
 <!-- P&L Tab -->
 <div id="tab-pl" class="tab-panel active">
   <div class="kpi-row" id="pl-kpis"></div>
-  <table class="fs-table"><thead><tr>
-    <th>Category</th>
-    <th class="r">FY24 (₹ L)</th>
-    <th class="r">FY25 (₹ L)</th>
-    <th class="r">FY26 (₹ L)</th>
-  </tr></thead><tbody id="pl-body"></tbody></table>
-  <div class="note">Note: ESOP perquisite is non-cash income (taxed as salary). Expense breakdown for FY24/FY25 uses historical data; FY26 is calculated live from the master ledger.</div>
+
+  <!-- Year toggle -->
+  <div class="pl-year-bar">
+    <label>Show years</label>
+    <div class="yr-check on" id="ck-FY24" onclick="toggleYear('FY24')">
+      <span class="tick">✓</span> FY 2023–24
+    </div>
+    <div class="yr-check on" id="ck-FY25" onclick="toggleYear('FY25')">
+      <span class="tick">✓</span> FY 2024–25
+    </div>
+    <div class="yr-check on" id="ck-FY26" onclick="toggleYear('FY26')">
+      <span class="tick">✓</span> FY 2025–26
+    </div>
+  </div>
+
+  <table class="fs-table" id="pl-table">
+    <colgroup><col class="cat-col"><col><col><col></colgroup>
+    <thead><tr id="pl-thead">
+      <th>Category</th>
+      <th class="r pl-col-FY24">FY24 (₹ L)</th>
+      <th class="r pl-col-FY25">FY25 (₹ L)</th>
+      <th class="r pl-col-FY26">FY26 (₹ L)</th>
+    </tr></thead>
+    <tbody id="pl-body"></tbody>
+  </table>
+  <div class="note">ESOP perquisite is non-cash income (taxed as salary). FY24/FY25 expenses use historical data; FY26 is calculated live from the master ledger.</div>
 </div>
 
 <!-- Balance Sheet Tab -->
@@ -121,16 +139,11 @@ body { background:#f8f9fa; font-size:13px; }
 <script>
 let _data = null;
 let _activeYear = 'FY26';
+const ALL_FY = ['FY24','FY25','FY26'];
+let _visibleFY = new Set(['FY24','FY25','FY26']);
 
 const fmt = v => v != null ? v.toLocaleString('en-IN', {maximumFractionDigits:1}) : '—';
 const fmtL = v => v != null ? '₹' + v.toLocaleString('en-IN', {maximumFractionDigits:0}) + ' L' : '—';
-
-function setYear(fy) {
-  _activeYear = fy;
-  document.querySelectorAll('.year-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('yrBtn-' + fy).classList.add('active');
-  if (_data) renderAll();
-}
 
 function switchTab(name, el) {
   document.querySelectorAll('.fs-tab').forEach(t => t.classList.remove('active'));
@@ -148,9 +161,26 @@ function typeColor(type) {
   return map[type] || 'bgr';
 }
 
+function toggleYear(fy) {
+  // must keep at least one year visible
+  if (_visibleFY.has(fy) && _visibleFY.size === 1) return;
+  if (_visibleFY.has(fy)) _visibleFY.delete(fy); else _visibleFY.add(fy);
+  document.getElementById('ck-' + fy).classList.toggle('on', _visibleFY.has(fy));
+  applyColVisibility();
+}
+
+function applyColVisibility() {
+  ALL_FY.forEach(fy => {
+    const show = _visibleFY.has(fy);
+    document.querySelectorAll('.pl-col-' + fy).forEach(el => {
+      el.style.display = show ? '' : 'none';
+    });
+  });
+}
+
 function renderPL(d) {
-  const fy = ['FY24','FY25','FY26'];
   const p = d.pl;
+  const fy = ALL_FY;
 
   document.getElementById('pl-kpis').innerHTML = `
     <div class="kpi"><div class="kpi-label">FY24 Net Surplus</div><div class="kpi-val ${p.FY24.net_surplus>=0?'green':'red'}">${fmtL(p.FY24.net_surplus)}</div></div>
@@ -159,18 +189,15 @@ function renderPL(d) {
     <div class="kpi"><div class="kpi-label">FY26 Total Income</div><div class="kpi-val blue">${fmtL(p.FY26.total_income)}</div></div>`;
 
   const NON_FIN = d.non_fin_supers;
-  const SUPERS = d.super_order;
-
+  const cols = fy.length + 1;
   let html = '';
 
-  // Employment Income
-  html += `<tr class="sh"><td colspan="4">Employment Income</td></tr>`;
+  html += sh('Employment Income', cols);
   html += row('Salary (incl. PLVR / bonus)', fy.map(f => p[f].income.salary));
   html += row('ESOP / Perquisite value', fy.map(f => p[f].income.esop));
   html += subrow('Total Employment Income', fy.map(f => p[f].income.salary + p[f].income.esop));
 
-  // Investment Income
-  html += `<tr class="sh"><td colspan="4">Investment Income</td></tr>`;
+  html += sh('Investment Income', cols);
   html += row('Dividends (GCPL + PMS)', fy.map(f => p[f].income.dividends));
   html += row('Interest (SGB + savings)', fy.map(f => p[f].income.interest));
   html += row('Capital Gains', fy.map(f => p[f].income.capital_gains));
@@ -178,34 +205,32 @@ function renderPL(d) {
   html += subrow('Total Investment Income', fy.map(f => p[f].income.dividends + p[f].income.interest + p[f].income.capital_gains + p[f].income.other));
   html += subrow('Total Income', fy.map(f => p[f].total_income), 'tot');
 
-  // Non-Financial Expenses
-  html += `<tr class="sh"><td colspan="4">Expenditure — Non-Financial</td></tr>`;
-  NON_FIN.forEach(s => {
-    html += row(s, fy.map(f => p[f].expenses[s]));
-  });
+  html += sh('Expenditure — Non-Financial', cols);
+  NON_FIN.forEach(s => { html += row(s, fy.map(f => p[f].expenses[s])); });
   html += subrow('Total Non-Financial Expense', fy.map(f => p[f].non_financial_total));
 
-  // Financial Expenses
-  html += `<tr class="sh"><td colspan="4">Expenditure — Financial</td></tr>`;
-  html += row('Financial (Home Loan, Insurance, OD interest)', fy.map(f => p[f].expenses['Financial']));
+  html += sh('Expenditure — Financial', cols);
+  html += row('Home Loan, Insurance, OD interest', fy.map(f => p[f].expenses['Financial']));
   html += subrow('Total Financial Expense', fy.map(f => p[f].financial_total));
 
-  // Tax
-  html += `<tr class="sh"><td colspan="4">Tax</td></tr>`;
+  html += sh('Tax', cols);
   html += row('Income Tax', fy.map(f => p[f].tax));
 
-  // Totals
   html += subrow('Total Expenditure (incl. tax)', fy.map(f => p[f].total_expenditure), 'totr');
   html += subrow('Net Surplus / (Deficit)', fy.map(f => p[f].net_surplus), 'totp');
 
   document.getElementById('pl-body').innerHTML = html;
+  applyColVisibility();
 }
 
+function sh(label, cols) {
+  return `<tr class="sh"><td colspan="${cols}">${label}</td></tr>`;
+}
 function row(label, vals) {
-  return `<tr><td class="i">${label}</td>${vals.map(v => `<td class="r">${fmt(v)}</td>`).join('')}</tr>`;
+  return `<tr><td class="i">${label}</td>${vals.map((v, i) => `<td class="r pl-col-${ALL_FY[i]}">${fmt(v)}</td>`).join('')}</tr>`;
 }
 function subrow(label, vals, cls='sub') {
-  return `<tr class="${cls}"><td>${label}</td>${vals.map(v => `<td class="r">${fmt(v)}</td>`).join('')}</tr>`;
+  return `<tr class="${cls}"><td>${label}</td>${vals.map((v, i) => `<td class="r pl-col-${ALL_FY[i]}">${fmt(v)}</td>`).join('')}</tr>`;
 }
 
 function renderBS(d) {
