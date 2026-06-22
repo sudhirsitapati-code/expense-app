@@ -2082,7 +2082,8 @@ def api_approvals_structured():
     unauthorized = [e for e in recon if not e.get("matched") and not e.get("is_recurring") and not e.get("ignored")]
     tracker      = [e for e in log
                     if e.get("action") in approved_actions
-                    and not e.get("confirmed_paid")]
+                    and not e.get("confirmed_paid")
+                    and e.get("status") != "cancelled"]
 
     return jsonify({
         "pending":           pending,
