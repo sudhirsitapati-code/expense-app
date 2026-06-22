@@ -2260,38 +2260,83 @@ def api_insights_chat():
     # Build data context
     ledger = load_ledger()
     from collections import defaultdict
-    by_heading: dict = defaultdict(float)
-    by_month_heading: dict = defaultdict(lambda: defaultdict(float))
-    vendors: dict = defaultdict(float)
-    by_account: dict = defaultdict(float)
-    by_account_heading: dict = defaultdict(lambda: defaultdict(float))
-    by_account_month: dict = defaultdict(lambda: defaultdict(float))
-    for t in ledger:
-        mo = (t.get("date") or t.get("timestamp",""))[:7]
-        acct = t.get("account","unknown")
-        if t.get("debit"):
-            by_account[acct] += t["debit"]
-            if mo:
-                by_account_month[acct][mo] += t["debit"]
-            if t.get("heading"):
-                by_heading[t["heading"]] += t["debit"]
-                by_account_heading[acct][t["heading"]] += t["debit"]
-                if mo:
-                    by_month_heading[mo][t["heading"]] += t["debit"]
-        if t.get("debit") and t.get("paid_to"):
-            vendors[t["paid_to"]] += t["debit"]
 
-    # Recent 6 months breakdown
-    recent_months = sorted(by_month_heading.keys())[-6:]
-    monthly_data = {m: dict(by_month_heading[m]) for m in recent_months}
+    # account × heading × YYYY-MM → spend
+    by_heading: dict                          = defaultdict(float)
+    by_month_heading: dict                    = defaultdict(lambda: defaultdict(float))
+    vendors: dict                             = defaultdict(float)
+    by_account: dict                          = defaultdict(float)
+    by_account_heading: dict                  = defaultdict(lambda: defaultdict(float))
+    by_account_month: dict                    = defaultdict(lambda: defaultdict(float))
+    by_account_heading_month: dict            = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+    # FY buckets: "FY2627" etc
+    by_fy: dict                               = defaultdict(float)
+    by_account_fy: dict                       = defaultdict(lambda: defaultdict(float))
+    by_account_fy_heading: dict               = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+
+    def _fy(mo: str) -> str:
+        """YYYY-MM → 'FY2526' style label."""
+        if not mo or len(mo) < 7:
+            return "unknown"
+        y, m = int(mo[:4]), int(mo[5:7])
+        if m >= 4:
+            return f"FY{str(y)[2:]}{str(y+1)[2:]}"
+        return f"FY{str(y-1)[2:]}{str(y)[2:]}"
+
+    for t in ledger:
+        raw_date = t.get("date") or t.get("timestamp","")
+        # normalise DD/MM/YYYY → YYYY-MM
+        if raw_date and raw_date[2:3] == "/":
+            parts = raw_date.split("/")
+            if len(parts) == 3:
+                raw_date = f"{parts[2][:4]}-{parts[1].zfill(2)}"
+        mo   = raw_date[:7] if raw_date else ""
+        acct = t.get("account","unknown")
+        fy   = _fy(mo)
+        hdg  = t.get("heading","")
+
+        if t.get("debit"):
+            amt = float(t["debit"])
+            by_account[acct] += amt
+            by_fy[fy]         += amt
+            by_account_fy[acct][fy] += amt
+            if mo:
+                by_account_month[acct][mo] += amt
+            if hdg:
+                by_heading[hdg] += amt
+                by_account_heading[acct][hdg] += amt
+                by_account_fy_heading[acct][fy][hdg] += amt
+                if mo:
+                    by_month_heading[mo][hdg]                   += amt
+                    by_account_heading_month[acct][hdg][mo]     += amt
+        if t.get("debit") and t.get("paid_to"):
+            vendors[t["paid_to"]] += float(t["debit"])
+
+    # Recent 12 months (wider window for FY questions)
+    all_months = sorted(by_month_heading.keys())
+    recent_months = all_months[-12:]
+    monthly_data = {m: {h: round(v) for h, v in by_month_heading[m].items()} for m in recent_months}
     top_vendors = dict(sorted(vendors.items(), key=lambda x: -x[1])[:20])
 
-    # Per-account: total spend + top headings + recent monthly totals
+    # Per-account rich context
     accounts_context = {}
     for acct, total in sorted(by_account.items(), key=lambda x: -x[1]):
-        top_cats = dict(sorted(by_account_heading[acct].items(), key=lambda x: -x[1])[:10])
-        recent_mo = {m: round(by_account_month[acct][m]) for m in sorted(by_account_month[acct])[-6:]}
-        accounts_context[acct] = {"total": round(total), "by_heading": top_cats, "monthly": recent_mo}
+        top_cats = {h: round(v) for h, v in sorted(by_account_heading[acct].items(), key=lambda x: -x[1])[:12]}
+        # monthly totals — last 12 months
+        recent_mo = {m: round(by_account_month[acct][m]) for m in sorted(by_account_month[acct])[-12:]}
+        # per-FY totals for this account
+        fy_totals = {fy: round(v) for fy, v in sorted(by_account_fy[acct].items())}
+        # per-FY per-heading for this account (top 10 headings per FY)
+        fy_heading = {}
+        for fy, hdg_map in by_account_fy_heading[acct].items():
+            fy_heading[fy] = {h: round(v) for h, v in sorted(hdg_map.items(), key=lambda x: -x[1])[:10]}
+        accounts_context[acct] = {
+            "all_time_total": round(total),
+            "by_heading_alltime": top_cats,
+            "monthly_last_12": recent_mo,
+            "by_fy": fy_totals,
+            "by_fy_and_heading": fy_heading,
+        }
 
     # Approval log summary
     log = db.load("approval_log")
@@ -2299,18 +2344,24 @@ def api_insights_chat():
                         not any(a.get("action") in ("APPROVED","AUTO_APPROVE")
                                 for a in e.get("approved_actions",[])))
 
+    today = datetime.now()
+    current_fy = _fy(today.strftime("%Y-%m"))
+
     system_prompt = f"""You are a personal finance assistant for Sudhir, an Indian executive household (Mumbai).
-You have access to their complete expense data. Answer questions concisely and specifically.
+You have full access to their transaction ledger. Answer questions concisely and specifically.
 
-Data context:
-- All-time spend by heading (all accounts): {json.dumps(dict(sorted(by_heading.items(), key=lambda x: -x[1])[:20]))}
-- Monthly spend by heading — last 6 months (all accounts): {json.dumps(monthly_data)}
-- Top 20 vendors by total spend: {json.dumps(top_vendors)}
-- Spend by account (total + category breakdown + monthly last 6m): {json.dumps(accounts_context)}
-- Pending approvals in expense app: {pending_count}
-- Currency: Indian Rupees (₹). Use Indian number format (lakhs/crores) when amounts are large.
+Today: {today.strftime("%d %b %Y")}. Current financial year: {current_fy} (April–March).
+FY label format: FY2627 = April 2026 – March 2027.
 
-Keep answers short and direct. Use bullet points for lists. If a question is outside this data, say so."""
+Data available:
+1. All-time spend by heading (all accounts combined): {json.dumps({h: round(v) for h, v in sorted(by_heading.items(), key=lambda x: -x[1])[:20]})}
+2. Monthly spend by heading — last 12 months (all accounts): {json.dumps(monthly_data)}
+3. Top 20 vendors by all-time spend: {json.dumps({k: round(v) for k, v in top_vendors.items()})}
+4. Per-account breakdown (all-time total, top headings, monthly last 12m, FY totals, FY×heading): {json.dumps(accounts_context)}
+5. Pending expense approvals: {pending_count}
+
+All amounts in ₹. Use Indian number format (lakhs/crores) for large numbers.
+Keep answers short and direct. Use bullet points. If data is insufficient, say exactly what's missing."""
 
     messages = [{"role":"system","content":system_prompt}]
     for h in history[-10:]:  # keep last 10 turns for context
