@@ -1064,7 +1064,10 @@ async function loadApprovals(selectedMonth) {
         <td>${e.submitter}</td><td>${e.vendor}</td><td>${e.category}</td>
         <td class="text-end">₹${Number(e.approved_amount||e.amount).toLocaleString('en-IN')}</td>
         <td><span class="badge ${e.action==='AUTO_APPROVE'?'bg-primary':e.action==='APPROVED'?'bg-success':'bg-warning text-dark'}">${e.action}</span></td>
-        <td><button class="btn btn-sm btn-outline-danger" onclick="unmarkExpense('${e.request_id}',this)" title="Cancel this entry">✕</button></td>
+        <td class="d-flex gap-1">
+          <button class="btn btn-sm btn-outline-warning" onclick="reQueryEntry('${e.request_id}')" title="Send query to Vincent">?</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="unmarkExpense('${e.request_id}',this)" title="Cancel this entry">✕</button>
+        </td>
       </tr>`).join('')
     : '<tr><td colspan="7" class="text-center text-muted py-3">No approvals recorded for this month</td></tr>';
 
@@ -1108,6 +1111,14 @@ async function sendQuery(reqId) {
   if (!txt) return;
   await fetch('/api/decide', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({request_id: reqId, response: 'Q', query_text: txt})});
+  loadApprovals();
+}
+
+async function reQueryEntry(reqId) {
+  const txt = prompt('Enter your query for Vincent:');
+  if (!txt || !txt.trim()) return;
+  await fetch('/api/decide', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({request_id: reqId, response: 'Q', query_text: txt.trim()})});
   loadApprovals();
 }
 
