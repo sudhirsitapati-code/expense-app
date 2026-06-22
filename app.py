@@ -2077,6 +2077,7 @@ def api_approvals_structured():
     pending      = [e for e in log if e.get("action") == "ESCALATE" and "sudhir_response" not in e]
     this_month   = [e for e in log
                     if _effective_month(e) == month_prefix
+                    and e.get("status") != "cancelled"
                     and (e.get("action") in approved_actions
                          or (e.get("action") == "ESCALATE" and "sudhir_response" in e))]
     unauthorized = [e for e in recon if not e.get("matched") and not e.get("is_recurring") and not e.get("ignored")]
