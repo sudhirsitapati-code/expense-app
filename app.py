@@ -2302,7 +2302,7 @@ Keep answers short and direct. Use bullet points for lists. If a question is out
 
     try:
         resp = client.chat.completions.create(
-            model=deployment, max_completion_tokens=600, temperature=0.3,
+            model=deployment, max_completion_tokens=600,
             messages=messages
         )
         reply = resp.choices[0].message.content.strip()
