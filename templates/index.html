@@ -1041,7 +1041,10 @@ async function loadApprovals(selectedMonth) {
         <td class="text-end">₹${Number(e.approved_amount||e.amount).toLocaleString('en-IN')}</td>
         <td>${e.payment_method||'—'}</td>
         <td class="tracker-unpaid">⏳ Pending</td>
-        <td><button class="btn btn-sm btn-success btn-sm" onclick="markPaid('${e.request_id}')">Mark Paid</button></td>
+        <td class="d-flex gap-1">
+          <button class="btn btn-sm btn-success" onclick="markPaid('${e.request_id}')">Mark Paid</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="unmarkExpense('${e.request_id}',this)" title="Cancel / remove this entry">✕</button>
+        </td>
       </tr>`).join('')
     : '<tr><td colspan="6" class="text-center text-muted py-3">All approved expenses confirmed paid ✓</td></tr>';
 }
@@ -1063,6 +1066,16 @@ async function sendQuery(reqId) {
 async function markPaid(reqId) {
   await fetch('/api/mark-paid', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({request_id: reqId})});
+  loadApprovals();
+}
+
+async function unmarkExpense(reqId, btn) {
+  if (!confirm('Remove this expense? It will be cancelled and removed from the ledger.')) return;
+  btn.disabled = true;
+  const r = await fetch('/api/cancel-expense', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({request_id: reqId})});
+  const d = await r.json();
+  if (d.error) { alert('Could not remove: ' + d.error); btn.disabled = false; return; }
   loadApprovals();
 }
 
