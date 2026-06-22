@@ -2220,7 +2220,7 @@ Be specific, not generic. No obvious tips."""
 
     try:
         resp = client.chat.completions.create(
-            model=deployment, max_tokens=800,
+            model=deployment, max_completion_tokens=800,
             messages=[{"role":"system","content":"Reply only with JSON."},
                       {"role":"user","content":prompt}]
         )
@@ -2302,7 +2302,7 @@ Keep answers short and direct. Use bullet points for lists. If a question is out
 
     try:
         resp = client.chat.completions.create(
-            model=deployment, max_tokens=600, temperature=0.3,
+            model=deployment, max_completion_tokens=600, temperature=0.3,
             messages=messages
         )
         reply = resp.choices[0].message.content.strip()
