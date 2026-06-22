@@ -2274,26 +2274,46 @@ def api_insights_chat():
     by_account_fy: dict                       = defaultdict(lambda: defaultdict(float))
     by_account_fy_heading: dict               = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
 
+    _MON = {"jan":"01","feb":"02","mar":"03","apr":"04","may":"05","jun":"06",
+            "jul":"07","aug":"08","sep":"09","oct":"10","nov":"11","dec":"12"}
+
+    def _to_ym(raw: str) -> str:
+        """Normalise any date string to YYYY-MM, return '' on failure."""
+        if not raw:
+            return ""
+        try:
+            if raw[2:3] == "/" and raw[5:6] == "/":   # DD/MM/YYYY
+                parts = raw.split("/")
+                return f"{parts[2][:4]}-{parts[1].zfill(2)}"
+            if raw[2:3] == "-" and not raw[3:4].isdigit():  # DD-Mon-YY or DD-Mon-YYYY
+                parts = raw.split("-")
+                mon = _MON.get(parts[1][:3].lower(), "")
+                yr  = parts[2][:4] if len(parts[2]) == 4 else "20" + parts[2][:2]
+                return f"{yr}-{mon}" if mon else ""
+            if raw[4:5] == "-":                        # YYYY-MM-DD
+                return raw[:7]
+        except Exception:
+            pass
+        return ""
+
     def _fy(mo: str) -> str:
         """YYYY-MM → 'FY2526' style label."""
         if not mo or len(mo) < 7:
             return "unknown"
-        y, m = int(mo[:4]), int(mo[5:7])
+        try:
+            y, m = int(mo[:4]), int(mo[5:7])
+        except ValueError:
+            return "unknown"
         if m >= 4:
             return f"FY{str(y)[2:]}{str(y+1)[2:]}"
         return f"FY{str(y-1)[2:]}{str(y)[2:]}"
 
     for t in ledger:
         raw_date = t.get("date") or t.get("timestamp","")
-        # normalise DD/MM/YYYY → YYYY-MM
-        if raw_date and raw_date[2:3] == "/":
-            parts = raw_date.split("/")
-            if len(parts) == 3:
-                raw_date = f"{parts[2][:4]}-{parts[1].zfill(2)}"
-        mo   = raw_date[:7] if raw_date else ""
+        mo   = _to_ym(raw_date)
         acct = t.get("account","unknown")
         fy   = _fy(mo)
-        hdg  = t.get("heading","")
+        hdg  = t.get("heading","").strip().title()  # normalise case variants
 
         if t.get("debit"):
             amt = float(t["debit"])
