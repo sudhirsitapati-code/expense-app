@@ -906,7 +906,10 @@ def api_submit_expense():
 
     if decision.action == "AUTO_APPROVE":
         sync_approved_to_history()
-        send_auto_approval_notice(req.submitter, req.vendor, req.amount, decision.request_id)
+        try:
+            send_auto_approval_notice(req.submitter, req.vendor, req.amount, decision.request_id)
+        except Exception as ex:
+            print(f"[whatsapp] auto-approve notify failed: {ex}")
     elif decision.action == "ESCALATE" and decision.escalation_message:
         # Generate AI commentary for Sudhir's review screen (non-blocking)
         try:
@@ -921,7 +924,10 @@ def api_submit_expense():
                     e["ai_comment"] = req.ai_comment
                     break
             _save_json(APPROVAL_LOG, log)
-        send_approval_request(decision.escalation_message)
+        try:
+            send_approval_request(decision.escalation_message)
+        except Exception as ex:
+            print(f"[whatsapp] escalate notify failed: {ex}")
 
     return jsonify({
         "action": decision.action,
@@ -952,24 +958,27 @@ def api_decide():
     engine.update_log_with_sudhir_response(request_id, response, query_text=query_text)
 
     resp_upper = response.strip().upper()
-    if resp_upper == "Y":
-        send_approval_result(entry["submitter"], entry["vendor"], entry["amount"], approved=True, request_id=request_id)
-        sync_approved_to_history()
-    elif resp_upper == "N":
-        send_approval_result(entry["submitter"], entry["vendor"], entry["amount"], approved=False, request_id=request_id)
-    elif resp_upper == "Q" and query_text:
-        # Notify submitter of query via WhatsApp (send to submitter, not Sudhir)
-        from src.whatsapp_handler import HOUSEHOLD_MEMBERS, send_message
-        submitter = entry.get("submitter", "")
-        submitter_number = HOUSEHOLD_MEMBERS.get(submitter.lower())
-        msg = (f"❓ Query on your expense request\n"
-               f"Vendor: {entry.get('vendor')} — ₹{entry.get('amount'):,.0f}\n"
-               f"Query: {query_text}\n"
-               f"Ref: {request_id}")
-        if submitter_number:
-            send_message(submitter_number, msg)
-        else:
-            send_approval_request(msg)  # fallback to Sudhir if no number on file
+    try:
+        if resp_upper == "Y":
+            send_approval_result(entry["submitter"], entry["vendor"], entry["amount"], approved=True, request_id=request_id)
+            sync_approved_to_history()
+        elif resp_upper == "N":
+            send_approval_result(entry["submitter"], entry["vendor"], entry["amount"], approved=False, request_id=request_id)
+        elif resp_upper == "Q" and query_text:
+            # Notify submitter of query via WhatsApp (send to submitter, not Sudhir)
+            from src.whatsapp_handler import HOUSEHOLD_MEMBERS, send_message
+            submitter = entry.get("submitter", "")
+            submitter_number = HOUSEHOLD_MEMBERS.get(submitter.lower())
+            msg = (f"❓ Query on your expense request\n"
+                   f"Vendor: {entry.get('vendor')} — ₹{entry.get('amount'):,.0f}\n"
+                   f"Query: {query_text}\n"
+                   f"Ref: {request_id}")
+            if submitter_number:
+                send_message(submitter_number, msg)
+            else:
+                send_approval_request(msg)  # fallback to Sudhir if no number on file
+    except Exception as ex:
+        print(f"[whatsapp] decide notify failed (resp={resp_upper}): {ex}")
 
     return jsonify({"status": "ok"})
 
