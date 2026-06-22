@@ -2236,6 +2236,82 @@ Be specific, not generic. No obvious tips."""
     return jsonify({"insights": insights})
 
 
+@app.route("/api/insights-chat", methods=["POST"])
+@login_required
+def api_insights_chat():
+    """Free-form chat about expense data using Azure OpenAI."""
+    try:
+        from openai import AzureOpenAI
+        client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_KEY"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION","2024-12-01-preview"),
+        )
+        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT","gpt-5.5")
+    except Exception as e:
+        return jsonify({"reply": f"AI not configured: {e}"}), 500
+
+    data = request.get_json()
+    question = data.get("question","").strip()
+    history  = data.get("history", [])  # [{role, content}, ...]
+    if not question:
+        return jsonify({"reply": ""}), 400
+
+    # Build data context
+    ledger = load_ledger()
+    from collections import defaultdict
+    by_heading: dict = defaultdict(float)
+    by_month_heading: dict = defaultdict(lambda: defaultdict(float))
+    vendors: dict = defaultdict(float)
+    for t in ledger:
+        if t.get("debit") and t.get("heading"):
+            by_heading[t["heading"]] += t["debit"]
+            mo = (t.get("date") or t.get("timestamp",""))[:7]
+            if mo:
+                by_month_heading[mo][t["heading"]] += t["debit"]
+        if t.get("debit") and t.get("paid_to"):
+            vendors[t["paid_to"]] += t["debit"]
+
+    # Recent 6 months breakdown
+    recent_months = sorted(by_month_heading.keys())[-6:]
+    monthly_data = {m: dict(by_month_heading[m]) for m in recent_months}
+    top_vendors = dict(sorted(vendors.items(), key=lambda x: -x[1])[:20])
+
+    # Approval log summary
+    log = db.load("approval_log")
+    pending_count = sum(1 for e in log if not e.get("status") == "cancelled" and
+                        not any(a.get("action") in ("APPROVED","AUTO_APPROVE")
+                                for a in e.get("approved_actions",[])))
+
+    system_prompt = f"""You are a personal finance assistant for Sudhir, an Indian executive household (Mumbai).
+You have access to their complete expense data. Answer questions concisely and specifically.
+
+Data context:
+- All-time spend by heading: {json.dumps(dict(sorted(by_heading.items(), key=lambda x: -x[1])[:20]))}
+- Monthly spend by heading (last 6 months): {json.dumps(monthly_data)}
+- Top 20 vendors by total spend: {json.dumps(top_vendors)}
+- Pending approvals in expense app: {pending_count}
+- Currency: Indian Rupees (₹). Use Indian number format (lakhs/crores) when amounts are large.
+
+Keep answers short and direct. Use bullet points for lists. If a question is outside this data, say so."""
+
+    messages = [{"role":"system","content":system_prompt}]
+    for h in history[-10:]:  # keep last 10 turns for context
+        messages.append({"role": h["role"], "content": h["content"]})
+    messages.append({"role":"user","content":question})
+
+    try:
+        resp = client.chat.completions.create(
+            model=deployment, max_tokens=600, temperature=0.3,
+            messages=messages
+        )
+        reply = resp.choices[0].message.content.strip()
+    except Exception as e:
+        reply = f"Error: {e}"
+
+    return jsonify({"reply": reply})
+
+
 @app.route("/export", methods=["GET"])
 def export():
     month_str = request.args.get("month")

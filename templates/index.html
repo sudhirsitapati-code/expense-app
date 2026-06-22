@@ -414,6 +414,19 @@
   </div>
   <div id="insightsList"><div class="text-muted small">Click Refresh Insights to generate.</div></div>
 
+  <!-- Chat with your data -->
+  <hr class="my-4">
+  <h6 class="fw-bold text-primary mb-3"><i class="bi bi-chat-dots me-2"></i>Ask about your expenses</h6>
+  <div id="insightsChat" style="max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:12px;padding-right:4px"></div>
+  <div class="d-flex gap-2">
+    <input id="chatInput" type="text" class="form-control form-control-sm"
+      placeholder="e.g. What did I spend on dining last month?"
+      onkeydown="if(event.key==='Enter')sendInsightsChat()">
+    <button class="btn btn-sm btn-primary flex-shrink-0" onclick="sendInsightsChat()">
+      <i class="bi bi-send"></i>
+    </button>
+  </div>
+
   <h6 class="fw-bold text-primary mt-4 mb-2"><i class="bi bi-credit-card me-2"></i>Credit Card Balances (Accrued, Unpaid)</h6>
   <div class="row g-2" id="ccBalanceRow"><div class="col text-muted small">Loading…</div></div>
 </div>
@@ -1596,6 +1609,47 @@ async function loadInsights() {
   } catch {
     div.innerHTML = '<p class="text-danger small">Could not load insights.</p>';
   }
+}
+
+let _chatHistory = [];
+
+async function sendInsightsChat() {
+  const input = document.getElementById('chatInput');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  input.disabled = true;
+
+  const box = document.getElementById('insightsChat');
+  const userBubble = `<div style="align-self:flex-end;background:#0d6efd;color:#fff;border-radius:16px 16px 4px 16px;padding:8px 14px;max-width:80%;font-size:.875rem">${q}</div>`;
+  const thinkingId = 'chat-thinking-' + Date.now();
+  const thinkingBubble = `<div id="${thinkingId}" style="align-self:flex-start;background:#f1f3f5;color:#555;border-radius:16px 16px 16px 4px;padding:8px 14px;max-width:80%;font-size:.875rem">…</div>`;
+  box.insertAdjacentHTML('beforeend', userBubble + thinkingBubble);
+  box.scrollTop = box.scrollHeight;
+
+  try {
+    const r = await fetch('/api/insights-chat', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({question: q, history: _chatHistory})
+    });
+    const d = await r.json();
+    const reply = d.reply || '(no response)';
+    _chatHistory.push({role:'user', content: q});
+    _chatHistory.push({role:'assistant', content: reply});
+    // simple markdown: bold and bullets
+    const html = reply
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>)/s, '<ul style="margin:.25rem 0 0 1rem;padding:0">$1</ul>')
+      .replace(/\n/g, '<br>');
+    document.getElementById(thinkingId).innerHTML = html;
+  } catch {
+    document.getElementById(thinkingId).textContent = 'Error — please try again.';
+  }
+  input.disabled = false;
+  input.focus();
+  box.scrollTop = box.scrollHeight;
 }
 
 async function loadCCBalance() {
