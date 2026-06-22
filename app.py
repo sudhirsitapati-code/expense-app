@@ -2263,12 +2263,21 @@ def api_insights_chat():
     by_heading: dict = defaultdict(float)
     by_month_heading: dict = defaultdict(lambda: defaultdict(float))
     vendors: dict = defaultdict(float)
+    by_account: dict = defaultdict(float)
+    by_account_heading: dict = defaultdict(lambda: defaultdict(float))
+    by_account_month: dict = defaultdict(lambda: defaultdict(float))
     for t in ledger:
-        if t.get("debit") and t.get("heading"):
-            by_heading[t["heading"]] += t["debit"]
-            mo = (t.get("date") or t.get("timestamp",""))[:7]
+        mo = (t.get("date") or t.get("timestamp",""))[:7]
+        acct = t.get("account","unknown")
+        if t.get("debit"):
+            by_account[acct] += t["debit"]
             if mo:
-                by_month_heading[mo][t["heading"]] += t["debit"]
+                by_account_month[acct][mo] += t["debit"]
+            if t.get("heading"):
+                by_heading[t["heading"]] += t["debit"]
+                by_account_heading[acct][t["heading"]] += t["debit"]
+                if mo:
+                    by_month_heading[mo][t["heading"]] += t["debit"]
         if t.get("debit") and t.get("paid_to"):
             vendors[t["paid_to"]] += t["debit"]
 
@@ -2276,6 +2285,13 @@ def api_insights_chat():
     recent_months = sorted(by_month_heading.keys())[-6:]
     monthly_data = {m: dict(by_month_heading[m]) for m in recent_months}
     top_vendors = dict(sorted(vendors.items(), key=lambda x: -x[1])[:20])
+
+    # Per-account: total spend + top headings + recent monthly totals
+    accounts_context = {}
+    for acct, total in sorted(by_account.items(), key=lambda x: -x[1]):
+        top_cats = dict(sorted(by_account_heading[acct].items(), key=lambda x: -x[1])[:10])
+        recent_mo = {m: round(by_account_month[acct][m]) for m in sorted(by_account_month[acct])[-6:]}
+        accounts_context[acct] = {"total": round(total), "by_heading": top_cats, "monthly": recent_mo}
 
     # Approval log summary
     log = db.load("approval_log")
@@ -2287,9 +2303,10 @@ def api_insights_chat():
 You have access to their complete expense data. Answer questions concisely and specifically.
 
 Data context:
-- All-time spend by heading: {json.dumps(dict(sorted(by_heading.items(), key=lambda x: -x[1])[:20]))}
-- Monthly spend by heading (last 6 months): {json.dumps(monthly_data)}
+- All-time spend by heading (all accounts): {json.dumps(dict(sorted(by_heading.items(), key=lambda x: -x[1])[:20]))}
+- Monthly spend by heading — last 6 months (all accounts): {json.dumps(monthly_data)}
 - Top 20 vendors by total spend: {json.dumps(top_vendors)}
+- Spend by account (total + category breakdown + monthly last 6m): {json.dumps(accounts_context)}
 - Pending approvals in expense app: {pending_count}
 - Currency: Indian Rupees (₹). Use Indian number format (lakhs/crores) when amounts are large.
 
