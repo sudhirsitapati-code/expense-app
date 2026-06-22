@@ -734,17 +734,23 @@ async function loadMyExpenses() {
     const badge = STATUS_BADGE[status] || `<span class="badge bg-secondary">${status||'—'}</span>`;
     const canCancel = !e.confirmed_paid && e.status !== 'cancelled' && e.sudhir_response !== 'N';
     const ts = (e.timestamp||'').slice(0,16).replace('T',' ');
-    return `<div class="card mb-2 p-3 shadow-sm">
+    const queryBlock = e.query_text ? `
+      <div class="mt-2 p-2 rounded" style="background:#fff8e1;border-left:3px solid #f59e0b">
+        <div class="small fw-semibold text-warning-emphasis">❓ Query from Sudhir:</div>
+        <div class="small mt-1">${e.query_text}</div>
+      </div>` : '';
+    return `<div class="card mb-2 p-3 shadow-sm${e.query_text ? ' border-warning' : ''}">
       <div class="d-flex justify-content-between align-items-start">
-        <div>
+        <div class="flex-grow-1">
           <strong>${e.vendor}</strong>
           <span class="fw-bold text-danger ms-2">₹${Number(e.amount).toLocaleString('en-IN')}</span>
           ${badge}
           ${e.confirmed_paid ? '<span class="badge bg-primary ms-1">Paid</span>' : ''}
           <div class="small text-muted mt-1">${e.description||'—'} · ${ts}</div>
           <div style="font-size:.65rem;color:#bbb">Ref: ${e.request_id}</div>
+          ${queryBlock}
         </div>
-        ${canCancel ? `<button class="btn btn-sm btn-outline-danger flex-shrink-0" onclick="cancelExpense('${e.request_id}',this)">Cancel</button>` : ''}
+        ${canCancel ? `<button class="btn btn-sm btn-outline-danger flex-shrink-0 ms-2" onclick="cancelExpense('${e.request_id}',this)">Cancel</button>` : ''}
       </div>
     </div>`;
   }).join('');
