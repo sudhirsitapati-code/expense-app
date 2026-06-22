@@ -2313,7 +2313,7 @@ def api_insights_chat():
         mo   = _to_ym(raw_date)
         acct = t.get("account","unknown")
         fy   = _fy(mo)
-        hdg  = t.get("heading","").strip().title()  # normalise case variants
+        hdg  = (t.get("heading") or "").strip().title()  # normalise case variants
 
         if t.get("debit"):
             amt = float(t["debit"])
