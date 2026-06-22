@@ -78,11 +78,15 @@
 <!-- ═══ MAIN TABS ═══ -->
 <ul class="nav main-tabs mb-0" id="mainTabs">
   <li class="nav-item"><a class="nav-link active" href="#" onclick="switchMain('submit',this)"><i class="bi bi-plus-circle me-1"></i>Submit Expense</a></li>
+  {% if user == 'sudhir' %}
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchMain('approvals',this)">
     <i class="bi bi-check2-circle me-1"></i>Approvals
     <span id="pendingBadge" class="badge bg-danger ms-1 d-none">0</span>
   </a></li>
+  {% endif %}
+  {% if user == 'sudhir' %}
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchMain('reports',this)"><i class="bi bi-bar-chart-line me-1"></i>Reports</a></li>
+  {% endif %}
 </ul>
 
 <!-- ═══════════════════════════════════════════════════════
@@ -105,10 +109,10 @@
     <div class="mb-2">
       <label class="form-label fw-semibold small">Submitter</label>
       <select class="form-select form-select-sm" name="submitter" required>
-        <option value="vincent">Vincent</option>
-        <option value="sudhir">Sudhir</option>
-        <option value="ketki">Ketki</option>
-        <option value="santosh">Santosh</option>
+        <option value="vincent" {% if user == 'vincent' %}selected{% endif %}>Vincent</option>
+        <option value="sudhir" {% if user == 'sudhir' %}selected{% endif %}>Sudhir</option>
+        <option value="ketki" {% if user == 'ketki' %}selected{% endif %}>Ketki</option>
+        <option value="santosh" {% if user == 'santosh' %}selected{% endif %}>Santosh</option>
       </select>
     </div>
     <div class="mb-2">
@@ -123,7 +127,7 @@
       <div class="col">
         <label class="form-label fw-semibold small">Payment</label>
         <select class="form-select form-select-sm" name="payment_method">
-          <option value="sbi3152">SBI-3152</option>
+          <option value="SBI-3142">SBI-3142</option>
           <option value="cash">Cash</option>
         </select>
       </div>
@@ -235,6 +239,7 @@
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchApproval('month',this)"><i class="bi bi-calendar3 me-1"></i>This Month</a></li>
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchApproval('unauthorized',this)"><i class="bi bi-exclamation-triangle me-1"></i>Unauthorised</a></li>
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchApproval('tracker',this)"><i class="bi bi-check-all me-1"></i>Tracker</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchApproval('approved',this)">✓ Approved (90d)</a></li>
 </ul>
 
 <!-- Pending -->
@@ -279,6 +284,12 @@
     <thead><tr><th>Date</th><th>Vendor</th><th class="text-end">Amount</th><th>Method</th><th>Status</th><th>Action</th></tr></thead>
     <tbody id="trackerBody"></tbody>
   </table></div>
+</div>
+
+<!-- Approved (90 days) -->
+<div id="ap-approved" class="d-none">
+  <h6 class="fw-bold text-success mb-2">Approved — last 90 days</h6>
+  <div id="approvedList"></div>
 </div>
 </div>
 
@@ -646,7 +657,7 @@ function switchMain(name, el) {
 function switchApproval(name, el) {
   document.querySelectorAll('#approvalTabs .nav-link').forEach(l => l.classList.remove('active'));
   el.classList.add('active');
-  ['pending','month','unauthorized','tracker'].forEach(n =>
+  ['pending','month','unauthorized','tracker','approved'].forEach(n =>
     document.getElementById('ap-' + n).classList.toggle('d-none', n !== name));
   return false;
 }
@@ -711,6 +722,21 @@ function switchSubmit(name, el) {
 }
 
 // ── MY SUBMISSIONS ────────────────────────────────────────────────────────────
+function getStatusBadge(e) {
+  if (e.status === 'cancelled') return '<span class="badge bg-secondary">Cancelled</span>';
+  if (e.query_state === 'waiting_vincent') return '<span class="badge bg-danger">❓ Query — please reply</span>';
+  if (e.query_state === 'waiting_sudhir') return '<span class="badge bg-info text-dark">💬 Reply sent</span>';
+  const map = {
+    'AUTO_APPROVE':  '<span class="badge bg-success">Auto-approved</span>',
+    'APPROVED':      '<span class="badge bg-success">Approved</span>',
+    'APPROVED_LOWER':'<span class="badge bg-warning text-dark">Approved (lower)</span>',
+    'ESCALATE':      '<span class="badge bg-warning text-dark">Pending</span>',
+    'PENDING_CLARIFICATION': '<span class="badge bg-info text-dark">Query pending</span>',
+    'REJECTED':      '<span class="badge bg-danger">Rejected</span>',
+  };
+  return map[e.action] || `<span class="badge bg-secondary">${e.action||'—'}</span>`;
+}
+
 async function loadMyExpenses() {
   const el = document.getElementById('myExpensesList');
   el.innerHTML = '<div class="text-muted small">Loading…</div>';
@@ -720,27 +746,26 @@ async function loadMyExpenses() {
     el.innerHTML = '<div class="text-muted small">No submissions yet.</div>';
     return;
   }
-  const STATUS_BADGE = {
-    'AUTO_APPROVE': '<span class="badge bg-success">Auto-approved</span>',
-    'APPROVED':     '<span class="badge bg-success">Approved</span>',
-    'APPROVED_LOWER': '<span class="badge bg-warning text-dark">Approved (lower)</span>',
-    'ESCALATE':     '<span class="badge bg-warning text-dark">Pending</span>',
-    'PENDING_CLARIFICATION': '<span class="badge bg-info text-dark">Query pending</span>',
-    'QUERY':        '<span class="badge bg-danger">❓ Queried — please resubmit</span>',
-    'REJECTED':     '<span class="badge bg-danger">Rejected</span>',
-    'cancelled':    '<span class="badge bg-secondary">Cancelled</span>',
-  };
   el.innerHTML = list.map(e => {
-    const status = e.status === 'cancelled' ? 'cancelled' : (e.sudhir_response === 'N' ? 'REJECTED' : e.action);
-    const badge = STATUS_BADGE[status] || `<span class="badge bg-secondary">${status||'—'}</span>`;
-    const canCancel = !e.confirmed_paid && e.status !== 'cancelled' && e.sudhir_response !== 'N';
+    const badge = getStatusBadge(e);
+    const canCancel = !e.confirmed_paid && e.status !== 'cancelled' && e.action !== 'REJECTED';
     const ts = (e.timestamp||'').slice(0,16).replace('T',' ');
-    const queryBlock = e.query_text ? `
+    const hasQuery = e.query_state === 'waiting_vincent' || (e.queries && e.queries.length);
+    const queryThread = (e.queries||[]).map(qi => `
       <div class="mt-2 p-2 rounded" style="background:#fff8e1;border-left:3px solid #f59e0b">
-        <div class="small fw-semibold text-warning-emphasis">❓ Query from Sudhir:</div>
-        <div class="small mt-1">${e.query_text}</div>
+        <div class="small fw-semibold">❓ ${qi.q}</div>
+        ${qi.a ? `<div class="small text-success mt-1">Your reply: ${qi.a}</div>` : ''}
+      </div>`).join('');
+    const lastUnanswered = (e.queries||[]).filter(qi => !qi.a).slice(-1)[0];
+    const replyBlock = (e.query_state === 'waiting_vincent' && lastUnanswered) ? `
+      <div class="mt-2">
+        <div class="input-group input-group-sm">
+          <input type="text" class="form-control" id="reply-${e.request_id}"
+                 placeholder="Type your reply…">
+          <button class="btn btn-warning" onclick="sendVincentReply('${e.request_id}')">Reply</button>
+        </div>
       </div>` : '';
-    return `<div class="card mb-2 p-3 shadow-sm${e.query_text ? ' border-warning' : ''}">
+    return `<div class="card mb-2 p-3 shadow-sm${hasQuery ? ' border-warning' : ''}">
       <div class="d-flex justify-content-between align-items-start">
         <div class="flex-grow-1">
           <strong>${e.vendor}</strong>
@@ -749,12 +774,28 @@ async function loadMyExpenses() {
           ${e.confirmed_paid ? '<span class="badge bg-primary ms-1">Paid</span>' : ''}
           <div class="small text-muted mt-1">${e.description||'—'} · ${ts}</div>
           <div style="font-size:.65rem;color:#bbb">Ref: ${e.request_id}</div>
-          ${queryBlock}
+          ${queryThread}
+          ${replyBlock}
         </div>
         ${canCancel ? `<button class="btn btn-sm btn-outline-danger flex-shrink-0 ms-2" onclick="cancelExpense('${e.request_id}',this)">Cancel</button>` : ''}
       </div>
     </div>`;
   }).join('');
+}
+
+async function sendVincentReply(reqId) {
+  const input = document.getElementById('reply-' + reqId);
+  const txt = input.value.trim();
+  if (!txt) return;
+  const btn = input.nextElementSibling;
+  btn.disabled = true;
+  const r = await fetch('/api/vincent-reply', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({request_id: reqId, reply: txt})
+  });
+  const d = await r.json();
+  if (d.error) { alert('Error: ' + d.error); btn.disabled = false; return; }
+  loadMyExpenses();
 }
 
 async function cancelExpense(reqId, btn) {
@@ -973,7 +1014,13 @@ async function loadApprovals(selectedMonth) {
   if (!d.pending.length) {
     pl.innerHTML = '<div class="alert alert-success py-2">No pending approvals ✓</div>';
   } else {
-    pl.innerHTML = d.pending.map(e => `
+    pl.innerHTML = d.pending.map(e => {
+      const queryThread = (e.queries || []).map(qi => `
+        <div class="mt-2 p-2 rounded" style="background:#fff8e1;border-left:3px solid #f59e0b">
+          <div class="small fw-semibold text-warning-emphasis">❓ Your query: <span class="fw-normal">${qi.q}</span></div>
+          ${qi.a ? `<div class="small mt-1 text-success fw-semibold">💬 Reply: <span class="fw-normal">${qi.a}</span></div>` : '<div class="small text-muted mt-1">⏳ Awaiting reply…</div>'}
+        </div>`).join('');
+      return `
       <div class="card mb-3 p-3 shadow-sm">
         <div class="d-flex justify-content-between align-items-start gap-2">
           <div class="flex-grow-1">
@@ -985,6 +1032,7 @@ async function loadApprovals(selectedMonth) {
                 ? `<span class="badge bg-primary ms-1">${e.heading}</span>`
                 : '<span class="badge bg-warning text-dark ms-1">⚠ heading missing</span>'}
               ${e.is_post_facto ? '<span class="badge bg-info ms-1">post-facto</span>' : ''}
+              ${e.query_state === 'waiting_sudhir' ? '<span class="badge bg-success ms-1">💬 Reply received</span>' : ''}
             </div>
             <div class="small text-muted mb-1">
               <i class="bi bi-person me-1"></i>${e.submitter}
@@ -995,6 +1043,7 @@ async function loadApprovals(selectedMonth) {
             <div class="small mt-2 p-2 rounded" style="background:#f0f7ff;border-left:3px solid #0d6efd">
               <i class="bi bi-robot me-1 text-primary"></i>${e.ai_comment}
             </div>` : ''}
+            ${queryThread}
             <div style="font-size:.7rem;color:#aaa;margin-top:4px">Ref: ${e.request_id}</div>
             <div id="qbox-${e.request_id}" class="mt-2" style="display:none">
               <div class="input-group input-group-sm">
@@ -1013,7 +1062,8 @@ async function loadApprovals(selectedMonth) {
               onclick="document.getElementById('qbox-${e.request_id}').style.display='block'">? Query</button>
           </div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   // This Month
@@ -1039,6 +1089,32 @@ async function loadApprovals(selectedMonth) {
         <td><button class="btn btn-sm btn-outline-secondary" onclick="ignoreUnauth('${e.gmail_id}')">Ignore</button></td>
       </tr>`).join('')
     : '<tr><td colspan="5" class="text-center text-muted py-3">No unauthorised debits</td></tr>';
+
+  // Approved (90d)
+  const al = document.getElementById('approvedList');
+  al.innerHTML = (d.approved || []).length ? (d.approved || []).map(e => {
+    const ts = (e.response_timestamp || e.timestamp || '').slice(0,10);
+    const amt = Number(e.approved_amount || e.amount).toLocaleString('en-IN');
+    const qThread = (e.queries||[]).map(qi => `
+      <div class="small mt-1" style="color:#666">❓ ${qi.q}${qi.a ? ` → ${qi.a}` : ' ⏳'}</div>`).join('');
+    return `<div class="card mb-2 p-3 shadow-sm">
+      <div class="d-flex justify-content-between align-items-start">
+        <div class="flex-grow-1">
+          <strong>${e.vendor}</strong>
+          <span class="fw-bold text-danger ms-2">₹${amt}</span>
+          <span class="badge bg-success ms-1">${e.action === 'AUTO_APPROVE' ? 'Auto' : 'Approved'}</span>
+          ${e.confirmed_paid ? '<span class="badge bg-primary ms-1">Paid</span>' : ''}
+          <div class="small text-muted mt-1">${e.submitter} · ${e.payment_method||'—'} · ${ts}</div>
+          ${qThread}
+          <div style="font-size:.65rem;color:#bbb">Ref: ${e.request_id}</div>
+        </div>
+        <div class="d-flex flex-column gap-1 ms-2 flex-shrink-0">
+          <button class="btn btn-sm btn-outline-warning" onclick="reQueryApproved('${e.request_id}')">? Re-query</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="unmarkExpense('${e.request_id}',this)">✕ Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('') : '<div class="text-muted small">No approved entries in the last 90 days.</div>';
 
   // Tracker
   const tb = document.getElementById('trackerBody');
@@ -1067,6 +1143,14 @@ async function sendQuery(reqId) {
   if (!txt) return;
   await fetch('/api/decide', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({request_id: reqId, response: 'Q', query_text: txt})});
+  loadApprovals();
+}
+
+async function reQueryApproved(reqId) {
+  const txt = prompt('Enter your query for Vincent:');
+  if (!txt || !txt.trim()) return;
+  await fetch('/api/decide', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({request_id: reqId, response: 'Q', query_text: txt.trim()})});
   loadApprovals();
 }
 

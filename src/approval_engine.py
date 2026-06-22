@@ -289,10 +289,15 @@ Reply ONLY with JSON."""
                     entry["action"] = "REJECTED"
                     entry["sudhir_response"] = "N"
                 elif resp_upper == "Q":
-                    # Reject with query — stays pending, query stored for submitter
-                    entry["action"] = "QUERY"
-                    entry["sudhir_response"] = "Q"
-                    entry["query_text"] = query_text
+                    # Keep action as-is (ESCALATE or approved); set query state
+                    if "queries" not in entry:
+                        entry["queries"] = []
+                    entry["queries"].append({"q": query_text, "a": None,
+                                             "q_time": datetime.now().isoformat(), "a_time": None})
+                    entry["query_state"] = "waiting_vincent"
+                    # Clear any old query_text field
+                    entry.pop("query_text", None)
+                    entry.pop("sudhir_response", None)
                 elif resp_upper.startswith("L"):
                     try:
                         lower_amount = float(resp_upper[1:].strip())

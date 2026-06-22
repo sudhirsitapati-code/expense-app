@@ -29,6 +29,7 @@ from src.whatsapp_handler import (
     build_twiml_reply, parse_incoming,
     send_approval_request, send_approval_result,
     send_auto_approval_notice, send_clarification_request,
+    send_to_sudhir,
     SUDHIR, HOUSEHOLD_MEMBERS,
 )
 from src import db
@@ -1139,6 +1140,53 @@ def api_cancel_expense():
     return jsonify({"status": "cancelled", "removed_from_ledger": len(ledger) < before})
 
 
+@app.route("/api/vincent-reply", methods=["POST"])
+@login_required
+def api_vincent_reply():
+    """Vincent answers a query from Sudhir."""
+    data = request.get_json()
+    request_id = data.get("request_id")
+    reply = data.get("reply", "").strip()
+    if not reply:
+        return jsonify({"error": "empty reply"}), 400
+
+    log = db.load("approval_log")
+    entry = next((e for e in log if e.get("request_id") == request_id), None)
+    if not entry:
+        return jsonify({"error": "not found"}), 404
+
+    caller = session.get("user", "")
+    if caller != entry.get("submitter", "").lower() and caller != "sudhir":
+        return jsonify({"error": "not authorised"}), 403
+
+    if entry.get("query_state") != "waiting_vincent":
+        return jsonify({"error": "no pending query"}), 400
+
+    # Answer the last unanswered query
+    queries = entry.get("queries", [])
+    for qi in reversed(queries):
+        if qi.get("a") is None:
+            qi["a"] = reply
+            qi["a_time"] = datetime.now().isoformat()
+            break
+    entry["queries"] = queries
+    entry["query_state"] = "waiting_sudhir"
+    db.save("approval_log", log)
+
+    # Notify Sudhir via WhatsApp (best-effort)
+    try:
+        msg = (f"💬 Reply to your query\n"
+               f"Vendor: {entry.get('vendor')} — ₹{entry.get('amount'):,.0f}\n"
+               f"Query: {queries[-1].get('q','')}\n"
+               f"Reply: {reply}\n"
+               f"Ref: {request_id}")
+        send_to_sudhir(msg)
+    except Exception as ex:
+        print(f"[whatsapp] vincent-reply notify failed: {ex}")
+
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/my-expenses", methods=["GET"])
 @login_required
 def api_my_expenses():
@@ -2074,7 +2122,39 @@ def api_approvals_structured():
         and _effective_month(e) <= today_prefix
     }, reverse=True)
 
-    pending      = [e for e in log if e.get("action") == "ESCALATE" and "sudhir_response" not in e]
+    def _is_pending(e):
+        """Sudhir needs to act: fresh ESCALATE, OR Vincent has answered a query."""
+        if e.get("status") == "cancelled":
+            return False
+        qs = e.get("query_state")
+        if qs == "waiting_vincent":
+            return False   # ball is with Vincent
+        if qs == "waiting_sudhir":
+            return True    # Vincent replied, Sudhir must act
+        # No active query: pending only if ESCALATE with no final response
+        action = e.get("action", "")
+        if action == "ESCALATE" and "sudhir_response" not in e:
+            return True
+        return False
+
+    def _is_approved(e):
+        if e.get("status") == "cancelled":
+            return False
+        if e.get("query_state") in ("waiting_vincent", "waiting_sudhir"):
+            return False   # in query limbo — show in pending
+        return e.get("action") in approved_actions
+
+    pending      = [e for e in log if _is_pending(e)]
+
+    # Approved: last 90 days
+    from datetime import timedelta
+    cutoff = (now - timedelta(days=90)).isoformat()
+    approved = sorted(
+        [e for e in log if _is_approved(e) and (e.get("timestamp","") >= cutoff or e.get("response_timestamp","") >= cutoff)],
+        key=lambda e: e.get("response_timestamp") or e.get("timestamp",""),
+        reverse=True
+    )
+
     this_month   = [e for e in log
                     if _effective_month(e) == month_prefix
                     and e.get("status") != "cancelled"
@@ -2082,12 +2162,12 @@ def api_approvals_structured():
                          or (e.get("action") == "ESCALATE" and "sudhir_response" in e))]
     unauthorized = [e for e in recon if not e.get("matched") and not e.get("is_recurring") and not e.get("ignored")]
     tracker      = [e for e in log
-                    if e.get("action") in approved_actions
-                    and not e.get("confirmed_paid")
-                    and e.get("status") != "cancelled"]
+                    if _is_approved(e)
+                    and not e.get("confirmed_paid")]
 
     return jsonify({
         "pending":           pending,
+        "approved":          approved,
         "this_month":        this_month,
         "selected_month":    month_prefix,
         "months_with_data":  months_with_data,
