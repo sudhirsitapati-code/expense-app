@@ -235,7 +235,6 @@
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchApproval('month',this)"><i class="bi bi-calendar3 me-1"></i>This Month</a></li>
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchApproval('unauthorized',this)"><i class="bi bi-exclamation-triangle me-1"></i>Unauthorised</a></li>
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchApproval('tracker',this)"><i class="bi bi-check-all me-1"></i>Tracker</a></li>
-  <li class="nav-item"><a class="nav-link" href="#" onclick="switchApproval('approved',this)">✓ Approved (90d)</a></li>
 </ul>
 
 <!-- Pending -->
@@ -255,7 +254,7 @@
     </div>
   </div>
   <div class="table-wrap"><table class="table table-hover mb-0">
-    <thead><tr><th>Date</th><th>Submitter</th><th>Vendor</th><th>Category</th><th class="text-end">Amount</th><th>Status</th></tr></thead>
+    <thead><tr><th>Date</th><th>Submitter</th><th>Vendor</th><th>Category</th><th class="text-end">Amount</th><th>Status</th><th></th></tr></thead>
     <tbody id="monthBody"></tbody>
   </table></div>
   <div class="mt-2 text-muted small fw-semibold" id="monthTotal"></div>
@@ -282,11 +281,6 @@
   </table></div>
 </div>
 
-<!-- Approved (90 days) -->
-<div id="ap-approved" class="d-none">
-  <h6 class="fw-bold text-success mb-2">Approved — last 90 days</h6>
-  <div id="approvedList"></div>
-</div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
@@ -653,7 +647,7 @@ function switchMain(name, el) {
 function switchApproval(name, el) {
   document.querySelectorAll('#approvalTabs .nav-link').forEach(l => l.classList.remove('active'));
   el.classList.add('active');
-  ['pending','month','unauthorized','tracker','approved'].forEach(n =>
+  ['pending','month','unauthorized','tracker'].forEach(n =>
     document.getElementById('ap-' + n).classList.toggle('d-none', n !== name));
   return false;
 }
@@ -1070,8 +1064,9 @@ async function loadApprovals(selectedMonth) {
         <td>${e.submitter}</td><td>${e.vendor}</td><td>${e.category}</td>
         <td class="text-end">₹${Number(e.approved_amount||e.amount).toLocaleString('en-IN')}</td>
         <td><span class="badge ${e.action==='AUTO_APPROVE'?'bg-primary':e.action==='APPROVED'?'bg-success':'bg-warning text-dark'}">${e.action}</span></td>
+        <td><button class="btn btn-sm btn-outline-danger" onclick="unmarkExpense('${e.request_id}',this)" title="Cancel this entry">✕</button></td>
       </tr>`).join('')
-    : '<tr><td colspan="6" class="text-center text-muted py-3">No approvals recorded for this month</td></tr>';
+    : '<tr><td colspan="7" class="text-center text-muted py-3">No approvals recorded for this month</td></tr>';
 
   const mTotal = d.this_month.reduce((s,e) => s + (e.approved_amount||e.amount||0), 0);
   document.getElementById('monthTotal').textContent = `Total approved ${monthLabel(currentVal)}: ₹${mTotal.toLocaleString('en-IN')}`;
@@ -1085,32 +1080,6 @@ async function loadApprovals(selectedMonth) {
         <td><button class="btn btn-sm btn-outline-secondary" onclick="ignoreUnauth('${e.gmail_id}')">Ignore</button></td>
       </tr>`).join('')
     : '<tr><td colspan="5" class="text-center text-muted py-3">No unauthorised debits</td></tr>';
-
-  // Approved (90d)
-  const al = document.getElementById('approvedList');
-  al.innerHTML = (d.approved || []).length ? (d.approved || []).map(e => {
-    const ts = (e.response_timestamp || e.timestamp || '').slice(0,10);
-    const amt = Number(e.approved_amount || e.amount).toLocaleString('en-IN');
-    const qThread = (e.queries||[]).map(qi => `
-      <div class="small mt-1" style="color:#666">❓ ${qi.q}${qi.a ? ` → ${qi.a}` : ' ⏳'}</div>`).join('');
-    return `<div class="card mb-2 p-3 shadow-sm">
-      <div class="d-flex justify-content-between align-items-start">
-        <div class="flex-grow-1">
-          <strong>${e.vendor}</strong>
-          <span class="fw-bold text-danger ms-2">₹${amt}</span>
-          <span class="badge bg-success ms-1">${e.action === 'AUTO_APPROVE' ? 'Auto' : 'Approved'}</span>
-          ${e.confirmed_paid ? '<span class="badge bg-primary ms-1">Paid</span>' : ''}
-          <div class="small text-muted mt-1">${e.submitter} · ${e.payment_method||'—'} · ${ts}</div>
-          ${qThread}
-          <div style="font-size:.65rem;color:#bbb">Ref: ${e.request_id}</div>
-        </div>
-        <div class="d-flex flex-column gap-1 ms-2 flex-shrink-0">
-          <button class="btn btn-sm btn-outline-warning" onclick="reQueryApproved('${e.request_id}')">? Re-query</button>
-          <button class="btn btn-sm btn-outline-danger" onclick="unmarkExpense('${e.request_id}',this)">✕ Cancel</button>
-        </div>
-      </div>
-    </div>`;
-  }).join('') : '<div class="text-muted small">No approved entries in the last 90 days.</div>';
 
   // Tracker
   const tb = document.getElementById('trackerBody');
@@ -1139,14 +1108,6 @@ async function sendQuery(reqId) {
   if (!txt) return;
   await fetch('/api/decide', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({request_id: reqId, response: 'Q', query_text: txt})});
-  loadApprovals();
-}
-
-async function reQueryApproved(reqId) {
-  const txt = prompt('Enter your query for Vincent:');
-  if (!txt || !txt.trim()) return;
-  await fetch('/api/decide', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({request_id: reqId, response: 'Q', query_text: txt.trim()})});
   loadApprovals();
 }
 

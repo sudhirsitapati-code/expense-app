@@ -1112,9 +1112,6 @@ def api_cancel_expense():
     if caller != submitter and caller != "sudhir":
         return jsonify({"error": "not authorised"}), 403
 
-    # Can only cancel if not yet paid / not already cancelled
-    if entry.get("confirmed_paid"):
-        return jsonify({"error": "already paid — ask Sudhir to reverse"}), 400
     if entry.get("status") == "cancelled":
         return jsonify({"error": "already cancelled"}), 400
 
