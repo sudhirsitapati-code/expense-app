@@ -427,6 +427,11 @@
     </button>
   </div>
 
+  <!-- Saved insights -->
+  <hr class="my-4">
+  <h6 class="fw-bold text-primary mb-3"><i class="bi bi-bookmark-check me-2"></i>Saved Insights</h6>
+  <div id="savedInsightsList"><div class="text-muted small">No saved insights yet — click Save on any response above.</div></div>
+
   <h6 class="fw-bold text-primary mt-4 mb-2"><i class="bi bi-credit-card me-2"></i>Credit Card Balances (Accrued, Unpaid)</h6>
   <div class="row g-2" id="ccBalanceRow"><div class="col text-muted small">Loading…</div></div>
 </div>
@@ -691,7 +696,7 @@ function switchReport(name, el) {
     document.getElementById('rp-' + n).classList.toggle('d-none', n !== name));
   if (name === 'ledger' || name === 'notsure') loadLedger();
   if (name === 'mis')             loadMIS('ytd', document.getElementById('misBtnYtd'));
-  if (name === 'insights')        { loadInsights(); loadCCBalance(); }
+  if (name === 'insights')        { loadInsights(); loadCCBalance(); loadSavedInsights(); }
   if (name === 'acct-status')     loadAcctStatus();
   if (name === 'transfer-recon')  loadTransferRecon();
   if (name === 'year')            loadYear('FY27', document.getElementById('fyBtn27'));
@@ -1637,19 +1642,75 @@ async function sendInsightsChat() {
     const reply = d.reply || '(no response)';
     _chatHistory.push({role:'user', content: q});
     _chatHistory.push({role:'assistant', content: reply});
-    // simple markdown: bold and bullets
     const html = reply
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>')
       .replace(/(<li>.*<\/li>)/s, '<ul style="margin:.25rem 0 0 1rem;padding:0">$1</ul>')
       .replace(/\n/g, '<br>');
-    document.getElementById(thinkingId).innerHTML = html;
+    const bubble = document.getElementById(thinkingId);
+    bubble.innerHTML = `<div>${html}</div>
+      <div class="mt-1 text-end">
+        <button class="btn btn-link btn-sm p-0 text-muted" style="font-size:.7rem"
+          onclick="saveInsight(this.dataset.q, this.dataset.r, this)"
+          data-q="${q.replace(/"/g,'&quot;')}" data-r="${reply.replace(/"/g,'&quot;')}">
+          <i class="bi bi-bookmark me-1"></i>Save
+        </button>
+      </div>`;
   } catch {
     document.getElementById(thinkingId).textContent = 'Error — please try again.';
   }
   input.disabled = false;
   input.focus();
   box.scrollTop = box.scrollHeight;
+}
+
+async function saveInsight(question, reply, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-bookmark-check-fill me-1"></i>Saved';
+  await fetch('/api/save-insight', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({question, reply})
+  });
+  loadSavedInsights();
+}
+
+async function deleteSavedInsight(id) {
+  await fetch('/api/delete-insight', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id})
+  });
+  loadSavedInsights();
+}
+
+function _renderInsightHtml(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul style="margin:.25rem 0 0 1rem;padding:0">$1</ul>')
+    .replace(/\n/g, '<br>');
+}
+
+async function loadSavedInsights() {
+  const div = document.getElementById('savedInsightsList');
+  const r = await fetch('/api/saved-insights');
+  const d = await r.json();
+  if (!d.items?.length) {
+    div.innerHTML = '<div class="text-muted small">No saved insights yet — click Save on any response above.</div>';
+    return;
+  }
+  div.innerHTML = d.items.map(item => `
+    <div class="card mb-2 p-3 shadow-sm">
+      <div class="d-flex justify-content-between align-items-start gap-2">
+        <div class="flex-grow-1">
+          <div class="small fw-semibold text-muted mb-1">❓ ${item.question}</div>
+          <div style="font-size:.875rem">${_renderInsightHtml(item.reply)}</div>
+          <div style="font-size:.65rem;color:#bbb" class="mt-1">${(item.saved_at||'').slice(0,10)}</div>
+        </div>
+        <button class="btn btn-sm btn-outline-danger flex-shrink-0" onclick="deleteSavedInsight('${item.id}')">✕</button>
+      </div>
+    </div>`).join('');
 }
 
 async function loadCCBalance() {

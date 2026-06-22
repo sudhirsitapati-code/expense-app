@@ -2312,6 +2312,38 @@ Keep answers short and direct. Use bullet points for lists. If a question is out
     return jsonify({"reply": reply})
 
 
+@app.route("/api/saved-insights", methods=["GET"])
+@login_required
+def api_saved_insights():
+    return jsonify({"items": db.load("saved_insights", [])})
+
+
+@app.route("/api/save-insight", methods=["POST"])
+@login_required
+def api_save_insight():
+    import uuid
+    data = request.get_json()
+    items = db.load("saved_insights", [])
+    items.insert(0, {
+        "id": str(uuid.uuid4()),
+        "question": data.get("question",""),
+        "reply": data.get("reply",""),
+        "saved_at": datetime.now().isoformat(),
+    })
+    db.save("saved_insights", items)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/delete-insight", methods=["POST"])
+@login_required
+def api_delete_insight():
+    data = request.get_json()
+    items = db.load("saved_insights", [])
+    items = [i for i in items if i.get("id") != data.get("id")]
+    db.save("saved_insights", items)
+    return jsonify({"ok": True})
+
+
 @app.route("/export", methods=["GET"])
 def export():
     month_str = request.args.get("month")
