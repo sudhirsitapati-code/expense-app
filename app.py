@@ -958,12 +958,18 @@ def api_decide():
     elif resp_upper == "N":
         send_approval_result(entry["submitter"], entry["vendor"], entry["amount"], approved=False, request_id=request_id)
     elif resp_upper == "Q" and query_text:
-        # Notify submitter of query via WhatsApp
+        # Notify submitter of query via WhatsApp (send to submitter, not Sudhir)
+        from src.whatsapp_handler import HOUSEHOLD_MEMBERS, send_message
+        submitter = entry.get("submitter", "")
+        submitter_number = HOUSEHOLD_MEMBERS.get(submitter.lower())
         msg = (f"❓ Query on your expense request\n"
                f"Vendor: {entry.get('vendor')} — ₹{entry.get('amount'):,.0f}\n"
                f"Query: {query_text}\n"
                f"Ref: {request_id}")
-        send_approval_request(msg)
+        if submitter_number:
+            send_message(submitter_number, msg)
+        else:
+            send_approval_request(msg)  # fallback to Sudhir if no number on file
 
     return jsonify({"status": "ok"})
 

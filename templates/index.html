@@ -816,15 +816,26 @@ async function uploadPhotos(mode) {
 // ── SUBMIT ─────────────────────────────────────────────────────────────────
 async function submitExpense(e) {
   e.preventDefault();
+  const btn = e.target.querySelector('[type=submit]');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
   const fd   = new FormData(e.target);
   const data = Object.fromEntries(fd.entries());
   data.is_post_facto = fd.has('is_post_facto');
   data.amount = parseFloat(data.amount);
 
-  const res = await fetch('/api/submit-expense', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
-  });
-  const r = await res.json();
+  let r;
+  try {
+    const res = await fetch('/api/submit-expense', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+    });
+    r = await res.json();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Submit';
+  }
   const div = document.getElementById('submitResult');
   div.classList.remove('d-none');
 
