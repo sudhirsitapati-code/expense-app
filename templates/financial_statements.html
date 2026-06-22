@@ -368,7 +368,6 @@ function renderBS(d) {
   html += expandBsRow('bs-a-gold',     'Gold (SGB + ETF)',                  'gold_bond');
   html += expandBsRow('bs-a-nps',      'NPS',                               'nps');
   html += expandBsRow('bs-a-pf',       'EPF / PF',                          'pf');
-  html += expandBsRow('bs-a-gratuity', 'Gratuity',                          'gratuity');
   html += expandBsRow('bs-a-pe',       'Private Equity',                    'private_eq');
   html += expandBsRow('bs-a-art',      'Art & Jewellery',                   'art_jewellery');
   html += expandBsRow('bs-a-bank',     'Bank Accounts (ICICI / SBI / StanChart)', 'bank');
@@ -376,7 +375,7 @@ function renderBS(d) {
 
   html += `<tr class="sh"><td colspan="5">Liabilities</td></tr>`;
   html += expandBsRow('bs-l-hl',    'Home Loans',                   'home_loans');
-  html += expandBsRow('bs-l-od',    'OD / Credit Lines (ICICI 9175)','od');
+  html += expandBsRow('bs-l-od',    'OD / Credit Lines (ICICI 7281)', 'od');
   html += expandBsRow('bs-l-las',   'Loan against Shares',           'loan_shares');
   html += s4('Total Liabilities','total_liabilities','totr');
 

@@ -696,10 +696,11 @@ def api_financial_statements():
         "FY25": {"company_shares":3400,"property":2740,"equity":1380,"gold_bond":300,"nps":470,"pf":234,"gratuity":0,"private_eq":346,"art_jewellery":115,"total_assets":8985,"home_loans":200,"od":538,"loan_shares":840,"total_liabilities":1578,"net_worth":7445},
         # FY26 equity (domestic): Solidarity 671+PPFAS 165+SBI ETF 90+Latent 187=1113
         # international_equity: Marcellus IB 342 (USD 360K×95)+StanChart equity 320 (USD 336K×95)=662
-        # bank: StanChart cash 150 (USD 158K×95)+ICICI 1331 15+other 5=170
+        # bank: StanChart cash 150 (USD 158K×95)+ICICI 1331 15+SBI TBD≈5=170
         # gold_bond: SGB 314+Nippon Gold ETF 68=382  art_jewellery: 115+Mizugami 10+Cartier 4.51=130
-        # total: 3500+4080+1113+662+382+478+306+350+346+130+170=11517  net_worth: 11517-1352=10165
-        "FY26": {"company_shares":3500,"property":4080,"equity":1113,"gold_bond":382,"nps":478,"pf":306,"gratuity":350,"private_eq":346,"art_jewellery":130,"international_equity":662,"bank":170,"total_assets":11517,"home_loans":782,"od":570,"loan_shares":0,"total_liabilities":1352,"net_worth":10165},
+        # home_loans: HL1 C51 440+HL2 C34 342+ICICI 9175 HomeSaver 571=1353  od: ICICI 7281 ~5
+        # total: 3500+4080+1113+662+382+478+306+346+130+170=11167  net_worth: 11167-1358=9809
+        "FY26": {"company_shares":3500,"property":4080,"equity":1113,"gold_bond":382,"nps":478,"pf":306,"private_eq":346,"art_jewellery":130,"international_equity":662,"bank":170,"total_assets":11167,"home_loans":1353,"od":5,"loan_shares":0,"total_liabilities":1358,"net_worth":9809},
     }
 
     # ── Asset detail ─────────────────────────────────────────────────────────
@@ -745,7 +746,6 @@ def api_financial_statements():
         {"name":"Uspaar / Sarve Land","type":"Property","fy24":340,"fy25":340,"fy26":1000},
         {"name":"NPS","type":"Retirement","fy24":370,"fy25":470,"fy26":478},
         {"name":"EPF","type":"Retirement","fy24":150,"fy25":234,"fy26":306},
-        {"name":"Gratuity","type":"Retirement","fy24":None,"fy25":None,"fy26":350},
         {"name":"Art & Jewellery","type":"Alternative","fy24":93,"fy25":106,"fy26":130},
     ]
 
@@ -754,7 +754,8 @@ def api_financial_statements():
         {"name":"HL2 — C34 Kalpataru (top-up) XX00382","type":"Home Loan","fy24":None,"fy25":None,"fy26":342},
         {"name":"HL3 — C34 HomeSaver","type":"Home Loan","fy24":None,"fy25":200,"fy26":None},
         {"name":"HL4 — C51 original XX42596","type":"Home Loan","fy24":200,"fy25":None,"fy26":191},
-        {"name":"OD — ICICI 9175","type":"Credit Line","fy24":495,"fy25":538,"fy26":570},
+        {"name":"HL5 — ICICI 9175 HomeSaver (MaxGain)","type":"Home Loan","fy24":495,"fy25":538,"fy26":571},
+        {"name":"OD — ICICI 7281","type":"Credit Line","fy24":None,"fy25":None,"fy26":5},
         {"name":"Loan against shares","type":"Pledge Loan","fy24":440,"fy25":840,"fy26":None},
     ]
 
