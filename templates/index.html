@@ -94,6 +94,7 @@
 <ul class="nav sub-tabs gap-1 mb-3">
   <li class="nav-item"><a class="nav-link active" href="#" onclick="switchSubmit('form',this)"><i class="bi bi-plus-circle me-1"></i>New Estimate</a></li>
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchSubmit('bills',this)"><i class="bi bi-receipt me-1"></i>Load Bills</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchSubmit('mine',this)"><i class="bi bi-clock-history me-1"></i>My Submissions</a></li>
 </ul>
 
 <!-- New Expense form -->
@@ -211,6 +212,19 @@
 </div>
 </div>
 </div><!-- /submit-bills -->
+
+<!-- My Submissions panel -->
+<div id="submit-mine" class="d-none">
+<div class="row g-3 justify-content-center">
+<div class="col-lg-8">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="fw-bold mb-0">My Recent Submissions</h6>
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadMyExpenses()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+  </div>
+  <div id="myExpensesList"><div class="text-muted small">Loading…</div></div>
+</div>
+</div>
+</div><!-- /submit-mine -->
 
 <!-- ═══════════════════════════════════════════════════════
      TAB 2 — APPROVALS
@@ -689,9 +703,64 @@ function switchSubmit(name, el) {
   document.getElementById('submit-form').classList.toggle('d-none', name !== 'form');
   document.getElementById('submit-photos').classList.toggle('d-none', name !== 'photos');
   document.getElementById('submit-bills').classList.toggle('d-none', name !== 'bills');
+  document.getElementById('submit-mine').classList.toggle('d-none', name !== 'mine');
   if (name === 'photos') loadRecentExpensesForPhotos();
   if (name === 'bills' && !_allExpenses.length) loadRecentExpensesForPhotos();
+  if (name === 'mine') loadMyExpenses();
   return false;
+}
+
+// ── MY SUBMISSIONS ────────────────────────────────────────────────────────────
+async function loadMyExpenses() {
+  const el = document.getElementById('myExpensesList');
+  el.innerHTML = '<div class="text-muted small">Loading…</div>';
+  const r = await fetch('/api/my-expenses');
+  const list = await r.json();
+  if (!list.length) {
+    el.innerHTML = '<div class="text-muted small">No submissions yet.</div>';
+    return;
+  }
+  const STATUS_BADGE = {
+    'AUTO_APPROVE': '<span class="badge bg-success">Auto-approved</span>',
+    'APPROVED':     '<span class="badge bg-success">Approved</span>',
+    'APPROVED_LOWER': '<span class="badge bg-warning text-dark">Approved (lower)</span>',
+    'ESCALATE':     '<span class="badge bg-warning text-dark">Pending</span>',
+    'PENDING_CLARIFICATION': '<span class="badge bg-info text-dark">Query pending</span>',
+    'REJECTED':     '<span class="badge bg-danger">Rejected</span>',
+    'cancelled':    '<span class="badge bg-secondary">Cancelled</span>',
+  };
+  el.innerHTML = list.map(e => {
+    const status = e.status === 'cancelled' ? 'cancelled' : (e.sudhir_response === 'N' ? 'REJECTED' : e.action);
+    const badge = STATUS_BADGE[status] || `<span class="badge bg-secondary">${status||'—'}</span>`;
+    const canCancel = !e.confirmed_paid && e.status !== 'cancelled' && e.sudhir_response !== 'N';
+    const ts = (e.timestamp||'').slice(0,16).replace('T',' ');
+    return `<div class="card mb-2 p-3 shadow-sm">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <strong>${e.vendor}</strong>
+          <span class="fw-bold text-danger ms-2">₹${Number(e.amount).toLocaleString('en-IN')}</span>
+          ${badge}
+          ${e.confirmed_paid ? '<span class="badge bg-primary ms-1">Paid</span>' : ''}
+          <div class="small text-muted mt-1">${e.description||'—'} · ${ts}</div>
+          <div style="font-size:.65rem;color:#bbb">Ref: ${e.request_id}</div>
+        </div>
+        ${canCancel ? `<button class="btn btn-sm btn-outline-danger flex-shrink-0" onclick="cancelExpense('${e.request_id}',this)">Cancel</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function cancelExpense(reqId, btn) {
+  if (!confirm('Cancel this expense submission?')) return;
+  btn.disabled = true;
+  btn.textContent = '…';
+  const r = await fetch('/api/cancel-expense', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({request_id: reqId})
+  });
+  const d = await r.json();
+  if (d.error) { alert('Could not cancel: ' + d.error); btn.disabled = false; btn.textContent = 'Cancel'; return; }
+  loadMyExpenses();
 }
 
 // ── PHOTO HELPERS ────────────────────────────────────────────────────────────

@@ -1093,6 +1093,64 @@ def api_mark_paid():
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/cancel-expense", methods=["POST"])
+@login_required
+def api_cancel_expense():
+    """Allow a submitter to cancel their own auto-approved or pending expense."""
+    data = request.get_json()
+    request_id = data.get("request_id")
+    caller = session.get("user", "")
+
+    log = db.load("approval_log")
+    entry = next((e for e in log if e.get("request_id") == request_id), None)
+    if not entry:
+        return jsonify({"error": "not found"}), 404
+
+    # Only the submitter (or sudhir) can cancel
+    submitter = entry.get("submitter", "").lower()
+    if caller != submitter and caller != "sudhir":
+        return jsonify({"error": "not authorised"}), 403
+
+    # Can only cancel if not yet paid / not already cancelled
+    if entry.get("confirmed_paid"):
+        return jsonify({"error": "already paid — ask Sudhir to reverse"}), 400
+    if entry.get("status") == "cancelled":
+        return jsonify({"error": "already cancelled"}), 400
+
+    entry["status"] = "cancelled"
+    entry["cancelled_by"] = caller
+    entry["cancelled_at"] = datetime.now().isoformat()
+    db.save("approval_log", log)
+
+    # Also remove from master ledger if it was synced there
+    from src.master_ledger import _fy_info, _parse_date
+    import hashlib
+    paid_at = entry.get("confirmed_at") or entry.get("response_timestamp") or entry.get("timestamp", "")
+    date_str = paid_at[:10]
+    amount = float(entry.get("approved_amount") or entry.get("amount") or 0)
+    raw = f"{date_str}|approval|{entry.get('vendor','')}|{amount:.2f}"
+    txn_id = hashlib.sha1(raw.encode()).hexdigest()[:16]
+    ledger = db.load("master_ledger")
+    before = len(ledger)
+    ledger = [t for t in ledger if t.get("txn_id") != txn_id]
+    if len(ledger) < before:
+        db.save("master_ledger", ledger)
+
+    return jsonify({"status": "cancelled", "removed_from_ledger": len(ledger) < before})
+
+
+@app.route("/api/my-expenses", methods=["GET"])
+@login_required
+def api_my_expenses():
+    """Return the logged-in user's recent expense submissions."""
+    caller = session.get("user", "")
+    log = db.load("approval_log")
+    mine = [e for e in log if e.get("submitter", "").lower() == caller]
+    # Return most recent 20, newest first
+    mine = sorted(mine, key=lambda e: e.get("timestamp", ""), reverse=True)[:20]
+    return jsonify(mine)
+
+
 @app.route("/api/sync-approvals-to-ledger", methods=["POST"])
 @login_required
 def api_sync_approvals_to_ledger():
