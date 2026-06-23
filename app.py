@@ -1728,7 +1728,7 @@ def api_debug_mis_actuals():
 def api_ledger_update(txn_id):
     """Update type, heading, paid_to, remarks, saving_agreed for a transaction."""
     data    = request.get_json() or {}
-    allowed = {"account","paid_to","type","heading","remarks","saving_agreed"}
+    allowed = {"account","paid_to","type","heading","remarks","saving_agreed","project"}
     updates = {k: v for k, v in data.items() if k in allowed}
     if not updates:
         return jsonify({"error": "no valid fields"}), 400
@@ -2430,6 +2430,69 @@ def api_delete_insight():
     items = [i for i in items if i.get("id") != data.get("id")]
     db.save("saved_insights", items)
     return jsonify({"ok": True})
+
+
+# ── Projects ──────────────────────────────────────────────────────────────────
+
+@app.route("/api/projects", methods=["GET"])
+@login_required
+def api_projects_list():
+    import uuid
+    projects = db.load("projects", [])
+    ledger   = load_ledger()
+    # compute spent + txn count per project (match by id or name for legacy)
+    for p in projects:
+        matched = [t for t in ledger if t.get("project") in (p["id"], p["name"])]
+        p["spent"]     = round(sum(float(t.get("debit") or 0) for t in matched))
+        p["txn_count"] = len(matched)
+    return jsonify({"projects": projects})
+
+
+@app.route("/api/projects", methods=["POST"])
+@login_required
+def api_projects_save():
+    import uuid
+    data     = request.get_json() or {}
+    projects = db.load("projects", [])
+    pid      = data.get("id")
+    if pid:
+        for p in projects:
+            if p["id"] == pid:
+                p.update({k: data[k] for k in ("name","budget","desc","status") if k in data})
+                break
+    else:
+        projects.append({
+            "id":         str(uuid.uuid4()),
+            "name":       data.get("name","Unnamed"),
+            "budget":     data.get("budget", 0),
+            "desc":       data.get("desc",""),
+            "status":     data.get("status","open"),
+            "created_at": datetime.now().isoformat(),
+        })
+    db.save("projects", projects)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/projects/<project_id>", methods=["DELETE"])
+@login_required
+def api_projects_delete(project_id):
+    projects = db.load("projects", [])
+    projects = [p for p in projects if p["id"] != project_id]
+    db.save("projects", projects)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/projects/<project_id>/transactions", methods=["GET"])
+@login_required
+def api_project_transactions(project_id):
+    projects = db.load("projects", [])
+    proj     = next((p for p in projects if p["id"] == project_id), None)
+    if not proj:
+        return jsonify({"error": "not found"}), 404
+    ledger = load_ledger()
+    txns   = [t for t in ledger if t.get("project") in (project_id, proj["name"])]
+    txns.sort(key=lambda t: (t.get("date") or t.get("timestamp","") or ""), reverse=True)
+    return jsonify({"transactions": txns})
 
 
 @app.route("/export", methods=["GET"])

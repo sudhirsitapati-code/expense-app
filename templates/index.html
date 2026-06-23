@@ -300,6 +300,7 @@
     <span id="unreconBadge" class="badge bg-danger ms-1 d-none">0</span>
   </a></li>
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('year',this)"><i class="bi bi-calendar3 me-1"></i>Year</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('projects',this)"><i class="bi bi-folder2-open me-1"></i>Projects</a></li>
 </ul>
 
 <!-- ── Master Ledger ── -->
@@ -601,6 +602,57 @@
   </div>
 </div>
 
+<!-- ── Projects ── -->
+<div id="rp-projects" class="d-none">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="mb-0 fw-bold text-primary"><i class="bi bi-folder2-open me-2"></i>Projects</h6>
+    <button class="btn btn-sm btn-primary" onclick="showNewProjectForm()"><i class="bi bi-plus me-1"></i>New Project</button>
+  </div>
+
+  <!-- New / Edit project form -->
+  <div id="projectForm" class="card p-3 mb-3 d-none">
+    <input type="hidden" id="pfId">
+    <div class="row g-2 mb-2">
+      <div class="col-sm-5">
+        <input class="form-control form-control-sm" id="pfName" placeholder="Project name (e.g. Greenhouse)">
+      </div>
+      <div class="col-sm-3">
+        <input class="form-control form-control-sm" id="pfBudget" type="number" placeholder="Budget (₹)">
+      </div>
+      <div class="col-sm-2">
+        <select class="form-select form-select-sm" id="pfStatus">
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+    </div>
+    <div class="mb-2">
+      <input class="form-control form-control-sm" id="pfDesc" placeholder="Description (optional)">
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-primary" onclick="saveProject()">Save</button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('projectForm').classList.add('d-none')">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Project cards -->
+  <div id="projectList"><div class="text-muted small">Loading…</div></div>
+
+  <!-- Transaction drill-down -->
+  <div id="projectTxns" class="d-none mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0 fw-semibold" id="projectTxnsTitle"></h6>
+      <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('projectTxns').classList.add('d-none')">✕ Close</button>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover">
+        <thead><tr><th>Date</th><th>Account</th><th>Description</th><th>Heading</th><th class="text-end">Amount</th></tr></thead>
+        <tbody id="projectTxnsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 </div><!-- /tab-reports -->
 </div><!-- /container -->
 
@@ -643,6 +695,12 @@
         <div class="mb-2">
           <label class="form-label small fw-semibold">Paid To</label>
           <input class="form-control form-control-sm" id="editPaidTo">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Project</label>
+          <select class="form-select form-select-sm" id="editProject">
+            <option value="">— None —</option>
+          </select>
         </div>
         <div class="mb-2">
           <label class="form-label small fw-semibold">Remarks</label>
@@ -704,7 +762,7 @@ function setYear(fy) {
 function switchReport(name, el) {
   document.querySelectorAll('#reportTabs .nav-link').forEach(l => l.classList.remove('active'));
   el.classList.add('active');
-  ['ledger','notsure','mis','insights','acct-status','transfer-recon','year'].forEach(n =>
+  ['ledger','notsure','mis','insights','acct-status','transfer-recon','year','projects'].forEach(n =>
     document.getElementById('rp-' + n).classList.toggle('d-none', n !== name));
   if (name === 'ledger' || name === 'notsure') loadLedger();
   if (name === 'mis')             loadMIS('ytd', document.getElementById('misBtnYtd'));
@@ -712,6 +770,7 @@ function switchReport(name, el) {
   if (name === 'acct-status')     loadAcctStatus();
   if (name === 'transfer-recon')  loadTransferRecon();
   if (name === 'year')            loadYear('FY27', document.getElementById('fyBtn27'));
+  if (name === 'projects')        loadProjects();
   return false;
 }
 
@@ -1403,6 +1462,13 @@ function openEdit(txnId, txnEncoded) {
   refreshEditHeadings(t.type, t.heading || '');
   document.getElementById('editPaidTo').value  = t.paid_to || '';
   document.getElementById('editRemarks').value = t.remarks || '';
+  // populate project dropdown
+  fetch('/api/projects').then(r => r.json()).then(d => {
+    const sel = document.getElementById('editProject');
+    const cur = t.project || '';
+    sel.innerHTML = '<option value="">— None —</option>' +
+      (d.projects||[]).map(p => `<option value="${p.id}" ${p.id===cur||p.name===cur?'selected':''}>${p.name}</option>`).join('');
+  });
   editModal.show();
 }
 
@@ -1414,6 +1480,7 @@ async function saveEdit() {
     heading: document.getElementById('editHeading').value || null,
     paid_to: document.getElementById('editPaidTo').value,
     remarks: document.getElementById('editRemarks').value,
+    project: document.getElementById('editProject').value || null,
   };
   await fetch('/api/master-ledger/' + txnId, {
     method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(updates)
@@ -1725,6 +1792,126 @@ async function loadSavedInsights() {
         <button class="btn btn-sm btn-outline-danger flex-shrink-0" onclick="deleteSavedInsight('${item.id}')">✕</button>
       </div>
     </div>`).join('');
+}
+
+// ── Projects ───────────────────────────────────────────────────────────────
+
+function showNewProjectForm() {
+  document.getElementById('pfId').value    = '';
+  document.getElementById('pfName').value  = '';
+  document.getElementById('pfBudget').value= '';
+  document.getElementById('pfDesc').value  = '';
+  document.getElementById('pfStatus').value= 'open';
+  document.getElementById('projectForm').classList.remove('d-none');
+  document.getElementById('pfName').focus();
+}
+
+async function saveProject() {
+  const id     = document.getElementById('pfId').value;
+  const name   = document.getElementById('pfName').value.trim();
+  const budget = parseFloat(document.getElementById('pfBudget').value) || 0;
+  const desc   = document.getElementById('pfDesc').value.trim();
+  const status = document.getElementById('pfStatus').value;
+  if (!name) return;
+  await fetch('/api/projects', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id: id||undefined, name, budget, desc, status})
+  });
+  document.getElementById('projectForm').classList.add('d-none');
+  loadProjects();
+}
+
+async function deleteProject(id) {
+  if (!confirm('Delete this project?')) return;
+  await fetch('/api/projects/' + id, {method:'DELETE'});
+  loadProjects();
+}
+
+function editProject(p) {
+  document.getElementById('pfId').value    = p.id;
+  document.getElementById('pfName').value  = p.name;
+  document.getElementById('pfBudget').value= p.budget || '';
+  document.getElementById('pfDesc').value  = p.desc || '';
+  document.getElementById('pfStatus').value= p.status || 'open';
+  document.getElementById('projectForm').classList.remove('d-none');
+  document.getElementById('pfName').focus();
+}
+
+async function loadProjects() {
+  const div = document.getElementById('projectList');
+  div.innerHTML = '<div class="text-muted small">Loading…</div>';
+  const r = await fetch('/api/projects');
+  const d = await r.json();
+  const projects = d.projects || [];
+  if (!projects.length) {
+    div.innerHTML = '<div class="text-muted small">No projects yet. Click New Project to create one.</div>';
+    return;
+  }
+  div.innerHTML = projects.map(p => {
+    const spent   = p.spent || 0;
+    const budget  = p.budget || 0;
+    const pct     = budget ? Math.min(100, Math.round(spent / budget * 100)) : null;
+    const over    = budget && spent > budget;
+    const barCol  = over ? 'bg-danger' : pct > 80 ? 'bg-warning' : 'bg-success';
+    const statusBadge = p.status === 'closed'
+      ? '<span class="badge bg-secondary ms-2">Closed</span>'
+      : '<span class="badge bg-success ms-2">Open</span>';
+    return `<div class="card mb-3 p-3 shadow-sm">
+      <div class="d-flex justify-content-between align-items-start">
+        <div class="flex-grow-1">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <strong class="fs-6">${p.name}</strong>${statusBadge}
+          </div>
+          ${p.desc ? `<div class="text-muted small mb-2">${p.desc}</div>` : ''}
+          <div class="d-flex gap-4 mb-2">
+            <div><div class="small text-muted">Spent</div><div class="fw-bold text-danger">₹${Math.round(spent).toLocaleString('en-IN')}</div></div>
+            ${budget ? `<div><div class="small text-muted">Budget</div><div class="fw-bold">₹${Math.round(budget).toLocaleString('en-IN')}</div></div>` : ''}
+            ${budget ? `<div><div class="small text-muted">Remaining</div><div class="fw-bold ${over?'text-danger':'text-success'}">₹${Math.round(budget-spent).toLocaleString('en-IN')}</div></div>` : ''}
+          </div>
+          ${budget ? `<div class="progress mb-2" style="height:6px"><div class="progress-bar ${barCol}" style="width:${pct}%"></div></div>` : ''}
+          <button class="btn btn-sm btn-outline-primary" onclick="loadProjectTxns('${p.id}','${p.name}')">
+            <i class="bi bi-list-ul me-1"></i>${p.txn_count||0} transactions
+          </button>
+        </div>
+        <div class="d-flex flex-column gap-1 ms-3">
+          <button class="btn btn-sm btn-outline-secondary" onclick="editProject(${JSON.stringify(p).replace(/"/g,'&quot;')})"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteProject('${p.id}')"><i class="bi bi-trash"></i></button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadProjectTxns(projectId, projectName) {
+  const panel = document.getElementById('projectTxns');
+  const body  = document.getElementById('projectTxnsBody');
+  document.getElementById('projectTxnsTitle').textContent = projectName;
+  body.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-2">Loading…</td></tr>';
+  panel.classList.remove('d-none');
+  panel.scrollIntoView({behavior:'smooth', block:'start'});
+  const r = await fetch('/api/projects/' + projectId + '/transactions');
+  const d = await r.json();
+  const txns = d.transactions || [];
+  if (!txns.length) {
+    body.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-3">No transactions tagged yet.</td></tr>';
+    return;
+  }
+  let total = 0;
+  body.innerHTML = txns.map(t => {
+    const amt = t.debit || 0;
+    total += amt;
+    return `<tr>
+      <td style="white-space:nowrap">${t.date||''}</td>
+      <td><span class="badge bg-light text-dark border">${t.account||'—'}</span></td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.raw_description||''}">${t.paid_to||t.raw_description||'—'}</td>
+      <td>${t.heading||'—'}</td>
+      <td class="text-end fw-semibold text-danger">₹${Math.round(amt).toLocaleString('en-IN')}</td>
+    </tr>`;
+  }).join('') + `<tr class="table-light fw-bold">
+    <td colspan="4" class="text-end">Total</td>
+    <td class="text-end text-danger">₹${Math.round(total).toLocaleString('en-IN')}</td>
+  </tr>`;
 }
 
 async function loadCCBalance() {
