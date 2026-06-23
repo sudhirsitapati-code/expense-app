@@ -1728,7 +1728,7 @@ def api_debug_mis_actuals():
 def api_ledger_update(txn_id):
     """Update type, heading, paid_to, remarks, saving_agreed for a transaction."""
     data    = request.get_json() or {}
-    allowed = {"paid_to","type","heading","remarks","saving_agreed"}
+    allowed = {"account","paid_to","type","heading","remarks","saving_agreed"}
     updates = {k: v for k, v in data.items() if k in allowed}
     if not updates:
         return jsonify({"error": "no valid fields"}), 400

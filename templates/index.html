@@ -615,6 +615,18 @@
       <div class="modal-body">
         <input type="hidden" id="editTxnId">
         <div class="mb-2">
+          <label class="form-label small fw-semibold">Account</label>
+          <select class="form-select form-select-sm" id="editAccount">
+            <option value="SBI-4852">SBI-4852</option>
+            <option value="ICICI-1331">ICICI-1331</option>
+            <option value="ICICI-0018">ICICI-0018</option>
+            <option value="ICICI-9175">ICICI-9175</option>
+            <option value="ICICI-7009">ICICI-7009</option>
+            <option value="ICICI-7281">ICICI-7281</option>
+            <option value="cash">cash</option>
+          </select>
+        </div>
+        <div class="mb-2">
           <label class="form-label small fw-semibold">Type</label>
           <select class="form-select form-select-sm" id="editType" onchange="refreshEditHeadings(this.value)">
             <option value="expense">Expense</option>
@@ -1385,8 +1397,9 @@ function refreshEditHeadings(type, current) {
 
 function openEdit(txnId, txnEncoded) {
   const t = JSON.parse(decodeURIComponent(txnEncoded));
-  document.getElementById('editTxnId').value  = txnId;
-  document.getElementById('editType').value   = (t.type || 'expense').toLowerCase();
+  document.getElementById('editTxnId').value   = txnId;
+  document.getElementById('editAccount').value = t.account || 'SBI-4852';
+  document.getElementById('editType').value    = (t.type || 'expense').toLowerCase();
   refreshEditHeadings(t.type, t.heading || '');
   document.getElementById('editPaidTo').value  = t.paid_to || '';
   document.getElementById('editRemarks').value = t.remarks || '';
@@ -1396,6 +1409,7 @@ function openEdit(txnId, txnEncoded) {
 async function saveEdit() {
   const txnId = document.getElementById('editTxnId').value;
   const updates = {
+    account: document.getElementById('editAccount').value,
     type:    document.getElementById('editType').value,
     heading: document.getElementById('editHeading').value || null,
     paid_to: document.getElementById('editPaidTo').value,
