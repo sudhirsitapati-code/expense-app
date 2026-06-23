@@ -299,7 +299,6 @@
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('transfer-recon',this)"><i class="bi bi-arrow-left-right me-1"></i>Transfer Recon
     <span id="unreconBadge" class="badge bg-danger ms-1 d-none">0</span>
   </a></li>
-  <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('year',this)"><i class="bi bi-calendar3 me-1"></i>Year</a></li>
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('projects',this)"><i class="bi bi-folder2-open me-1"></i>Projects</a></li>
 </ul>
 
@@ -604,51 +603,127 @@
 
 <!-- ── Projects ── -->
 <div id="rp-projects" class="d-none">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h6 class="mb-0 fw-bold text-primary"><i class="bi bi-folder2-open me-2"></i>Projects</h6>
-    <button class="btn btn-sm btn-primary" onclick="showNewProjectForm()"><i class="bi bi-plus me-1"></i>New Project</button>
+
+  <!-- List view -->
+  <div id="projectListView">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h6 class="mb-0 fw-bold text-primary"><i class="bi bi-folder2-open me-2"></i>Projects</h6>
+      <button class="btn btn-sm btn-primary" onclick="showNewProjectForm()"><i class="bi bi-plus me-1"></i>New Project</button>
+    </div>
+    <div id="projectForm" class="card p-3 mb-3 d-none">
+      <input type="hidden" id="pfId">
+      <div class="row g-2 mb-2">
+        <div class="col-sm-4"><input class="form-control form-control-sm" id="pfName" placeholder="Project name"></div>
+        <div class="col-sm-3"><input class="form-control form-control-sm" id="pfContractor" placeholder="Contractor name"></div>
+        <div class="col-sm-2"><input class="form-control form-control-sm" id="pfBudget" type="number" placeholder="Budget (₹)"></div>
+        <div class="col-sm-2"><select class="form-select form-select-sm" id="pfStatus"><option value="open">Open</option><option value="closed">Closed</option></select></div>
+      </div>
+      <div class="mb-2"><input class="form-control form-control-sm" id="pfDesc" placeholder="Description (optional)"></div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-primary" onclick="saveProject()">Save</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('projectForm').classList.add('d-none')">Cancel</button>
+      </div>
+    </div>
+    <div id="projectList"><div class="text-muted small">Loading…</div></div>
   </div>
 
-  <!-- New / Edit project form -->
-  <div id="projectForm" class="card p-3 mb-3 d-none">
-    <input type="hidden" id="pfId">
-    <div class="row g-2 mb-2">
-      <div class="col-sm-5">
-        <input class="form-control form-control-sm" id="pfName" placeholder="Project name (e.g. Greenhouse)">
+  <!-- Detail view -->
+  <div id="projectDetailView" class="d-none">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <button class="btn btn-sm btn-outline-secondary me-2" onclick="closeProjectDetail()"><i class="bi bi-arrow-left me-1"></i>Back</button>
+        <strong id="pdTitle" class="fs-6"></strong>
+        <span id="pdStatusBadge" class="ms-2"></span>
       </div>
-      <div class="col-sm-3">
-        <input class="form-control form-control-sm" id="pfBudget" type="number" placeholder="Budget (₹)">
-      </div>
-      <div class="col-sm-2">
-        <select class="form-select form-select-sm" id="pfStatus">
-          <option value="open">Open</option>
-          <option value="closed">Closed</option>
-        </select>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-secondary" id="pdEditBtn" onclick="editCurrentProject()"><i class="bi bi-pencil me-1"></i>Edit</button>
       </div>
     </div>
-    <div class="mb-2">
-      <input class="form-control form-control-sm" id="pfDesc" placeholder="Description (optional)">
-    </div>
-    <div class="d-flex gap-2">
-      <button class="btn btn-sm btn-primary" onclick="saveProject()">Save</button>
-      <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('projectForm').classList.add('d-none')">Cancel</button>
-    </div>
-  </div>
 
-  <!-- Project cards -->
-  <div id="projectList"><div class="text-muted small">Loading…</div></div>
-
-  <!-- Transaction drill-down -->
-  <div id="projectTxns" class="d-none mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h6 class="mb-0 fw-semibold" id="projectTxnsTitle"></h6>
-      <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('projectTxns').classList.add('d-none')">✕ Close</button>
+    <!-- Summary bar -->
+    <div class="row g-2 mb-3">
+      <div class="col-6 col-md-3"><div class="card border-0 bg-light h-100"><div class="card-body py-2 px-3">
+        <div class="text-muted small">Contractor</div><div class="fw-semibold" id="pdContractor">—</div>
+      </div></div></div>
+      <div class="col-6 col-md-3"><div class="card border-0 bg-light h-100"><div class="card-body py-2 px-3">
+        <div class="text-muted small">Budget</div><div class="fw-semibold" id="pdBudget">—</div>
+      </div></div></div>
+      <div class="col-6 col-md-3"><div class="card border-0 bg-light h-100"><div class="card-body py-2 px-3">
+        <div class="text-muted small">Billed (items)</div><div class="fw-semibold text-danger" id="pdItemTotal">—</div>
+      </div></div></div>
+      <div class="col-6 col-md-3"><div class="card border-0 bg-light h-100"><div class="card-body py-2 px-3">
+        <div class="text-muted small">Paid (ledger)</div><div class="fw-semibold text-warning" id="pdLedgerTotal">—</div>
+      </div></div></div>
     </div>
-    <div class="table-responsive">
-      <table class="table table-sm table-hover">
-        <thead><tr><th>Date</th><th>Account</th><th>Description</th><th>Heading</th><th class="text-end">Amount</th></tr></thead>
-        <tbody id="projectTxnsBody"></tbody>
-      </table>
+    <div id="pdProgressWrap" class="mb-3 d-none">
+      <div class="d-flex justify-content-between small text-muted mb-1">
+        <span>Budget used</span><span id="pdPct"></span>
+      </div>
+      <div class="progress" style="height:8px">
+        <div class="progress-bar" id="pdBar" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Tabs within detail -->
+    <ul class="nav nav-tabs mb-3" id="pdTabs">
+      <li class="nav-item"><a class="nav-link active" href="#" onclick="switchPdTab('items',this)">Bill of Materials</a></li>
+      <li class="nav-item"><a class="nav-link" href="#" onclick="switchPdTab('attachments',this)">Estimates &amp; Bills</a></li>
+      <li class="nav-item"><a class="nav-link" href="#" onclick="switchPdTab('txns',this)">Ledger Transactions</a></li>
+    </ul>
+
+    <!-- Bill of Materials -->
+    <div id="pd-items">
+      <div class="table-responsive mb-2">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Material / Description</th>
+              <th class="text-end" style="width:90px">Qty</th>
+              <th class="text-end" style="width:110px">Price/Unit (₹)</th>
+              <th class="text-end" style="width:110px">Value (₹)</th>
+              <th style="width:200px">AI Comment</th>
+              <th style="width:60px"></th>
+            </tr>
+          </thead>
+          <tbody id="pdItemsBody"></tbody>
+          <tfoot>
+            <tr class="table-light fw-bold">
+              <td colspan="3" class="text-end">Total</td>
+              <td class="text-end text-danger" id="pdItemsTotal">—</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <button class="btn btn-sm btn-outline-primary" onclick="addItemRow()"><i class="bi bi-plus me-1"></i>Add Item</button>
+    </div>
+
+    <!-- Attachments -->
+    <div id="pd-attachments" class="d-none">
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">Attach Estimate or Bill</label>
+        <div class="d-flex gap-2 align-items-center">
+          <input type="file" id="attachFile" class="form-control form-control-sm" accept=".pdf,.jpg,.jpeg,.png">
+          <select class="form-select form-select-sm" id="attachType" style="width:130px;flex-shrink:0">
+            <option value="estimate">Estimate</option>
+            <option value="bill">Final Bill</option>
+            <option value="other">Other</option>
+          </select>
+          <button class="btn btn-sm btn-primary flex-shrink-0" onclick="uploadAttachment()"><i class="bi bi-upload me-1"></i>Upload</button>
+        </div>
+        <div class="text-muted" style="font-size:.7rem;margin-top:4px">Max 5 MB. PDF, JPG or PNG.</div>
+      </div>
+      <div id="pdAttachList"></div>
+    </div>
+
+    <!-- Ledger transactions -->
+    <div id="pd-txns" class="d-none">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead><tr><th>Date</th><th>Account</th><th>Description</th><th>Heading</th><th class="text-end">Amount</th></tr></thead>
+          <tbody id="pdTxnsBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -752,24 +827,18 @@ function setYear(fy) {
   if (activeReport === 'ledger' || activeReport === 'notsure') loadLedger();
   if (activeReport === 'mis')           loadMIS('ytd', document.getElementById('misBtnYtd'));
   if (activeReport === 'transfer-recon') loadTransferRecon();
-  if (activeReport === 'year') {
-    const yearMap = {FY27:'FY27', FY26:'FY26', FY25:'FY25', FY24:'FY25'};
-    const btnMap  = {FY27:'fyBtn27', FY26:'fyBtn26', FY25:'fyBtn25', FY24:'fyBtn25'};
-    loadYear(yearMap[fy]||'FY27', document.getElementById(btnMap[fy]||'fyBtn27'));
-  }
 }
 
 function switchReport(name, el) {
   document.querySelectorAll('#reportTabs .nav-link').forEach(l => l.classList.remove('active'));
   el.classList.add('active');
-  ['ledger','notsure','mis','insights','acct-status','transfer-recon','year','projects'].forEach(n =>
+  ['ledger','notsure','mis','insights','acct-status','transfer-recon','projects'].forEach(n =>
     document.getElementById('rp-' + n).classList.toggle('d-none', n !== name));
   if (name === 'ledger' || name === 'notsure') loadLedger();
   if (name === 'mis')             loadMIS('ytd', document.getElementById('misBtnYtd'));
   if (name === 'insights')        { loadInsights(); loadCCBalance(); loadSavedInsights(); }
   if (name === 'acct-status')     loadAcctStatus();
   if (name === 'transfer-recon')  loadTransferRecon();
-  if (name === 'year')            loadYear('FY27', document.getElementById('fyBtn27'));
   if (name === 'projects')        loadProjects();
   return false;
 }
@@ -1796,30 +1865,61 @@ async function loadSavedInsights() {
 
 // ── Projects ───────────────────────────────────────────────────────────────
 
+let _currentProject = null;
+
+function switchPdTab(name, el) {
+  document.querySelectorAll('#pdTabs .nav-link').forEach(l => l.classList.remove('active'));
+  el.classList.add('active');
+  ['items','attachments','txns'].forEach(n =>
+    document.getElementById('pd-' + n).classList.toggle('d-none', n !== name));
+  if (name === 'txns') renderProjectTxns(_currentProject);
+  if (name === 'attachments') renderProjectAttachments(_currentProject);
+}
+
 function showNewProjectForm() {
-  document.getElementById('pfId').value    = '';
-  document.getElementById('pfName').value  = '';
-  document.getElementById('pfBudget').value= '';
-  document.getElementById('pfDesc').value  = '';
-  document.getElementById('pfStatus').value= 'open';
+  document.getElementById('pfId').value = '';
+  document.getElementById('pfName').value = '';
+  document.getElementById('pfContractor').value = '';
+  document.getElementById('pfBudget').value = '';
+  document.getElementById('pfDesc').value = '';
+  document.getElementById('pfStatus').value = 'open';
   document.getElementById('projectForm').classList.remove('d-none');
   document.getElementById('pfName').focus();
 }
 
 async function saveProject() {
-  const id     = document.getElementById('pfId').value;
-  const name   = document.getElementById('pfName').value.trim();
-  const budget = parseFloat(document.getElementById('pfBudget').value) || 0;
-  const desc   = document.getElementById('pfDesc').value.trim();
-  const status = document.getElementById('pfStatus').value;
-  if (!name) return;
-  await fetch('/api/projects', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({id: id||undefined, name, budget, desc, status})
-  });
+  const id = document.getElementById('pfId').value;
+  const payload = {
+    id: id || undefined,
+    name: document.getElementById('pfName').value.trim(),
+    contractor: document.getElementById('pfContractor').value.trim(),
+    budget: parseFloat(document.getElementById('pfBudget').value) || 0,
+    desc: document.getElementById('pfDesc').value.trim(),
+    status: document.getElementById('pfStatus').value,
+  };
+  if (!payload.name) return;
+  await fetch('/api/projects', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
   document.getElementById('projectForm').classList.add('d-none');
+  if (_currentProject) {
+    // refresh current project header
+    const r = await fetch('/api/projects'); const d = await r.json();
+    _currentProject = (d.projects||[]).find(p => p.id === (id || _currentProject.id)) || _currentProject;
+    renderProjectHeader(_currentProject);
+  }
   loadProjects();
+}
+
+function editCurrentProject() {
+  const p = _currentProject;
+  if (!p) return;
+  document.getElementById('pfId').value = p.id;
+  document.getElementById('pfName').value = p.name;
+  document.getElementById('pfContractor').value = p.contractor || '';
+  document.getElementById('pfBudget').value = p.budget || '';
+  document.getElementById('pfDesc').value = p.desc || '';
+  document.getElementById('pfStatus').value = p.status || 'open';
+  document.getElementById('projectForm').classList.remove('d-none');
+  document.getElementById('projectListView').scrollIntoView({behavior:'smooth'});
 }
 
 async function deleteProject(id) {
@@ -1828,14 +1928,50 @@ async function deleteProject(id) {
   loadProjects();
 }
 
-function editProject(p) {
-  document.getElementById('pfId').value    = p.id;
-  document.getElementById('pfName').value  = p.name;
-  document.getElementById('pfBudget').value= p.budget || '';
-  document.getElementById('pfDesc').value  = p.desc || '';
-  document.getElementById('pfStatus').value= p.status || 'open';
-  document.getElementById('projectForm').classList.remove('d-none');
-  document.getElementById('pfName').focus();
+function closeProjectDetail() {
+  _currentProject = null;
+  document.getElementById('projectDetailView').classList.add('d-none');
+  document.getElementById('projectListView').classList.remove('d-none');
+}
+
+function renderProjectHeader(p) {
+  document.getElementById('pdTitle').textContent = p.name;
+  document.getElementById('pdStatusBadge').innerHTML = p.status === 'closed'
+    ? '<span class="badge bg-secondary">Closed</span>'
+    : '<span class="badge bg-success">Open</span>';
+  document.getElementById('pdContractor').textContent = p.contractor || '—';
+  document.getElementById('pdBudget').textContent = p.budget ? '₹' + Math.round(p.budget).toLocaleString('en-IN') : '—';
+  document.getElementById('pdLedgerTotal').textContent = '₹' + (p.spent||0).toLocaleString('en-IN');
+  const items = p.items || [];
+  const itemTotal = items.reduce((s,i) => s + (parseFloat(i.value)||0), 0);
+  document.getElementById('pdItemTotal').textContent = '₹' + Math.round(itemTotal).toLocaleString('en-IN');
+  const budget = p.budget || 0;
+  if (budget) {
+    const pct = Math.min(100, Math.round(itemTotal / budget * 100));
+    document.getElementById('pdProgressWrap').classList.remove('d-none');
+    document.getElementById('pdPct').textContent = pct + '%';
+    const bar = document.getElementById('pdBar');
+    bar.style.width = pct + '%';
+    bar.className = 'progress-bar ' + (pct > 100 ? 'bg-danger' : pct > 80 ? 'bg-warning' : 'bg-success');
+  } else {
+    document.getElementById('pdProgressWrap').classList.add('d-none');
+  }
+}
+
+async function openProject(projectId) {
+  const r = await fetch('/api/projects');
+  const d = await r.json();
+  const p = (d.projects||[]).find(x => x.id === projectId);
+  if (!p) return;
+  _currentProject = p;
+  document.getElementById('projectListView').classList.add('d-none');
+  document.getElementById('projectDetailView').classList.remove('d-none');
+  // reset to items tab
+  document.querySelectorAll('#pdTabs .nav-link').forEach((l,i) => l.classList.toggle('active', i===0));
+  ['items','attachments','txns'].forEach((n,i) => document.getElementById('pd-' + n).classList.toggle('d-none', i!==0));
+  renderProjectHeader(p);
+  renderProjectItems(p);
+  renderProjectAttachments(p);
 }
 
 async function loadProjects() {
@@ -1849,33 +1985,32 @@ async function loadProjects() {
     return;
   }
   div.innerHTML = projects.map(p => {
-    const spent   = p.spent || 0;
-    const budget  = p.budget || 0;
-    const pct     = budget ? Math.min(100, Math.round(spent / budget * 100)) : null;
-    const over    = budget && spent > budget;
-    const barCol  = over ? 'bg-danger' : pct > 80 ? 'bg-warning' : 'bg-success';
+    const items = p.items || [];
+    const itemTotal = items.reduce((s,i) => s + (parseFloat(i.value)||0), 0);
+    const budget = p.budget || 0;
+    const pct = budget ? Math.min(100, Math.round(itemTotal / budget * 100)) : null;
+    const over = budget && itemTotal > budget;
+    const barCol = over ? 'bg-danger' : pct > 80 ? 'bg-warning' : 'bg-success';
     const statusBadge = p.status === 'closed'
       ? '<span class="badge bg-secondary ms-2">Closed</span>'
       : '<span class="badge bg-success ms-2">Open</span>';
-    return `<div class="card mb-3 p-3 shadow-sm">
+    return `<div class="card mb-3 p-3 shadow-sm" style="cursor:pointer" onclick="openProject('${p.id}')">
       <div class="d-flex justify-content-between align-items-start">
         <div class="flex-grow-1">
           <div class="d-flex align-items-center gap-2 mb-1">
-            <strong class="fs-6">${p.name}</strong>${statusBadge}
+            <strong>${p.name}</strong>${statusBadge}
+            ${p.contractor ? `<span class="text-muted small">· ${p.contractor}</span>` : ''}
           </div>
           ${p.desc ? `<div class="text-muted small mb-2">${p.desc}</div>` : ''}
           <div class="d-flex gap-4 mb-2">
-            <div><div class="small text-muted">Spent</div><div class="fw-bold text-danger">₹${Math.round(spent).toLocaleString('en-IN')}</div></div>
+            <div><div class="small text-muted">Billed</div><div class="fw-bold text-danger">₹${Math.round(itemTotal).toLocaleString('en-IN')}</div></div>
             ${budget ? `<div><div class="small text-muted">Budget</div><div class="fw-bold">₹${Math.round(budget).toLocaleString('en-IN')}</div></div>` : ''}
-            ${budget ? `<div><div class="small text-muted">Remaining</div><div class="fw-bold ${over?'text-danger':'text-success'}">₹${Math.round(budget-spent).toLocaleString('en-IN')}</div></div>` : ''}
+            <div><div class="small text-muted">Paid</div><div class="fw-bold text-warning">₹${(p.spent||0).toLocaleString('en-IN')}</div></div>
+            <div><div class="small text-muted">Items</div><div class="fw-bold">${items.length}</div></div>
           </div>
-          ${budget ? `<div class="progress mb-2" style="height:6px"><div class="progress-bar ${barCol}" style="width:${pct}%"></div></div>` : ''}
-          <button class="btn btn-sm btn-outline-primary" onclick="loadProjectTxns('${p.id}','${p.name}')">
-            <i class="bi bi-list-ul me-1"></i>${p.txn_count||0} transactions
-          </button>
+          ${budget ? `<div class="progress" style="height:5px"><div class="progress-bar ${barCol}" style="width:${pct}%"></div></div>` : ''}
         </div>
-        <div class="d-flex flex-column gap-1 ms-3">
-          <button class="btn btn-sm btn-outline-secondary" onclick="editProject(${JSON.stringify(p).replace(/"/g,'&quot;')})"><i class="bi bi-pencil"></i></button>
+        <div class="ms-3 d-flex gap-1" onclick="event.stopPropagation()">
           <button class="btn btn-sm btn-outline-danger" onclick="deleteProject('${p.id}')"><i class="bi bi-trash"></i></button>
         </div>
       </div>
@@ -1883,28 +2018,185 @@ async function loadProjects() {
   }).join('');
 }
 
-async function loadProjectTxns(projectId, projectName) {
-  const panel = document.getElementById('projectTxns');
-  const body  = document.getElementById('projectTxnsBody');
-  document.getElementById('projectTxnsTitle').textContent = projectName;
+// ── Bill of materials ───────────────────────────────────────────────────────
+
+function renderProjectItems(p) {
+  const tbody = document.getElementById('pdItemsBody');
+  const items = p.items || [];
+  tbody.innerHTML = items.map((item, idx) => itemRow(item, idx)).join('');
+  updateItemsTotal();
+}
+
+function itemRow(item, idx) {
+  return `<tr id="item-row-${item.id}">
+    <td><input class="form-control form-control-sm" value="${item.material||''}" placeholder="Material / description"
+      onchange="updateItemField('${item.id}','material',this.value)"></td>
+    <td><input class="form-control form-control-sm text-end" type="number" value="${item.qty||''}" placeholder="0"
+      oninput="recalcItemValue('${item.id}',this)" style="width:80px"></td>
+    <td><input class="form-control form-control-sm text-end" type="number" value="${item.unit_price||''}" placeholder="0"
+      oninput="recalcItemValue('${item.id}',this)" style="width:100px"></td>
+    <td><input class="form-control form-control-sm text-end" type="number" value="${item.value||''}" placeholder="0"
+      id="item-val-${item.id}" oninput="updateItemField('${item.id}','value',parseFloat(this.value)||0);updateItemsTotal()"></td>
+    <td>
+      <div class="d-flex align-items-center gap-1">
+        <span class="text-muted small flex-grow-1" id="item-ai-${item.id}" style="font-size:.7rem">${item.ai_comment||''}</span>
+        <button class="btn btn-link btn-sm p-0 text-muted flex-shrink-0" title="Get AI price check"
+          onclick="aiPriceCheck('${item.id}')" style="font-size:.75rem"><i class="bi bi-robot"></i></button>
+      </div>
+    </td>
+    <td>
+      <div class="d-flex gap-1">
+        <button class="btn btn-sm btn-primary py-0 px-1" onclick="saveItem('${item.id}')" title="Save"><i class="bi bi-save" style="font-size:.7rem"></i></button>
+        <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteItem('${item.id}')" title="Delete"><i class="bi bi-trash" style="font-size:.7rem"></i></button>
+      </div>
+    </td>
+  </tr>`;
+}
+
+function updateItemsTotal() {
+  let total = 0;
+  document.querySelectorAll('[id^="item-val-"]').forEach(inp => {
+    total += parseFloat(inp.value) || 0;
+  });
+  document.getElementById('pdItemsTotal').textContent = '₹' + Math.round(total).toLocaleString('en-IN');
+  if (_currentProject) document.getElementById('pdItemTotal').textContent = '₹' + Math.round(total).toLocaleString('en-IN');
+}
+
+function recalcItemValue(itemId, changedInput) {
+  const row = document.getElementById('item-row-' + itemId);
+  const inputs = row.querySelectorAll('input[type="number"]');
+  const qty   = parseFloat(inputs[0].value) || 0;
+  const price = parseFloat(inputs[1].value) || 0;
+  const valInp = document.getElementById('item-val-' + itemId);
+  valInp.value = qty && price ? (qty * price).toFixed(2) : '';
+  updateItemField(itemId, 'qty', qty);
+  updateItemField(itemId, 'unit_price', price);
+  updateItemField(itemId, 'value', parseFloat(valInp.value) || 0);
+  updateItemsTotal();
+}
+
+function updateItemField(itemId, field, value) {
+  if (!_currentProject) return;
+  const item = (_currentProject.items||[]).find(i => i.id === itemId);
+  if (item) item[field] = value;
+}
+
+function addItemRow() {
+  if (!_currentProject) return;
+  const newItem = {id: 'new_' + Date.now(), material:'', qty:0, unit_price:0, value:0, ai_comment:''};
+  if (!_currentProject.items) _currentProject.items = [];
+  _currentProject.items.push(newItem);
+  const tbody = document.getElementById('pdItemsBody');
+  tbody.insertAdjacentHTML('beforeend', itemRow(newItem, _currentProject.items.length - 1));
+  tbody.lastElementChild.querySelector('input').focus();
+}
+
+async function saveItem(itemId) {
+  if (!_currentProject) return;
+  await fetch(`/api/projects/${_currentProject.id}/items`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({items: _currentProject.items})
+  });
+  // refresh project
+  const r = await fetch('/api/projects'); const d = await r.json();
+  _currentProject = (d.projects||[]).find(p => p.id === _currentProject.id) || _currentProject;
+  renderProjectHeader(_currentProject);
+}
+
+async function deleteItem(itemId) {
+  if (!_currentProject) return;
+  _currentProject.items = (_currentProject.items||[]).filter(i => i.id !== itemId);
+  document.getElementById('item-row-' + itemId)?.remove();
+  updateItemsTotal();
+  await fetch(`/api/projects/${_currentProject.id}/items`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({items: _currentProject.items})
+  });
+}
+
+async function aiPriceCheck(itemId) {
+  const item = (_currentProject?.items||[]).find(i => i.id === itemId);
+  if (!item || !item.material) return;
+  const span = document.getElementById('item-ai-' + itemId);
+  span.textContent = '…';
+  const r = await fetch(`/api/projects/${_currentProject.id}/items/${itemId}/ai-comment`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({material: item.material, qty: item.qty, unit_price: item.unit_price, value: item.value})
+  });
+  const d = await r.json();
+  span.textContent = d.comment || '';
+  item.ai_comment = d.comment || '';
+}
+
+// ── Attachments ────────────────────────────────────────────────────────────
+
+function renderProjectAttachments(p) {
+  const div = document.getElementById('pdAttachList');
+  const attachments = p.attachments || [];
+  if (!attachments.length) {
+    div.innerHTML = '<div class="text-muted small">No files attached yet.</div>';
+    return;
+  }
+  div.innerHTML = attachments.map(a => `
+    <div class="d-flex align-items-center gap-2 mb-2 p-2 border rounded">
+      <i class="bi ${a.content_type==='application/pdf'?'bi-file-pdf text-danger':'bi-image text-primary'} fs-5"></i>
+      <div class="flex-grow-1">
+        <div class="fw-semibold small">${a.name}</div>
+        <div class="text-muted" style="font-size:.7rem">${a.type} · ${(a.uploaded_at||'').slice(0,10)}</div>
+      </div>
+      <a class="btn btn-sm btn-outline-primary" href="/api/projects/${p.id}/attachments/${a.id}" target="_blank">
+        <i class="bi bi-download me-1"></i>Open
+      </a>
+      <button class="btn btn-sm btn-outline-danger" onclick="deleteAttachment('${a.id}')">✕</button>
+    </div>`).join('');
+}
+
+async function uploadAttachment() {
+  if (!_currentProject) return;
+  const file = document.getElementById('attachFile').files[0];
+  const type = document.getElementById('attachType').value;
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { alert('File too large (max 5 MB)'); return; }
+  const btn = document.querySelector('#pd-attachments button.btn-primary');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  const form = new FormData();
+  form.append('file', file);
+  form.append('type', type);
+  await fetch(`/api/projects/${_currentProject.id}/attachments`, {method:'POST', body: form});
+  // refresh
+  const r = await fetch('/api/projects'); const d = await r.json();
+  _currentProject = (d.projects||[]).find(p => p.id === _currentProject.id) || _currentProject;
+  renderProjectAttachments(_currentProject);
+  document.getElementById('attachFile').value = '';
+  btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload me-1"></i>Upload';
+}
+
+async function deleteAttachment(attachId) {
+  if (!_currentProject) return;
+  await fetch(`/api/projects/${_currentProject.id}/attachments/${attachId}`, {method:'DELETE'});
+  const r = await fetch('/api/projects'); const d = await r.json();
+  _currentProject = (d.projects||[]).find(p => p.id === _currentProject.id) || _currentProject;
+  renderProjectAttachments(_currentProject);
+}
+
+async function renderProjectTxns(p) {
+  const body = document.getElementById('pdTxnsBody');
   body.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-2">Loading…</td></tr>';
-  panel.classList.remove('d-none');
-  panel.scrollIntoView({behavior:'smooth', block:'start'});
-  const r = await fetch('/api/projects/' + projectId + '/transactions');
+  const r = await fetch('/api/projects/' + p.id + '/transactions');
   const d = await r.json();
   const txns = d.transactions || [];
   if (!txns.length) {
-    body.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-3">No transactions tagged yet.</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-3">No ledger transactions tagged to this project yet.</td></tr>';
     return;
   }
   let total = 0;
   body.innerHTML = txns.map(t => {
-    const amt = t.debit || 0;
+    const amt = parseFloat(t.debit||0);
     total += amt;
     return `<tr>
       <td style="white-space:nowrap">${t.date||''}</td>
       <td><span class="badge bg-light text-dark border">${t.account||'—'}</span></td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.raw_description||''}">${t.paid_to||t.raw_description||'—'}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.paid_to||t.raw_description||'—'}</td>
       <td>${t.heading||'—'}</td>
       <td class="text-end fw-semibold text-danger">₹${Math.round(amt).toLocaleString('en-IN')}</td>
     </tr>`;

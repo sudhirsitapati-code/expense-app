@@ -2445,7 +2445,11 @@ def api_projects_list():
         matched = [t for t in ledger if t.get("project") in (p["id"], p["name"])]
         p["spent"]     = round(sum(float(t.get("debit") or 0) for t in matched))
         p["txn_count"] = len(matched)
-    return jsonify({"projects": projects})
+    def _clean(p):
+        out = dict(p)
+        out["attachments"] = [{k:v for k,v in a.items() if k != "data_b64"} for a in p.get("attachments",[])]
+        return out
+    return jsonify({"projects": [_clean(p) for p in projects]})
 
 
 @app.route("/api/projects", methods=["POST"])
@@ -2458,16 +2462,19 @@ def api_projects_save():
     if pid:
         for p in projects:
             if p["id"] == pid:
-                p.update({k: data[k] for k in ("name","budget","desc","status") if k in data})
+                p.update({k: data[k] for k in ("name","budget","desc","status","contractor") if k in data})
                 break
     else:
         projects.append({
-            "id":         str(uuid.uuid4()),
-            "name":       data.get("name","Unnamed"),
-            "budget":     data.get("budget", 0),
-            "desc":       data.get("desc",""),
-            "status":     data.get("status","open"),
-            "created_at": datetime.now().isoformat(),
+            "id":          str(uuid.uuid4()),
+            "name":        data.get("name","Unnamed"),
+            "contractor":  data.get("contractor",""),
+            "budget":      data.get("budget", 0),
+            "desc":        data.get("desc",""),
+            "status":      data.get("status","open"),
+            "items":       [],
+            "attachments": [],
+            "created_at":  datetime.now().isoformat(),
         })
     db.save("projects", projects)
     return jsonify({"ok": True})
@@ -2493,6 +2500,126 @@ def api_project_transactions(project_id):
     txns   = [t for t in ledger if t.get("project") in (project_id, proj["name"])]
     txns.sort(key=lambda t: (t.get("date") or t.get("timestamp","") or ""), reverse=True)
     return jsonify({"transactions": txns})
+
+
+@app.route("/api/projects/<project_id>/items", methods=["POST"])
+@login_required
+def api_project_items_save(project_id):
+    projects = db.load("projects", [])
+    proj = next((p for p in projects if p["id"] == project_id), None)
+    if not proj:
+        return jsonify({"error": "not found"}), 404
+    data = request.get_json() or {}
+    proj["items"] = data.get("items", [])
+    db.save("projects", projects)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/projects/<project_id>/items/<item_id>/ai-comment", methods=["POST"])
+@login_required
+def api_project_item_ai(project_id, item_id):
+    try:
+        from openai import AzureOpenAI
+        client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_KEY"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION","2024-12-01-preview"),
+        )
+        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT","gpt-5.5")
+    except Exception as e:
+        return jsonify({"comment": f"AI unavailable: {e}"})
+
+    data = request.get_json() or {}
+    material   = data.get("material","")
+    qty        = data.get("qty", 0)
+    unit_price = data.get("unit_price", 0)
+    value      = data.get("value", 0)
+
+    prompt = f"""You are evaluating a construction/project line item for a residential property in Mumbai, India.
+Item: {material}
+Quantity: {qty}
+Price per unit: ₹{unit_price}
+Total value: ₹{value}
+
+Give a 1-sentence assessment: is this price reasonable for Mumbai in 2025-26? Flag if it seems high or low. Be specific."""
+
+    try:
+        resp = client.chat.completions.create(
+            model=deployment,
+            max_completion_tokens=120,
+            messages=[{"role":"user","content":prompt}]
+        )
+        comment = resp.choices[0].message.content.strip()
+    except Exception as e:
+        comment = f"Error: {e}"
+
+    # save comment back to item
+    projects = db.load("projects", [])
+    proj = next((p for p in projects if p["id"] == project_id), None)
+    if proj:
+        for item in proj.get("items", []):
+            if item.get("id") == item_id:
+                item["ai_comment"] = comment
+                break
+        db.save("projects", projects)
+    return jsonify({"comment": comment})
+
+
+@app.route("/api/projects/<project_id>/attachments", methods=["POST"])
+@login_required
+def api_project_attach_upload(project_id):
+    import uuid, base64
+    projects = db.load("projects", [])
+    proj = next((p for p in projects if p["id"] == project_id), None)
+    if not proj:
+        return jsonify({"error": "not found"}), 404
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "no file"}), 400
+    attach_type = request.form.get("type","other")
+    data_b64 = base64.b64encode(file.read()).decode()
+    attachment = {
+        "id":           str(uuid.uuid4()),
+        "name":         file.filename,
+        "type":         attach_type,
+        "content_type": file.content_type,
+        "data_b64":     data_b64,
+        "uploaded_at":  datetime.now().isoformat(),
+    }
+    if "attachments" not in proj:
+        proj["attachments"] = []
+    proj["attachments"].append(attachment)
+    db.save("projects", projects)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/projects/<project_id>/attachments/<attach_id>", methods=["GET"])
+@login_required
+def api_project_attach_download(project_id, attach_id):
+    import base64
+    from flask import Response
+    projects = db.load("projects", [])
+    proj = next((p for p in projects if p["id"] == project_id), None)
+    if not proj:
+        return jsonify({"error": "not found"}), 404
+    att = next((a for a in proj.get("attachments",[]) if a["id"] == attach_id), None)
+    if not att:
+        return jsonify({"error": "not found"}), 404
+    data = base64.b64decode(att["data_b64"])
+    return Response(data, content_type=att.get("content_type","application/octet-stream"),
+                    headers={"Content-Disposition": f'inline; filename="{att["name"]}"'})
+
+
+@app.route("/api/projects/<project_id>/attachments/<attach_id>", methods=["DELETE"])
+@login_required
+def api_project_attach_delete(project_id, attach_id):
+    projects = db.load("projects", [])
+    proj = next((p for p in projects if p["id"] == project_id), None)
+    if not proj:
+        return jsonify({"error": "not found"}), 404
+    proj["attachments"] = [a for a in proj.get("attachments",[]) if a["id"] != attach_id]
+    db.save("projects", projects)
+    return jsonify({"ok": True})
 
 
 @app.route("/export", methods=["GET"])
