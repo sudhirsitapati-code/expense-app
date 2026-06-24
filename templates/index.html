@@ -1297,6 +1297,7 @@ async function ignoreUnauth(gmailId) {
 
 // ── MASTER LEDGER ──────────────────────────────────────────────────────────
 async function loadLedger() {
+  _loadProjectCache();  // refresh project name cache for row badges
   const params = new URLSearchParams();
   const s  = document.getElementById('ledgerSearch')?.value;
   const ac = document.getElementById('ledgerAccount')?.value;
@@ -1424,12 +1425,23 @@ function renderLedger(txns) {
       <td>${typeBadge(t.type)}${tw}</td>
       <td>${t.heading||'—'}${hw}</td>
       <td class="text-muted">${t.remarks||''}</td>
-      <td>${tip}</td>
+      <td>${t.project ? `<span class="badge bg-info text-dark" style="font-size:.65rem">${_projectName(t.project)}</span>` : ''}${tip}</td>
     </tr>`;
   }).join('');
 }
 
 const TYPES    = ['expense','income','investment','transfer','official'];
+
+let _projectCache = {};  // id → name
+function _projectName(idOrName) {
+  return _projectCache[idOrName] || idOrName || '';
+}
+async function _loadProjectCache() {
+  const r = await fetch('/api/projects');
+  const d = await r.json();
+  _projectCache = {};
+  (d.projects||[]).forEach(p => { _projectCache[p.id] = p.name; });
+}
 
 const HEADINGS_BY_TYPE = {
   expense:    ['Groceries','Staff Salary','Electricity & Gas','Cash','Alcohol','Wellness',
