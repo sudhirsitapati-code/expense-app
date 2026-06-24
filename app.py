@@ -1929,7 +1929,7 @@ def _merge_approval_to_sbi_internal() -> dict:
     ledger = load_ledger()
 
     approval_entries = [t for t in ledger if t.get("source") == "approval_log"]
-    sbi_entries      = [t for t in ledger if (t.get("account") or "").find("3152") >= 0
+    sbi_entries      = [t for t in ledger if "SBI" in (t.get("account") or "").upper()
                         and t.get("source") == "sbi_statement"]
 
     to_remove_ids = set()
@@ -2024,10 +2024,10 @@ def api_migrate_cash_upi_to_sbi():
     updated = 0
     for txn in ledger:
         if (txn.get("account") or "").lower() == "cash/upi":
-            txn["account"]      = "SBI-3152"
+            txn["account"]      = "SBI-4852"
             txn["bank"]         = "SBI"
             txn["source"]       = "sbi_statement"
-            txn["account_type"] = "sbi3152"
+            txn["account_type"] = "sbi4852"
             updated += 1
     if updated:
         _save_json(LEDGER_PATH, ledger)
@@ -2040,7 +2040,7 @@ def api_merge_approval_to_sbi():
     result = _merge_approval_to_sbi_internal()
     result["total_sbi"] = sum(
         1 for t in load_ledger()
-        if (t.get("account") or "").find("3152") >= 0 and t.get("source") == "sbi_statement"
+        if "SBI" in (t.get("account") or "").upper() and t.get("source") == "sbi_statement"
     )
     return jsonify(result)
 
@@ -2984,7 +2984,7 @@ def _parse_acc27_excel(file_obj):
         heading = HEADING_FIX.get(heading, heading)
         out.append({
             'date': d.strftime('%d/%m/%Y'),
-            'account': 'SBI-3152',  # sbi4852 in Excel = SBI-3152 in ledger
+            'account': 'SBI-4852',
             'debit': debit, 'credit': credit, 'amount': amt,
             'description': str(row[4].value or '').strip(),
             'paid_to': str(row[5].value or '').strip() or None,
@@ -3014,7 +3014,7 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
 
     def _is_sbi(t):
         acct = (t.get("account") or "").upper()
-        return "SBI" in acct or "3152" in acct
+        return "SBI" in acct
 
     existing_ids = {t["txn_id"] for t in ledger}
 
@@ -3052,7 +3052,7 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
                     new_entry = {
                         "txn_id":          new_id,
                         "date":            xl.get("date",""),
-                        "account":         "SBI-3152",
+                        "account":         "SBI-4852",
                         "debit":           xl.get("debit") or 0,
                         "credit":          xl.get("credit") or 0,
                         "raw_description": xl.get("description",""),
@@ -3108,8 +3108,8 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
                 atm_fixed += 1
         _assign_seq(ledger)
         _save_json(LEDGER_PATH, ledger)
-        sbi_total    = sum(1 for t in ledger if "SBI" in (t.get("account") or "").upper() or "3152" in (t.get("account") or ""))
-        sbi_uncertain = sum(1 for t in ledger if t.get("uncertain") and ("SBI" in (t.get("account") or "").upper() or "3152" in (t.get("account") or "")))
+        sbi_total    = sum(1 for t in ledger if "SBI" in (t.get("account") or "").upper())
+        sbi_uncertain = sum(1 for t in ledger if t.get("uncertain") and "SBI" in (t.get("account") or "").upper())
         total_uncertain = sum(1 for t in ledger if t.get("uncertain"))
         return {"applied": applied, "created": created, "atm_fixed": atm_fixed,
                 "total": len(xl_list), "ledger_total": len(ledger),
@@ -3129,8 +3129,7 @@ def api_acc27_debug():
     from src.master_ledger import _parse_date as _ml_pd
     import io
     ledger  = load_ledger()
-    sbi_txns = [t for t in ledger if "SBI" in (t.get("account") or "").upper()
-                                  or "3152" in (t.get("account") or "")]
+    sbi_txns = [t for t in ledger if "SBI" in (t.get("account") or "").upper()]
     # unique accounts in ledger
     all_accounts = sorted(set(t.get("account","") for t in ledger))
     xl_list = []
@@ -3292,7 +3291,7 @@ def _parse_acc26_sudhir(file_bytes):
     from datetime import datetime as _dt
 
     _ACCT_MAP = {
-        "sbi4852":"SBI-3152","sbi":"SBI-3152",
+        "sbi4852":"SBI-4852","sbi":"SBI-4852",
         "icic0018":"ICICI-0018","ici0018":"ICICI-0018","icici0018":"ICICI-0018","ICI0018":"ICICI-0018","ICIC0018":"ICICI-0018",
         "icic7281":"ICICI-7281","ici7281":"ICICI-7281","icici7281":"ICICI-7281","ICIC7281":"ICICI-7281",
         "icic1331":"ICICI-1331","ici1331":"ICICI-1331","icici1331":"ICICI-1331","icci1331":"ICICI-1331",
@@ -3515,7 +3514,7 @@ def _parse_acc25_sudhir(file_bytes):
     from datetime import datetime as _dt
 
     _ACCT_MAP = {
-        "sbi4852":"SBI-3152","sbi":"SBI-3152",
+        "sbi4852":"SBI-4852","sbi":"SBI-4852",
         "icic0018":"ICICI-0018","ici0018":"ICICI-0018","icici0018":"ICICI-0018","ICI0018":"ICICI-0018","ICIC0018":"ICICI-0018",
         "icic7281":"ICICI-7281","ici7281":"ICICI-7281","icici7281":"ICICI-7281","ICIC7281":"ICICI-7281",
         "icic1331":"ICICI-1331","ici1331":"ICICI-1331","icici1331":"ICICI-1331","icci1331":"ICICI-1331",
@@ -3735,7 +3734,7 @@ def _parse_acc24_sudhir(file_bytes):
     from datetime import datetime as _dt
 
     _ACCT_MAP = {
-        "sbi4852":"SBI-3152","sbi":"SBI-3152",
+        "sbi4852":"SBI-4852","sbi":"SBI-4852",
         "icic0018":"ICICI-0018","ici0018":"ICICI-0018","icici0018":"ICICI-0018","ICI0018":"ICICI-0018","ICIC0018":"ICICI-0018",
         "icic7281":"ICICI-7281","ici7281":"ICICI-7281","icici7281":"ICICI-7281","ICIC7281":"ICICI-7281",
         "icic1331":"ICICI-1331","ici1331":"ICICI-1331","icici1331":"ICICI-1331","icci1331":"ICICI-1331",
