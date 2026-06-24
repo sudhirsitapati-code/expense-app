@@ -1508,7 +1508,7 @@ def get_uncertain() -> list:
 def update_transaction(txn_id: str, updates: dict) -> bool:
     """Update editable fields. Clears uncertain flag if type+heading provided."""
     ledger = _load_json(LEDGER_PATH)
-    allowed = {"paid_to","type","heading","remarks","ai_saving_tip","saving_agreed"}
+    allowed = {"paid_to","type","heading","remarks","ai_saving_tip","saving_agreed","account","project"}
     for txn in ledger:
         if txn["txn_id"] == txn_id:
             for k, v in updates.items():
