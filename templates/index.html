@@ -128,36 +128,18 @@
         </select>
       </div>
     </div>
-    <div class="mb-2">
-      <label class="form-label fw-semibold small">Category / Heading</label>
-      <select class="form-select form-select-sm" name="category" required>
-        <option value="Groceries">Groceries</option>
-        <option value="Staff Salary">Staff Salary</option>
-        <option value="Electricity &amp; Gas">Electricity &amp; Gas</option>
-        <option value="Medical">Medical</option>
-        <option value="Eating Out">Eating Out</option>
-        <option value="Entertainment">Entertainment</option>
-        <option value="Alcohol">Alcohol</option>
-        <option value="Clothes">Clothes</option>
-        <option value="Wellness">Wellness</option>
-        <option value="Children Education">Children Education</option>
-        <option value="Gifts">Gifts</option>
-        <option value="Charity">Charity</option>
-        <option value="Holiday">Holiday</option>
-        <option value="Malhar">Malhar</option>
-        <option value="Maintenance Expense">Maintenance Expense</option>
-        <option value="Kalpataru Maintenance">Kalpataru Maintenance</option>
-        <option value="One Time Charge">One Time Charge</option>
-        <option value="Home office">Home office</option>
-        <option value="Insurance">Insurance</option>
-        <option value="Home Loan">Home Loan</option>
-        <option value="Tax">Tax</option>
-        <option value="Short Term Advance">Short Term Advance</option>
-        <option value="Amma">Amma</option>
-        <option value="Ketki">Ketki</option>
-        <option value="Uspaar">Uspaar</option>
-        <option value="Misc">Misc</option>
-      </select>
+    <div class="row g-2 mb-2">
+      <div class="col">
+        <label class="form-label fw-semibold small">Type</label>
+        <select class="form-select form-select-sm" name="type" id="submitType" onchange="refreshSubmitHeadings(this.value)" required>
+          <option value="expense">Expense</option>
+          <option value="official">Official</option>
+        </select>
+      </div>
+      <div class="col">
+        <label class="form-label fw-semibold small">Heading</label>
+        <select class="form-select form-select-sm" name="category" id="submitHeading" required></select>
+      </div>
     </div>
     <div class="mb-2">
       <label class="form-label fw-semibold small">Description</label>
@@ -1517,6 +1499,12 @@ async function saveNotSure(txnId) {
   cnt.textContent = Math.max(0, parseInt(cnt.textContent||'0') - 1);
 }
 
+function refreshSubmitHeadings(type) {
+  const sel = document.getElementById('submitHeading');
+  const list = HEADINGS_BY_TYPE[type] || HEADINGS_BY_TYPE['expense'];
+  sel.innerHTML = list.map(h => `<option value="${h}">${h}</option>`).join('');
+}
+
 function refreshEditHeadings(type, current) {
   const sel = document.getElementById('editHeading');
   const cur = current !== undefined ? current : sel.value;
@@ -2594,6 +2582,7 @@ function renderYear(d) {
 // ── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadApprovals();  // pre-load badge
+  refreshSubmitHeadings('expense');  // initialise submit form headings
 });
 </script>
 </body>
