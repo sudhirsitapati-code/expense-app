@@ -341,7 +341,7 @@
       <th>Paid To</th>
       <th class="text-end" style="cursor:pointer;user-select:none" onclick="cycleSort('debit')" id="hdrDebit">Debit ↕</th>
       <th class="text-end" style="cursor:pointer;user-select:none" onclick="cycleSort('credit')" id="hdrCredit">Credit ↕</th>
-      <th>Type</th><th>Heading</th><th>Remarks</th><th>💡</th>
+      <th>Type</th><th>Heading</th><th>Remarks</th><th>Project</th><th>💡</th>
     </tr></thead>
     <tbody id="ledgerBody"></tbody>
   </table>
@@ -1425,7 +1425,8 @@ function renderLedger(txns) {
       <td>${typeBadge(t.type)}${tw}</td>
       <td>${t.heading||'—'}${hw}</td>
       <td class="text-muted">${t.remarks||''}</td>
-      <td>${t.project ? `<span class="badge bg-info text-dark" style="font-size:.65rem">${_projectName(t.project)}</span>` : ''}${tip}</td>
+      <td>${t.project ? `<span class="badge bg-info text-dark" style="font-size:.65rem">${_projectName(t.project)}</span>` : ''}</td>
+      <td>${tip}</td>
     </tr>`;
   }).join('');
 }
