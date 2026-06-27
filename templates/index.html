@@ -282,6 +282,7 @@
     <span id="unreconBadge" class="badge bg-danger ms-1 d-none">0</span>
   </a></li>
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('projects',this)"><i class="bi bi-folder2-open me-1"></i>Projects</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchReport('cash-register',this)"><i class="bi bi-cash-coin me-1"></i>Cash Register</a></li>
 </ul>
 
 <!-- ── Master Ledger ── -->
@@ -710,6 +711,131 @@
   </div>
 </div>
 
+<!-- ── Cash Register ── -->
+<div id="rp-cash-register" class="d-none">
+
+  <!-- KPI strip -->
+  <div class="row g-2 mb-3" id="crKpis"></div>
+
+  <!-- Sub-tabs -->
+  <div class="d-flex gap-2 mb-3" id="crSubTabs">
+    <button class="btn btn-sm cr-stab active" onclick="crSwitchTab('cash',this)" style="background:#1e3a5f;color:#fff;border-radius:20px;font-size:12px;padding:4px 16px;">💵 Cash</button>
+    <button class="btn btn-sm cr-stab" onclick="crSwitchTab('upi',this)" style="background:#f3f4f6;color:#374151;border-radius:20px;font-size:12px;padding:4px 16px;">📲 UPI to Staff</button>
+    <button class="btn btn-sm cr-stab" onclick="crSwitchTab('add',this)" style="background:#f3f4f6;color:#374151;border-radius:20px;font-size:12px;padding:4px 16px;">＋ Add Payment</button>
+    <button class="btn btn-sm cr-stab" onclick="crSwitchTab('settings',this)" style="background:#f3f4f6;color:#374151;border-radius:20px;font-size:12px;padding:4px 16px;">⚙ Settings</button>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" style="font-size:11px;padding:2px 10px;" onclick="loadCashRegister()">↺ Refresh</button>
+  </div>
+
+  <!-- ── Cash Recon sub-tab ── -->
+  <div id="crTab-cash">
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;" id="crCashTable">
+        <thead>
+          <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
+            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;white-space:nowrap;">Date</th>
+            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Description</th>
+            <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Heading</th>
+            <th style="padding:8px 10px;text-align:right;color:#16a34a;font-weight:600;">Cash In</th>
+            <th style="padding:8px 10px;text-align:right;color:#dc2626;font-weight:600;">Cash Out</th>
+            <th style="padding:8px 10px;text-align:right;color:#6b7280;font-weight:600;">Balance</th>
+            <th style="padding:8px 10px;"></th>
+          </tr>
+        </thead>
+        <tbody id="crCashBody"></tbody>
+        <tfoot id="crCashFoot"></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── UPI to Staff sub-tab ── -->
+  <div id="crTab-upi" class="d-none">
+    <div id="crUpiStaff" style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;max-height:500px;overflow-y:auto;"></div>
+  </div>
+
+  <!-- ── Add Payment sub-tab ── -->
+  <div id="crTab-add" class="d-none">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <!-- Staff quick buttons -->
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6b7280;margin-bottom:8px;">Quick Staff Payment</div>
+          <div id="crStaffBtns" class="d-flex flex-wrap gap-2"></div>
+        </div>
+        <!-- Logged entries -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6b7280;margin-bottom:6px;">Payments Logged</div>
+        <div id="crEntries" style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;max-height:340px;overflow-y:auto;"></div>
+      </div>
+      <div class="col-md-6">
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6b7280;margin-bottom:10px;">Add Payment</div>
+          <div class="mb-2 d-flex gap-2">
+            <select id="crType" class="form-select form-select-sm" onchange="crTypeChange()" style="flex:1">
+              <option value="vendor">Vendor payment</option>
+              <option value="staff">Staff payment</option>
+            </select>
+            <select id="crMethod" class="form-select form-select-sm" style="flex:1">
+              <option value="cash">Cash</option>
+              <option value="upi">UPI</option>
+            </select>
+          </div>
+          <div class="mb-2" id="crVendorRow">
+            <input id="crVendor" class="form-control form-control-sm" placeholder="Vendor / shop name">
+          </div>
+          <div class="mb-2 d-none" id="crStaffRow">
+            <select id="crStaff" class="form-select form-select-sm">
+              <option value="">— select staff —</option>
+            </select>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col">
+              <input id="crAmount" class="form-control form-control-sm" type="number" placeholder="Amount (₹)">
+            </div>
+            <div class="col">
+              <input id="crDate" class="form-control form-control-sm" type="date">
+            </div>
+          </div>
+          <div class="mb-2">
+            <select id="crHeading" class="form-select form-select-sm">
+              <option value="">— heading —</option>
+              <option>Groceries</option><option>Electricity &amp; Gas</option>
+              <option>Wellness</option><option>Clothes</option><option>Gifts</option>
+              <option>Medical</option><option>Children Education</option><option>Holiday</option>
+              <option>Eating Out</option><option>Entertainment</option><option>Maintenance Expense</option>
+              <option>Kalpataru Maintenance</option><option>One Time Charge</option><option>Misc</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <input id="crNotes" class="form-control form-control-sm" placeholder="Notes (optional)">
+          </div>
+          <div class="mb-2">
+            <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:3px;">Bill / Receipt (optional)</label>
+            <input id="crBillFile" type="file" accept="image/*,application/pdf" class="form-control form-control-sm" onchange="crBillSelected(event)">
+            <div id="crAiResult" style="display:none;margin-top:6px;padding:6px 10px;background:#eff6ff;border-radius:6px;font-size:11px;color:#1e40af;"></div>
+          </div>
+          <button class="btn btn-sm w-100" style="background:#1e3a5f;color:#fff;font-size:12px;" onclick="crSubmit()">
+            <i class="bi bi-plus-circle me-1"></i>Add to Register
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Settings sub-tab ── -->
+  <div id="crTab-settings" class="d-none">
+    <div style="max-width:420px;">
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:16px;">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <span style="font-size:13px;font-weight:700;color:#374151;">Staff UPI IDs</span>
+          <button class="btn btn-sm" style="font-size:12px;padding:3px 12px;background:#1e3a5f;color:#fff;" onclick="crSaveStaff()">Save</button>
+        </div>
+        <p style="font-size:11px;color:#9ca3af;margin-bottom:12px;">UPI IDs / phone numbers are used to auto-detect SBI transfers to staff in the ledger.</p>
+        <div id="crStaffSettings"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
 </div><!-- /tab-reports -->
 </div><!-- /container -->
 
@@ -814,7 +940,7 @@ function setYear(fy) {
 function switchReport(name, el) {
   document.querySelectorAll('#reportTabs .nav-link').forEach(l => l.classList.remove('active'));
   el.classList.add('active');
-  ['ledger','notsure','mis','insights','acct-status','transfer-recon','projects'].forEach(n =>
+  ['ledger','notsure','mis','insights','acct-status','transfer-recon','projects','cash-register'].forEach(n =>
     document.getElementById('rp-' + n).classList.toggle('d-none', n !== name));
   if (name === 'ledger' || name === 'notsure') loadLedger();
   if (name === 'mis')             loadMIS('ytd', document.getElementById('misBtnYtd'));
@@ -822,6 +948,7 @@ function switchReport(name, el) {
   if (name === 'acct-status')     loadAcctStatus();
   if (name === 'transfer-recon')  loadTransferRecon();
   if (name === 'projects')        loadProjects();
+  if (name === 'cash-register')   loadCashRegister();
   return false;
 }
 
@@ -1413,9 +1540,9 @@ function renderLedger(txns) {
       ? `<span class="saving-badge" title="${t.ai_saving_tip}">💡 ${t.saving_agreed===true?'✅':t.saving_agreed===false?'❌':'?'}</span>`
       : '';
     const txnJ = encodeURIComponent(JSON.stringify(t));
-    const serial = (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || (i+1);
+    const serial = t.seq || (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || '—';
     return `<tr class="${unc}" onclick="openEdit('${t.txn_id}','${txnJ}')">
-      <td class="text-muted" style="white-space:nowrap;font-size:.75rem">${serial}</td>
+      <td style="white-space:nowrap;font-size:.75rem;font-weight:600;color:#374151;">${serial}</td>
       <td style="white-space:nowrap">${t.date}</td>
       <td><span class="badge bg-light text-dark border">${t.account||'—'}</span></td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.raw_description||''}">${t.raw_description||'—'}</td>
@@ -1480,9 +1607,9 @@ function renderNotSure(txns) {
     const typeOpts = TYPES.map(v =>
       `<option value="${v}" ${(t.type||'').toLowerCase()===v?'selected':''}>${v}</option>`).join('');
     const headOpts = headingOpts(t.type, t.heading);
-    const serial = (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || '';
+    const serial = t.seq || (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || '—';
     return `<tr id="ns-${t.txn_id}" class="uncertain-row">
-      <td class="text-muted" style="white-space:nowrap;font-size:.75rem">${serial}</td>
+      <td style="white-space:nowrap;font-size:.75rem;font-weight:600;color:#374151;">${serial}</td>
       <td style="white-space:nowrap">${t.date}</td>
       <td><span class="badge bg-light text-dark border">${t.account||'—'}</span></td>
       <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.raw_description||''}">${t.raw_description||'—'}</td>
@@ -2332,7 +2459,7 @@ function _reclassifyBtn(txnId, extra) {
 
 function _transferRow(t, rowClass) {
   return `<tr class="${rowClass}" id="unrecon-row-${t.txn_id}">
-    <td class="text-muted small">${t.seq ?? '—'}</td>
+    <td style="font-size:.75rem;font-weight:600;color:#374151;">${t.seq ?? '—'}</td>
     <td>${t.date||'—'}</td>
     <td><small>${t.account}</small></td>
     <td class="text-end fw-semibold">${fmt(t.amount)}</td>
@@ -2346,7 +2473,7 @@ function renderSuspected(rows) {
   document.getElementById('suspectedBody').innerHTML = rows.length
     ? rows.map(t => `
       <tr id="unrecon-row-${t.txn_id}">
-        <td class="text-muted small">${t.seq??'—'}</td>
+        <td style="font-size:.75rem;font-weight:600;color:#374151;">${t.seq??'—'}</td>
         <td>${t.date||'—'}</td>
         <td><small>${t.account}</small></td>
         <td><span class="badge ${t.direction==='debit'?'bg-danger':'bg-primary'}">${t.direction}</span></td>
@@ -2592,10 +2719,291 @@ function renderYear(d) {
     '<tr><td colspan="7" class="text-muted text-center py-2">No data</td></tr>';
 }
 
+// ── Cash Register ──────────────────────────────────────────────────────────
+let _crData = null;
+
+function crFmt(n) { return '₹' + Number(n||0).toLocaleString('en-IN'); }
+
+async function loadCashRegister() {
+  const r = await fetch('/api/cash-register');
+  _crData = await r.json();
+  renderCashRegister();
+}
+
+function crSwitchTab(name, el) {
+  document.querySelectorAll('.cr-stab').forEach(b => {
+    b.style.background = '#f3f4f6';
+    b.style.color = '#374151';
+  });
+  el.style.background = '#1e3a5f';
+  el.style.color = '#fff';
+  ['cash','upi','add','settings'].forEach(t =>
+    document.getElementById('crTab-' + t).classList.toggle('d-none', t !== name));
+}
+
+function renderCashRegister() {
+  const d = _crData;
+  if (!d) return;
+
+  // KPIs — cash_ledger has side="given"|"spent"; entries key no longer exists
+  const cl = d.cash_ledger || [];
+  const totalGiven  = cl.filter(e=>e.side==='given').reduce((s,e)=>s+(e.amount||0),0);
+  const totalSpent  = cl.filter(e=>e.side==='spent').reduce((s,e)=>s+(e.amount||0),0);
+  const totalUPI    = (d.upi_staff||[]).reduce((s,u) => s + (u.amount||0), 0);
+  const cashBalance = totalGiven - totalSpent;
+  document.getElementById('crKpis').innerHTML = `
+    <div class="col-6 col-md-3"><div class="card border-0 shadow-sm p-3">
+      <div style="font-size:11px;color:#6b7280;">Cash Given (SBI)</div>
+      <div style="font-size:18px;font-weight:700;color:#16a34a;">${crFmt(totalGiven)}</div>
+      <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Transfers &amp; petty cash out</div>
+    </div></div>
+    <div class="col-6 col-md-3"><div class="card border-0 shadow-sm p-3">
+      <div style="font-size:11px;color:#6b7280;">Cash Spent</div>
+      <div style="font-size:18px;font-weight:700;color:#dc2626;">${crFmt(totalSpent)}</div>
+      <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Ledger cash expenses</div>
+    </div></div>
+    <div class="col-6 col-md-3"><div class="card border-0 shadow-sm p-3">
+      <div style="font-size:11px;color:#6b7280;">UPI to Staff</div>
+      <div style="font-size:18px;font-weight:700;color:#7c3aed;">${crFmt(totalUPI)}</div>
+      <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Auto-detected from ledger</div>
+    </div></div>
+    <div class="col-6 col-md-3"><div class="card border-0 shadow-sm p-3">
+      <div style="font-size:11px;color:#6b7280;">Unaccounted Cash</div>
+      <div style="font-size:18px;font-weight:700;color:${cashBalance>0?'#b45309':'#16a34a'}">${crFmt(Math.abs(cashBalance))}</div>
+      <div style="font-size:10px;color:#9ca3af;margin-top:2px;">${cashBalance>0?'Cash in hand unaccounted':'Fully accounted'}</div>
+    </div></div>`;
+
+  // ── Cash ledger table ──
+  // cash_ledger entries: side="given" (Cash In) or "spent" (Cash Out from ledger)
+  // manual entries: always Cash Out
+  const rows = [];
+  (d.cash_ledger||[]).forEach(e => {
+    const isGiven = e.side === 'given';
+    rows.push({
+      seq: e.seq, date: e.date_iso || e.date,
+      desc: e.narration || (isGiven ? 'Cash Given' : 'Cash Spent'),
+      heading: isGiven ? 'Cash Given' : 'Cash Spent',
+      in:  isGiven ? e.amount : 0,
+      out: isGiven ? 0 : e.amount,
+      id: null, bill: null, notes: ''
+    });
+  });
+  // cash_ledger is already sorted chronologically from backend
+  let running = 0;
+  const tbody = cl.map(e => {
+    const isGiven = e.side === 'given';
+    const cashIn  = isGiven ? e.amount : 0;
+    const cashOut = isGiven ? 0 : e.amount;
+    running += cashIn - cashOut;
+    const balColor = running >= 0 ? '#374151' : '#dc2626';
+    const inCell  = cashIn  ? `<span style="color:#16a34a;font-weight:600;">${crFmt(cashIn)}</span>`  : '<span style="color:#d1d5db;">—</span>';
+    const outCell = cashOut ? `<span style="color:#dc2626;font-weight:600;">${crFmt(cashOut)}</span>` : '<span style="color:#d1d5db;">—</span>';
+    const methodIcon = e.method === 'upi' ? '📲' : (isGiven ? '' : '💵');
+    const actions = e.deletable ? `
+      ${e.bill_b64 ? `<span title="Bill" style="cursor:pointer;font-size:13px;" onclick="crViewBill('${e.id}')">🧾</span>` : ''}
+      <button onclick="crDelete('${e.id}')" style="background:none;border:none;color:#d1d5db;font-size:12px;cursor:pointer;padding:0 2px;">✕</button>` : '';
+    const noteTip = e.notes ? `<div style="font-size:10px;color:#9ca3af;">${e.notes}</div>` : '';
+    const label = isGiven ? 'Cash Given' : (e.heading || 'Cash Spent');
+    return `<tr style="border-bottom:0.5px solid #f3f4f6;${isGiven?'background:#f9fafb;':''}">
+      <td style="padding:7px 10px;white-space:nowrap;color:#6b7280;font-size:11px;">${e.date_iso||e.date||''}</td>
+      <td style="padding:7px 10px;font-size:12px;">${methodIcon} ${e.narration||''}${noteTip}</td>
+      <td style="padding:7px 10px;font-size:11px;color:#9ca3af;">${label} <span style="color:#e5e7eb;font-size:10px;">#${e.seq||''}</span></td>
+      <td style="padding:7px 10px;text-align:right;">${inCell}</td>
+      <td style="padding:7px 10px;text-align:right;">${outCell}</td>
+      <td style="padding:7px 10px;text-align:right;font-weight:600;color:${balColor};">${crFmt(running)}</td>
+      <td style="padding:7px 6px;text-align:right;white-space:nowrap;">${actions}</td>
+    </tr>`;
+  }).join('');
+
+  const noRows = `<tr><td colspan="7" style="padding:24px;text-align:center;color:#9ca3af;font-size:12px;">
+    No SBI cash transactions found in master ledger for FY27.
+  </td></tr>`;
+
+  document.getElementById('crCashBody').innerHTML = tbody || noRows;
+  document.getElementById('crCashFoot').innerHTML = `
+    <tr style="background:#f9fafb;border-top:2px solid #e5e7eb;">
+      <td colspan="3" style="padding:8px 10px;font-size:12px;font-weight:700;color:#374151;">Total</td>
+      <td style="padding:8px 10px;text-align:right;font-weight:700;color:#16a34a;">${crFmt(totalGiven)}</td>
+      <td style="padding:8px 10px;text-align:right;font-weight:700;color:#dc2626;">${crFmt(totalSpent)}</td>
+      <td style="padding:8px 10px;text-align:right;font-weight:700;color:${cashBalance>0?'#b45309':'#16a34a'};">${crFmt(Math.abs(cashBalance))}</td>
+      <td></td>
+    </tr>`;
+
+  // ── UPI to Staff ──
+  const uEl = document.getElementById('crUpiStaff');
+  if (!(d.upi_staff||[]).length) {
+    uEl.innerHTML = '<div style="padding:20px;font-size:12px;color:#9ca3af;text-align:center;">No UPI transfers to staff detected.<br>Add staff UPI IDs in the Settings tab to enable auto-detection.</div>';
+  } else {
+    uEl.innerHTML = d.upi_staff.map(u => `
+      <div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:0.5px solid #e9d5ff;">
+        <span style="font-size:11px;color:#6b7280;min-width:82px;">${u.date}</span>
+        <span style="font-size:15px;">📲</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:600;color:#7c3aed;">${u.staff}</div>
+          <div style="font-size:11px;color:#9ca3af;">${u.narration}</div>
+        </div>
+        <span style="font-size:13px;font-weight:600;color:#7c3aed;">${crFmt(u.amount)}</span>
+      </div>`).join('');
+  }
+
+  // ── Logged entries (Add Payment tab) — only cash_register entries ──
+  const crEntries = cl.filter(e => e.deletable);
+  const eEl = document.getElementById('crEntries');
+  if (!crEntries.length) {
+    eEl.innerHTML = '<div style="padding:16px;font-size:12px;color:#9ca3af;text-align:center;">No payments logged yet.</div>';
+  } else {
+    eEl.innerHTML = crEntries.map(e => `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:0.5px solid #f3f4f6;">
+        <span style="font-size:10px;color:#d1d5db;min-width:36px;font-weight:600;">#${e.seq||''}</span>
+        <span style="font-size:11px;color:#6b7280;min-width:76px;">${e.date_iso||e.date||''}</span>
+        <span style="font-size:14px;">${e.method==='upi'?'📲':'💵'}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:600;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.narration||'—'}</div>
+          <div style="font-size:11px;color:#9ca3af;">${e.heading||''} ${e.notes?'· '+e.notes:''}</div>
+        </div>
+        ${e.bill_b64?`<span title="Bill" style="font-size:13px;cursor:pointer;" onclick="crViewBill('${e.id}')">🧾</span>`:''}
+        <span style="font-size:13px;font-weight:600;color:#dc2626;">${crFmt(e.amount)}</span>
+        <button onclick="crDelete('${e.id}')" style="background:none;border:none;color:#d1d5db;font-size:13px;cursor:pointer;padding:0 2px;">✕</button>
+      </div>`).join('');
+  }
+
+  renderCrStaffBtns(d.staff);
+  renderCrStaffSettings(d.staff);
+}
+
+function renderCrStaffBtns(staff) {
+  document.getElementById('crStaffBtns').innerHTML = (staff||[]).map(s =>
+    `<button class="btn btn-sm" style="background:#ede9fe;color:#5b21b6;border:none;font-size:12px;padding:4px 12px;border-radius:20px;"
+      onclick="crQuickStaff('${s.id}','${s.name}')">${s.name}</button>`
+  ).join('');
+  const sel = document.getElementById('crStaff');
+  sel.innerHTML = '<option value="">— select staff —</option>' +
+    (staff||[]).map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+}
+
+function renderCrStaffSettings(staff) {
+  document.getElementById('crStaffSettings').innerHTML = (staff||[]).map(s => `
+    <div class="row g-1 mb-1 align-items-center" data-sid="${s.id}">
+      <div class="col-3"><span style="font-size:12px;font-weight:600;">${s.name}</span></div>
+      <div class="col-4"><input class="form-control form-control-sm" placeholder="UPI ID" value="${s.upi_id||''}" data-field="upi_id"></div>
+      <div class="col-4"><input class="form-control form-control-sm" placeholder="Phone / UPI#" value="${s.upi_phone||''}" data-field="upi_phone"></div>
+    </div>`).join('');
+}
+
+async function crSaveStaff() {
+  const rows = document.querySelectorAll('#crStaffSettings [data-sid]');
+  const staff = _crData.staff.map(s => {
+    const row = document.querySelector(`#crStaffSettings [data-sid="${s.id}"]`);
+    if (row) {
+      s.upi_id    = row.querySelector('[data-field="upi_id"]').value.trim();
+      s.upi_phone = row.querySelector('[data-field="upi_phone"]').value.trim();
+    }
+    return s;
+  });
+  await fetch('/api/cash-staff', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({staff})});
+  _crData.staff = staff;
+  renderCrStaffBtns(staff);
+  alert('Staff UPI IDs saved.');
+}
+
+function crTypeChange() {
+  const t = document.getElementById('crType').value;
+  document.getElementById('crVendorRow').classList.toggle('d-none', t === 'staff');
+  document.getElementById('crStaffRow').classList.toggle('d-none', t !== 'staff');
+}
+
+function crQuickStaff(id, name) {
+  document.getElementById('crType').value = 'staff';
+  crTypeChange();
+  document.getElementById('crStaff').value = name;
+  document.getElementById('crDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('crAmount').focus();
+}
+
+let _crBillB64 = null, _crBillMime = null;
+
+function crBillSelected(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  _crBillMime = file.type;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const b64 = e.target.result.split(',')[1];
+    _crBillB64 = b64;
+    // Run AI extraction
+    const res = document.getElementById('crAiResult');
+    res.style.display = 'block';
+    res.textContent = '⏳ Extracting bill details…';
+    try {
+      const r = await fetch('/api/cash-register/ai-extract', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({image_b64: b64, mime: _crBillMime})
+      });
+      const data = await r.json();
+      if (data.error) { res.textContent = '⚠ ' + data.error; return; }
+      res.innerHTML = `✓ <b>${data.vendor||'?'}</b> · ${data.amount ? '₹'+data.amount : '?'} · ${data.heading||''}`;
+      if (data.amount)   document.getElementById('crAmount').value  = data.amount;
+      if (data.vendor)   document.getElementById('crVendor').value  = data.vendor;
+      if (data.date)     document.getElementById('crDate').value    = data.date;
+      if (data.heading)  document.getElementById('crHeading').value = data.heading;
+      if (data.notes)    document.getElementById('crNotes').value   = data.notes;
+    } catch(err) { res.textContent = '⚠ Could not extract: ' + err; }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function crSubmit() {
+  const type   = document.getElementById('crType').value;
+  const method = document.getElementById('crMethod').value;
+  const amount = parseFloat(document.getElementById('crAmount').value);
+  const date   = document.getElementById('crDate').value;
+  if (!amount || !date) { alert('Amount and date are required.'); return; }
+
+  const entry = {
+    type, method, amount, date,
+    heading:  document.getElementById('crHeading').value,
+    notes:    document.getElementById('crNotes').value.trim(),
+    vendor:   type === 'vendor' ? document.getElementById('crVendor').value.trim() : '',
+    staff:    type === 'staff'  ? document.getElementById('crStaff').value : '',
+    bill_b64: _crBillB64 || null,
+    bill_mime: _crBillMime || null,
+  };
+
+  await fetch('/api/cash-register/entry', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry)
+  });
+
+  // Reset form
+  ['crAmount','crVendor','crNotes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('crBillFile').value = '';
+  document.getElementById('crAiResult').style.display = 'none';
+  _crBillB64 = null; _crBillMime = null;
+
+  loadCashRegister();
+}
+
+async function crDelete(id) {
+  if (!confirm('Remove this entry?')) return;
+  await fetch('/api/cash-register/entry/' + id, {method:'DELETE'});
+  loadCashRegister();
+}
+
+function crViewBill(id) {
+  const e = (_crData.entries||[]).find(x => x.id === id);
+  if (!e || !e.bill_b64) return;
+  const win = window.open('', '_blank');
+  if (e.bill_mime && e.bill_mime.includes('pdf')) {
+    win.document.write(`<iframe src="data:${e.bill_mime};base64,${e.bill_b64}" style="width:100%;height:100vh;border:none;"></iframe>`);
+  } else {
+    win.document.write(`<img src="data:${e.bill_mime||'image/jpeg'};base64,${e.bill_b64}" style="max-width:100%;display:block;margin:auto;">`);
+  }
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadApprovals();  // pre-load badge
   refreshSubmitHeadings('expense');  // initialise submit form headings
+  document.getElementById('crDate').value = new Date().toISOString().slice(0,10);
 });
 </script>
 </body>
