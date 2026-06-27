@@ -336,7 +336,7 @@
   <div class="table-wrap">
   <table class="table table-hover mb-0">
     <thead><tr>
-      <th>#</th>
+      <th style="cursor:pointer;user-select:none" onclick="cycleSort('seq')" id="hdrSeq"># ↕</th>
       <th style="cursor:pointer;user-select:none" onclick="cycleSort('date')" id="hdrDate">Date ↕</th>
       <th>Account</th><th>Description</th>
       <th>Paid To</th>
@@ -1504,6 +1504,9 @@ function sortedLedger(txns) {
     if (_sortCol === 'date') {
       return _sortDir * (parseDateVal(a.date) - parseDateVal(b.date));
     }
+    if (_sortCol === 'seq') {
+      return _sortDir * ((a.seq || 0) - (b.seq || 0));
+    }
     const av = parseFloat(a[_sortCol]) || 0;
     const bv = parseFloat(b[_sortCol]) || 0;
     return _sortDir * (av - bv);
@@ -1515,9 +1518,10 @@ function cycleSort(col) {
   else if (_sortDir === 1) _sortDir = -1;
   else { _sortCol = null; _sortDir = 0; }
   const icon = c => _sortCol === c ? (_sortDir === 1 ? '↑' : '↓') : '↕';
-  document.getElementById('hdrDate').textContent   = 'Date '   + icon('date');
-  document.getElementById('hdrDebit').textContent  = 'Debit '  + icon('debit');
-  document.getElementById('hdrCredit').textContent = 'Credit ' + icon('credit');
+  document.getElementById('hdrSeq').textContent   = '# '     + icon('seq');
+  document.getElementById('hdrDate').textContent  = 'Date '  + icon('date');
+  document.getElementById('hdrDebit').textContent  = 'Debit ' + icon('debit');
+  document.getElementById('hdrCredit').textContent = 'Credit '+ icon('credit');
   if (window._ledgerAll) renderLedger(sortedLedger(window._ledgerAll));
 }
 

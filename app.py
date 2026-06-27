@@ -988,7 +988,8 @@ def _sbi_cash_ledger_entries(fy=27):
     GIVEN_HEADINGS = {"petty cash", "cash", "interbank", "unknown", ""}
     for t in ledger:
         acct = (t.get("account") or "").upper()
-        if "SBI" not in acct:
+        is_cash_acct = acct == "CASH"  # approval_log cash expenses
+        if "SBI" not in acct and not is_cash_acct:
             continue
         heading = (t.get("heading") or "").lower().strip()
         typ = (t.get("type") or "").lower()
@@ -997,6 +998,8 @@ def _sbi_cash_ledger_entries(fy=27):
 
         is_cr = t.get("source") == "cash_register"
         if is_cr and debit > 0:
+            side = "spent"
+        elif is_cash_acct and t.get("source") == "approval_log" and debit > 0:
             side = "spent"
         elif typ == "transfer" and heading in GIVEN_HEADINGS and debit > 0:
             side = "given"
