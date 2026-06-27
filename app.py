@@ -10,7 +10,7 @@ from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from flask import Flask, request, render_template, jsonify, session, redirect, url_for
+from flask import Flask, request, render_template, jsonify, session, redirect, url_for, send_from_directory
 
 from src.approval_engine import ApprovalEngine, ExpenseRequest
 from src.reconcile import run_reconciliation
@@ -63,8 +63,6 @@ NUMBER_TO_NAME = {v: k for k, v in HOUSEHOLD_MEMBERS.items() if v}
 PASSWORDS = {
     "vincent": os.getenv("VINCENT_PASSWORD", "vincent123"),
     "sudhir":  os.getenv("SUDHIR_PASSWORD",  "sudhir123"),
-    "ketki":   os.getenv("KETKI_PASSWORD",   "ketki123"),
-    "santosh": os.getenv("SANTOSH_PASSWORD", "santosh123"),
 }
 
 
@@ -696,8 +694,8 @@ def api_financial_statements():
         "FY24": {"company_shares":1800,"property":2140,"equity":1277,"gold_bond":135,"nps":370,"pf":150,"gratuity":0,"private_eq":289,"art_jewellery":92,"total_assets":6253,"home_loans":200,"od":495,"loan_shares":440,"total_liabilities":1135,"net_worth":5133},
         "FY25": {"company_shares":3400,"property":2740,"equity":1380,"gold_bond":300,"nps":470,"pf":234,"gratuity":0,"private_eq":346,"art_jewellery":115,"total_assets":8985,"home_loans":200,"od":538,"loan_shares":840,"total_liabilities":1578,"net_worth":7445},
         # FY26 equity (domestic): Solidarity 671+PPFAS 165+SBI ETF 90+Latent 187=1113
-        # international_equity: Marcellus IB 342 (USD 360K×95)+StanChart equity 320 (USD 336K×95)=662
-        # bank: StanChart cash 150 (USD 158K×95)+ICICI 1331 15+SBI TBD≈5=170
+        # international_equity: Marcellus IB 342 (USD 360K×95)+StanChart equity 320 (USD 336K×95, Mar31 portfolio)=662
+        # bank: StanChart cash 150 (USD 158K×95, Mar31 incl TDs)+ICICI 1331 15+SBI TBD≈5=170
         # gold_bond: SGB 314+Nippon Gold ETF 68=382  art_jewellery: 115+Mizugami 10+Cartier 4.51=130
         # home_loans: HL1 C51 440+HL2 C34 342+ICICI 9175 HomeSaver 571=1353  od: ICICI 7281 ~5
         # total: 3500+4080+1113+662+382+478+306+346+130+170=11167  net_worth: 11167-1358=9809
@@ -809,6 +807,421 @@ def api_financial_statements():
         "super_order": SUPER_ORDER,
         "non_fin_supers": NON_FIN,
     })
+
+
+def _default_asset_registry():
+    return {"classes": [
+        # ── ASSETS ──────────────────────────────────────────────────────────────
+        {"id":"gcpl_shares","label":"Company Shares — GCPL","section":"assets","icon":"bi-building","items":[
+            {"id":"gcpl_main","name":"GCPL Shares (vested pool)","date_acquired":"Various tranches FY21–FY26","purchase_value_L":None,"value_mar26_L":3500,"value_today_L":None,
+             "notes":"141,732 shares vested as of Mar 26. Includes pledged shares. Excludes unvested grants.",
+             "documents":["FY26/4_Financial_Investments/Sudhir Sitapati_ESGS Data.xlsx","FY26/4_Financial_Investments/Demat Account_90174124_01_04_2025-31_03_2026 (2).pdf","FY26/4_Financial_Investments/ICICI_Demat_90174124_Holdings_Mar26.pdf"],"sub_items":[]},
+        ]},
+        {"id":"listed_equity","label":"Listed Equity / PMS","section":"assets","icon":"bi-graph-up-arrow","items":[
+            {"id":"solidarity","name":"Solidarity PMS","date_acquired":"~FY22","purchase_value_L":None,"value_mar26_L":671,"value_today_L":None,
+             "notes":"Domestic long-only PMS. Managed by Solidarity Investment Managers.",
+             "documents":["FY26/4_Financial_Investments/Solidaruty.pdf"],"sub_items":[]},
+            {"id":"latent_pms","name":"Latent PMF","date_acquired":"~FY25","purchase_value_L":None,"value_mar26_L":187,"value_today_L":None,
+             "notes":"Portfolio Management Fund (PMF). Long-only concentrated equity strategy.","documents":["FY26/4_Financial_Investments/latent.pdf"],"sub_items":[]},
+        ]},
+        {"id":"mutual_funds","label":"Mutual Funds","section":"assets","icon":"bi-pie-chart","items":[
+            {"id":"ppfas","name":"PPFAS Flexi Cap MF","date_acquired":"~FY22","purchase_value_L":None,"value_mar26_L":165,"value_today_L":None,
+             "notes":"Parag Parikh Flexi Cap Fund. Folio 15152304.","documents":["FY26/4_Financial_Investments/Sudhir Sitapati_15152304.pdf"],"sub_items":[]},
+            {"id":"sbi_etf","name":"SBI ETF Nifty Next 50","date_acquired":"~FY24","purchase_value_L":None,"value_mar26_L":90,"value_today_L":None,
+             "notes":"Index ETF held in ICICI Demat 90174124.","documents":[],"sub_items":[]},
+        ]},
+        {"id":"international_equity","label":"International Equity","section":"assets","icon":"bi-globe2","items":[
+            {"id":"marcellus_ib","name":"Marcellus International Basket (USD)","date_acquired":"Feb 2026","purchase_value_L":None,"value_mar26_L":342,"value_today_L":None,
+             "notes":"USD 360K × ₹95. Managed by Marcellus Investment Managers. A/c U11622321.",
+             "documents":["FY26/4_Financial_Investments/Marcellus_IB_U11622321_Feb26.pdf","FY26/4_Financial_Investments/Marcellus_Summary_FY26.pdf"],"sub_items":[]},
+            {"id":"stanchart_intl","name":"StanChart International Portfolio","date_acquired":"~FY23","purchase_value_L":None,"value_mar26_L":470,"value_today_L":None,
+             "notes":"Standard Chartered Bank Singapore A/c 62-1-833928-2. Valuation as of 31-Mar-2026 from portfolio statement (generated 19-Jun-2026).",
+             "documents":["FY26/4_Financial_Investments/Portfolio-Sudhir.pdf","FY26/1_Bank_Accounts/StanChart_6007_SGD_Statement_Apr26.pdf","FY26/1_Bank_Accounts/eStatement_Consolidated Statement_6007_SGD_Apr_2026.pdf"],
+             "sub_items":[
+                {"id":"sc_gdx","name":"VanEck Gold Miners ETF (GDX) — 1,043 units","value_mar26_L":91,"notes":"USD 95,716 × ₹95 = 91L. Largest position. 19.4% of portfolio. 103% unrealised gain since Mar 2025."},
+                {"id":"sc_gld","name":"SPDR Gold Shares ETF (GLD) — 160 units","value_mar26_L":65,"notes":"USD 68,846 × ₹95 = 65L. 13.9% of portfolio. 54% unrealised gain."},
+                {"id":"sc_slv","name":"iShares Silver Trust ETF (SLV) — 470 units","value_mar26_L":30,"notes":"USD 32,026 × ₹95 = 30L. 6.5% of portfolio. 429% total return incl realised."},
+                {"id":"sc_qqq","name":"Invesco QQQ ETF (QQQ) — 65 units","value_mar26_L":36,"notes":"USD 37,517 × ₹95 = 36L. 7.6% of portfolio."},
+                {"id":"sc_ilf","name":"iShares Latin America 40 ETF (ILF) — 800 units","value_mar26_L":27,"notes":"USD 28,416 × ₹95 = 27L. 5.7% of portfolio."},
+                {"id":"sc_cnya","name":"iShares MSCI China A ETF (CNYA) — 800 units","value_mar26_L":26,"notes":"USD 27,344 × ₹95 = 26L. 5.5% of portfolio."},
+                {"id":"sc_asea","name":"Global X FTSE SE Asia ETF (ASEA) — 1,200 units","value_mar26_L":22,"notes":"USD 23,316 × ₹95 = 22L. 4.7% of portfolio."},
+                {"id":"sc_ewj","name":"iShares MSCI Japan ETF (EWJ) — 200 units","value_mar26_L":16,"notes":"USD 16,888 × ₹95 = 16L. 3.4% of portfolio."},
+                {"id":"sc_qqq_hkd","name":"Invesco QQQ ETF 3455 (HKD) — 11 units","value_mar26_L":6,"notes":"HKD 48,653 = USD 6,206 × ₹95 = 6L. 1.3% of portfolio."},
+                {"id":"sc_intc","name":"Intel Corp (INTC) — 2 units","value_mar26_L":0,"notes":"USD 88. Negligible position."},
+                {"id":"sc_usd_cash","name":"USD Cash (A/c 6208256430)","value_mar26_L":64,"notes":"USD 67,113 × ₹95 = 64L. Separate from AVER account."},
+                {"id":"sc_aver","name":"USD AVER (A/c 6218339282)","value_mar26_L":86,"notes":"USD 90,974 × ₹95 = 86L. This is the main USD savings account (Apr-2 statement balance)."},
+             ]},
+        ]},
+        {"id":"gold","label":"Gold","section":"assets","icon":"bi-gem","items":[
+            {"id":"sgb","name":"Sovereign Gold Bonds (SGB)","date_acquired":"Multiple tranches FY21–FY24","purchase_value_L":None,"value_mar26_L":314,"value_today_L":None,
+             "notes":"RBI-issued SGBs. 8-year maturity. Interest 2.5% p.a. tax-free at maturity.","documents":[],"sub_items":[]},
+            {"id":"gold_etf","name":"Nippon Gold ETF (GOLDBEES)","date_acquired":"~FY25","purchase_value_L":None,"value_mar26_L":68,"value_today_L":None,
+             "notes":"Gold ETF held in ICICI Demat 90174124.","documents":[],"sub_items":[]},
+        ]},
+        {"id":"property","label":"Property","section":"assets","icon":"bi-house-door","items":[
+            {"id":"c34","name":"C34 Kalpataru — Thane (primary residence)","date_acquired":"~2018","purchase_value_L":None,"value_mar26_L":1300,"value_today_L":None,
+             "notes":"4BHK flat at Kalpataru Serenity, Thane. Linked to HL2 (top-up) and HL5 (ICICI HomeSaver/MaxGain).","documents":[],"sub_items":[]},
+            {"id":"c51","name":"C51 Kalpataru — Thane","date_acquired":"~2021","purchase_value_L":None,"value_mar26_L":880,"value_today_L":None,
+             "notes":"Flat at Kalpataru, Thane. Linked to HL1 (top-up) and HL4 (original).","documents":[],"sub_items":[]},
+            {"id":"malhar","name":"Malhar Land — Kashid","date_acquired":"~FY22","purchase_value_L":None,"value_mar26_L":900,"value_today_L":None,
+             "notes":"Land parcel near Kashid beach. Uspaar / Sarve entity.","documents":[],"sub_items":[]},
+            {"id":"uspaar","name":"Uspaar / Sarve Land","date_acquired":"~FY22","purchase_value_L":None,"value_mar26_L":1000,"value_today_L":None,
+             "notes":"Land holding via Uspaar / Sarve.","documents":[],"sub_items":[]},
+        ]},
+        {"id":"retirement","label":"Retirement — NPS / EPF","section":"assets","icon":"bi-shield-check","items":[
+            {"id":"nps","name":"NPS (National Pension System)","date_acquired":"~FY20","purchase_value_L":None,"value_mar26_L":478,"value_today_L":None,
+             "notes":"Tier I NPS account. Employer + employee contributions. Locked till retirement.","documents":[],"sub_items":[]},
+            {"id":"epf","name":"EPF / PF","date_acquired":"~FY15","purchase_value_L":None,"value_mar26_L":306,"value_today_L":None,
+             "notes":"Employee Provident Fund. GCPL payroll deductions.","documents":["FY26/4_Financial_Investments/SohBeneficiaryRpt - 2026-06-10T131210.333.pdf","FY26/3_Retirement/718379.pdf"],"sub_items":[]},
+        ]},
+        {"id":"private_eq","label":"Private Equity","section":"assets","icon":"bi-rocket-takeoff","items":[
+            {"id":"gpa","name":"Godrej Pet (GPA)","date_acquired":"~FY24","purchase_value_L":164,"value_mar26_L":164,"value_today_L":None,"notes":"Unlisted. Cost basis held as value.","documents":[],"sub_items":[]},
+            {"id":"lo_foods","name":"LO Foods","date_acquired":"~FY22","purchase_value_L":20,"value_mar26_L":20,"value_today_L":None,"notes":"Unlisted. Cost basis.","documents":[],"sub_items":[]},
+            {"id":"localbuy","name":"LocalBuy / Superk","date_acquired":"~FY22","purchase_value_L":100,"value_mar26_L":100,"value_today_L":None,"notes":"Unlisted. Cost basis.","documents":[],"sub_items":[]},
+            {"id":"licious","name":"Licious","date_acquired":"~FY22","purchase_value_L":52,"value_mar26_L":52,"value_today_L":None,"notes":"Unlisted. Cost basis.","documents":[],"sub_items":[]},
+            {"id":"x_to_10x","name":"X to 10X","date_acquired":"~FY22","purchase_value_L":10,"value_mar26_L":10,"value_today_L":None,"notes":"Unlisted. Cost basis.","documents":[],"sub_items":[]},
+        ]},
+        {"id":"alt","label":"Art & Jewellery","section":"assets","icon":"bi-palette","items":[
+            {"id":"art_jewellery","name":"Art & Jewellery","date_acquired":"Various","purchase_value_L":None,"value_mar26_L":130,"value_today_L":None,
+             "notes":"Includes: Mizugami artwork (~10L), Cartier jewellery (~4.5L), and other art/jewellery (~115L).","documents":[],"sub_items":[]},
+        ]},
+        {"id":"bank","label":"Bank Accounts","section":"assets","icon":"bi-bank","items":[
+            {"id":"icici_1331","name":"ICICI Bank 1331 (savings)","date_acquired":None,"purchase_value_L":None,"value_mar26_L":15,"value_today_L":None,
+             "notes":"Primary operating account. ICICI Bank A/c ending 1331.","documents":[],"sub_items":[]},
+            {"id":"sbi_4852","name":"SBI 4852 (savings)","date_acquired":None,"purchase_value_L":None,"value_mar26_L":5,"value_today_L":None,
+             "notes":"SBI savings account. Approximate balance.","documents":[],"sub_items":[]},
+        ]},
+        {"id":"insurance","label":"Insurance","section":"assets","icon":"bi-umbrella","items":[
+            {"id":"ins_term","name":"Term Life Insurance","date_acquired":None,"purchase_value_L":None,"value_mar26_L":None,"value_today_L":None,
+             "notes":"Add policy details: insurer, sum assured, premium, expiry, nominee.","documents":[],"sub_items":[]},
+            {"id":"ins_health","name":"Health Insurance","date_acquired":None,"purchase_value_L":None,"value_mar26_L":None,"value_today_L":None,
+             "notes":"Add policy details: insurer, cover amount, premium, renewal date, dependants covered.","documents":[],"sub_items":[]},
+            {"id":"ins_other","name":"Other Insurance (property / vehicle / travel)","date_acquired":None,"purchase_value_L":None,"value_mar26_L":None,"value_today_L":None,
+             "notes":"Add policy details as needed.","documents":[],"sub_items":[]},
+        ]},
+        # ── LIABILITIES ──────────────────────────────────────────────────────────
+        {"id":"home_loans","label":"Home Loans","section":"liabilities","icon":"bi-house","items":[
+            {"id":"hl1_c51","name":"HL1 — C51 Kalpataru top-up (XX99508)","date_acquired":None,"purchase_value_L":None,"value_mar26_L":440,"value_today_L":None,
+             "notes":"Top-up home loan against C51. Outstanding ₹440L as at Mar 31 2026.","documents":["FY26/2_Home_Loans/ICICI_TopUp_XX99508_C51_Statement.pdf","FY26/2_Home_Loans/Statement of Account_TBMUM00007499508 (1).pdf"],"sub_items":[]},
+            {"id":"hl2_c34","name":"HL2 — C34 Kalpataru top-up (XX00382)","date_acquired":None,"purchase_value_L":None,"value_mar26_L":342,"value_today_L":None,
+             "notes":"Top-up home loan against C34. Outstanding ₹342L as at Mar 31 2026.","documents":["FY26/2_Home_Loans/ICICI_TopUp_XX00382_C34_Statement.pdf","FY26/2_Home_Loans/Statement of Account_TBMUM00007500382 (1).pdf"],"sub_items":[]},
+            {"id":"hl4_c51","name":"HL4 — C51 original (XX42596)","date_acquired":None,"purchase_value_L":None,"value_mar26_L":191,"value_today_L":None,
+             "notes":"Original home loan for C51.","documents":["FY26/2_Home_Loans/Statement of Account_TBMUM00006542596 (1).pdf"],"sub_items":[]},
+            {"id":"hl5_maxgain","name":"HL5 — ICICI 9175 HomeSaver MaxGain","date_acquired":None,"purchase_value_L":None,"value_mar26_L":380,"value_today_L":None,
+             "notes":"ICICI HomeSaver (overdraft-linked) for C34. A/c 9175.","documents":["FY26/1_Bank_Accounts/ICICI_9175_HomeSaver_Statement_FY26.pdf"],"sub_items":[]},
+        ]},
+        {"id":"credit_lines","label":"Credit Lines / OD","section":"liabilities","icon":"bi-credit-card","items":[
+            {"id":"od_7281","name":"OD — ICICI 7281","date_acquired":None,"purchase_value_L":None,"value_mar26_L":5,"value_today_L":None,
+             "notes":"Overdraft facility ICICI A/c 7281. Current utilisation ~5L.","documents":[],"sub_items":[]},
+        ]},
+        {"id":"loan_shares","label":"Loan Against Shares","section":"liabilities","icon":"bi-bank2","items":[]},
+    ]}
+
+@app.route("/api/asset-registry", methods=["GET"])
+@login_required
+def api_asset_registry_get():
+    registry = db.load("asset_registry")
+    if not registry:
+        registry = _default_asset_registry()
+    return jsonify(registry)
+
+@app.route("/api/asset-registry", methods=["POST"])
+@login_required
+def api_asset_registry_save():
+    data = request.get_json(force=True)
+    db.save("asset_registry", data)
+    return jsonify({"ok": True})
+
+@app.route("/api/asset-registry/reset", methods=["POST"])
+@login_required
+def api_asset_registry_reset():
+    db.save("asset_registry", _default_asset_registry())
+    return jsonify({"ok": True})
+
+
+@app.route("/api/data-file/<path:filepath>", methods=["GET"])
+@login_required
+def api_data_file(filepath):
+    """Serve any file from the data/ directory."""
+    directory = os.path.dirname(os.path.join(DATA_DIR, filepath))
+    filename = os.path.basename(filepath)
+    return send_from_directory(directory, filename)
+
+
+def _assign_missing_seq(ledger):
+    """Assign seq numbers to any transactions that don't have one yet."""
+    max_seq = max((t.get("seq") or 0 for t in ledger), default=0)
+    changed = False
+    for t in ledger:
+        if not t.get("seq"):
+            max_seq += 1
+            t["seq"] = max_seq
+            changed = True
+    return changed
+
+
+# ── Cash Register (SBI petty cash) ──────────────────────────────────────────
+
+def _parse_ledger_date(d):
+    from datetime import datetime
+    for fmt in ('%d-%b-%y', '%d-%b-%Y', '%Y-%m-%d', '%d/%m/%Y'):
+        try:
+            return datetime.strptime(d.strip(), fmt)
+        except Exception:
+            pass
+    return None
+
+
+def _sbi_cash_ledger_entries(fy=27):
+    """Return FY-filtered SBI cash movements from master ledger.
+
+    Cash Given (credit side): type=transfer with petty-cash/cash heading.
+    Cash Spent (debit side):  type=expense with heading=Cash.
+    """
+    from datetime import datetime
+    # FY26 = 01-Apr-2025 to 31-Mar-2026
+    fy_start = datetime(2000 + fy - 1, 4, 1)
+    fy_end   = datetime(2000 + fy,     3, 31, 23, 59, 59)
+
+    ledger = db.load("master_ledger") or []
+    out = []
+    GIVEN_HEADINGS = {"petty cash", "cash", "interbank", "unknown", ""}
+    for t in ledger:
+        acct = (t.get("account") or "").upper()
+        if "SBI" not in acct:
+            continue
+        heading = (t.get("heading") or "").lower().strip()
+        typ = (t.get("type") or "").lower()
+        narr = (t.get("paid_to") or t.get("remarks") or "").lower()
+        debit = float(t.get("debit") or t.get("amount") or 0)
+
+        is_cr = t.get("source") == "cash_register"
+        if is_cr and debit > 0:
+            side = "spent"
+        elif typ == "transfer" and heading in GIVEN_HEADINGS and debit > 0:
+            side = "given"
+        elif typ == "expense" and heading == "cash" and debit > 0:
+            side = "spent"
+        elif ("atm" in narr or "withdrawal" in narr) and debit > 0:
+            side = "given"
+        else:
+            continue
+
+        dt = _parse_ledger_date(t.get("date") or "")
+        if dt is None or not (fy_start <= dt <= fy_end):
+            continue
+
+        out.append({
+            "id":        t.get("txn_id") or t.get("id") or "",
+            "seq":       t.get("seq"),
+            "date":      t.get("date") or "",
+            "date_iso":  dt.strftime("%Y-%m-%d"),
+            "amount":    debit,
+            "narration": t.get("paid_to") or t.get("remarks") or "SBI Cash",
+            "heading":   (t.get("heading") or "").strip(),
+            "side":      side,
+            "source":    t.get("source") or "ledger",
+            "deletable": t.get("source") == "cash_register",
+            "method":    t.get("method") or "",
+            "bill_b64":  t.get("bill_b64") or "",
+            "notes":     t.get("remarks") or "",
+        })
+
+    out.sort(key=lambda x: (x["date_iso"], x["seq"] or 0))
+    return out
+
+
+def _sbi_upi_to_staff(staff_list):
+    """Pull UPI transfers from SBI to known staff from master ledger."""
+    if not staff_list:
+        return []
+    # Build lookup: token → staff name
+    tokens = {}
+    for s in staff_list:
+        name = s.get("name", "")
+        for field in ("upi_id", "upi_phone"):
+            val = (s.get(field) or "").lower().strip()
+            if val:
+                tokens[val] = name
+        # Also match by first name in paid_to/narration
+        if name:
+            tokens[name.lower().split()[0]] = name
+
+    ledger = db.load("master_ledger") or []
+    out = []
+    for t in ledger:
+        acct = (t.get("account") or "").upper()
+        if "SBI" not in acct:
+            continue
+        typ = (t.get("type") or "").lower()
+        if typ != "transfer":
+            continue
+        amt = t.get("amount") or 0
+        if amt <= 0:
+            continue
+        narr = (t.get("paid_to") or t.get("remarks") or "").lower()
+        heading = (t.get("heading") or "").lower()
+        # Skip ATM/cash withdrawals (already in withdrawals list)
+        if heading in ("cash",) or "atm" in narr or "withdrawal" in narr:
+            continue
+        matched_staff = None
+        for token, sname in tokens.items():
+            if token and token in narr:
+                matched_staff = sname
+                break
+        if not matched_staff:
+            continue
+        out.append({
+            "id": t.get("txn_id") or t.get("id") or "",
+            "date": t.get("date") or "",
+            "amount": amt,
+            "narration": t.get("paid_to") or t.get("remarks") or "",
+            "staff": matched_staff,
+            "source": "ledger",
+            "type": "upi_staff",
+        })
+    out.sort(key=lambda x: x["date"], reverse=True)
+    return out
+
+
+def _detect_staff_upis(entries, staff_list):
+    """Tag register entries whose narration matches a staff UPI id or phone."""
+    upi_map = {}
+    for s in staff_list:
+        for field in ("upi_id", "upi_phone"):
+            val = (s.get(field) or "").lower().strip()
+            if val:
+                upi_map[val] = s["name"]
+    for e in entries:
+        narr = (e.get("narration") or "").lower()
+        for token, name in upi_map.items():
+            if token and token in narr:
+                e.setdefault("staff", name)
+                break
+    return entries
+
+
+@app.route("/api/cash-register", methods=["GET"])
+@login_required
+def api_cash_register_get():
+    staff       = (db.load("cash_staff") or {}).get("staff", [])
+    cash_ledger = _sbi_cash_ledger_entries()   # includes source="cash_register" entries
+    upi_staff   = _sbi_upi_to_staff(staff)
+    upi_ids     = {u["id"] for u in upi_staff}
+    cash_ledger = [e for e in cash_ledger if e["id"] not in upi_ids]
+    return jsonify({
+        "cash_ledger": cash_ledger,
+        "upi_staff":   upi_staff,
+        "staff":       staff,
+    })
+
+
+@app.route("/api/cash-register/entry", methods=["POST"])
+@login_required
+def api_cash_register_entry():
+    """Save a cash register payment as a master ledger entry."""
+    data   = request.get_json(force=True)
+    ledger = db.load("master_ledger") or []
+
+    who     = data.get("staff") or data.get("vendor") or "Cash payment"
+    txn_id  = data.get("id") or ("cr_" + datetime.utcnow().strftime("%Y%m%d%H%M%S%f"))
+    amount  = float(data.get("amount") or 0)
+
+    # Update: remove old entry first
+    ledger = [t for t in ledger if t.get("txn_id") != txn_id]
+
+    entry = {
+        "txn_id":          txn_id,
+        "seq":             max((t.get("seq") or 0 for t in ledger), default=0) + 1,
+        "date":            data.get("date") or "",
+        "account":         "SBI-4852",
+        "type":            "expense",
+        "heading":         data.get("heading") or "Cash",
+        "paid_to":         who,
+        "debit":           amount,
+        "credit":          0.0,
+        "amount":          amount,
+        "remarks":         data.get("notes") or "",
+        "raw_description": f"{who} – {data.get('heading') or 'Cash'}",
+        "source":          "cash_register",
+        "method":          data.get("method") or "cash",
+        "cr_type":         data.get("type") or "vendor",   # vendor|staff
+        "bill_b64":        data.get("bill_b64") or "",
+        "confidence":      "manual",
+        "uncertain":       False,
+        "uncertain_fields":[],
+    }
+    ledger.append(entry)
+    ledger.sort(key=lambda t: t.get("date", ""), reverse=True)
+    db.save("master_ledger", ledger)
+    return jsonify({"ok": True, "id": txn_id, "seq": entry["seq"]})
+
+
+@app.route("/api/cash-register/entry/<eid>", methods=["DELETE"])
+@login_required
+def api_cash_register_delete(eid):
+    """Delete a cash register entry from the master ledger."""
+    ledger = db.load("master_ledger") or []
+    ledger = [t for t in ledger if t.get("txn_id") != eid]
+    db.save("master_ledger", ledger)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/cash-staff", methods=["GET"])
+@login_required
+def api_cash_staff_get():
+    return jsonify(db.load("cash_staff") or {"staff": [
+        {"id":"shiloch","name":"Shiloch","upi_id":"","upi_phone":""},
+        {"id":"mary","name":"Mary","upi_id":"","upi_phone":""},
+        {"id":"santosh","name":"Santosh","upi_id":"","upi_phone":""},
+        {"id":"mohammed","name":"Mohammed","upi_id":"","upi_phone":""},
+    ]})
+
+
+@app.route("/api/cash-staff", methods=["POST"])
+@login_required
+def api_cash_staff_save():
+    db.save("cash_staff", request.get_json(force=True))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/cash-register/ai-extract", methods=["POST"])
+@login_required
+def api_cash_register_ai_extract():
+    """Extract amount, vendor, date from a bill image (base64) using Azure OpenAI."""
+    data = request.get_json(force=True)
+    image_b64 = data.get("image_b64", "")
+    mime = data.get("mime", "image/jpeg")
+    if not image_b64:
+        return jsonify({"error": "no image"}), 400
+    try:
+        from src.azure_openai import client, DEPLOYMENT
+        resp = client.chat.completions.create(
+            model=DEPLOYMENT,
+            max_completion_tokens=400,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{image_b64}"}},
+                    {"type": "text", "text": (
+                        "This is a bill or receipt. Extract: amount (number only, INR), "
+                        "vendor/shop name, date (YYYY-MM-DD if visible). "
+                        "Also suggest the best expense heading from: Groceries, Staff Salary, "
+                        "Electricity & Gas, Wellness, Clothes, Gifts, Medical, Children Education, "
+                        "Holiday, Eating Out, Entertainment, Malhar, Maintenance Expense, "
+                        "Home office, One Time Charge, Kalpataru Maintenance, Misc. "
+                        "Reply as JSON: {\"amount\": 0, \"vendor\": \"\", \"date\": \"\", \"heading\": \"\", \"notes\": \"\"}"
+                    )}
+                ]
+            }]
+        )
+        import re, json as _json
+        raw = resp.choices[0].message.content or ""
+        m = re.search(r'\{.*\}', raw, re.DOTALL)
+        result = _json.loads(m.group()) if m else {"amount": 0, "vendor": "", "date": "", "heading": "", "notes": raw}
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/cash-recon", methods=["GET"])
@@ -1069,6 +1482,7 @@ def _sync_approvals_to_ledger():
 
     if added:
         ledger.sort(key=lambda t: t.get("date",""), reverse=True)
+        _assign_missing_seq(ledger)
         db.save("master_ledger", ledger)
     return added
 
@@ -1089,6 +1503,7 @@ def api_mark_paid():
         txn = _approval_to_ledger_entry(entry)
         if not any(t["txn_id"] == txn["txn_id"] for t in ledger):
             ledger.insert(0, txn)
+            _assign_missing_seq(ledger)
             db.save("master_ledger", ledger)
 
     return jsonify({"status": "ok"})
