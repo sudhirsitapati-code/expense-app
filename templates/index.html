@@ -732,6 +732,7 @@
       <table style="width:100%;border-collapse:collapse;font-size:12px;" id="crCashTable">
         <thead>
           <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
+            <th style="padding:8px 10px;text-align:right;color:#6b7280;font-weight:600;white-space:nowrap;">#</th>
             <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;white-space:nowrap;">Date</th>
             <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Description</th>
             <th style="padding:8px 10px;text-align:left;color:#6b7280;font-weight:600;">Heading</th>
@@ -2809,9 +2810,10 @@ function renderCashRegister() {
     const noteTip = e.notes ? `<div style="font-size:10px;color:#9ca3af;">${e.notes}</div>` : '';
     const label = isGiven ? 'Cash Given' : (e.heading || 'Cash Spent');
     return `<tr style="border-bottom:0.5px solid #f3f4f6;${isGiven?'background:#f9fafb;':''}">
+      <td style="padding:7px 10px;text-align:right;font-size:11px;font-weight:600;color:#374151;white-space:nowrap;">${e.seq||'—'}</td>
       <td style="padding:7px 10px;white-space:nowrap;color:#6b7280;font-size:11px;">${e.date_iso||e.date||''}</td>
       <td style="padding:7px 10px;font-size:12px;">${methodIcon} ${e.narration||''}${noteTip}</td>
-      <td style="padding:7px 10px;font-size:11px;color:#9ca3af;">${label} <span style="color:#e5e7eb;font-size:10px;">#${e.seq||''}</span></td>
+      <td style="padding:7px 10px;font-size:11px;color:#9ca3af;">${label}</td>
       <td style="padding:7px 10px;text-align:right;">${inCell}</td>
       <td style="padding:7px 10px;text-align:right;">${outCell}</td>
       <td style="padding:7px 10px;text-align:right;font-weight:600;color:${balColor};">${crFmt(running)}</td>
@@ -2819,14 +2821,14 @@ function renderCashRegister() {
     </tr>`;
   }).join('');
 
-  const noRows = `<tr><td colspan="7" style="padding:24px;text-align:center;color:#9ca3af;font-size:12px;">
+  const noRows = `<tr><td colspan="8" style="padding:24px;text-align:center;color:#9ca3af;font-size:12px;">
     No SBI cash transactions found in master ledger for FY27.
   </td></tr>`;
 
   document.getElementById('crCashBody').innerHTML = tbody || noRows;
   document.getElementById('crCashFoot').innerHTML = `
     <tr style="background:#f9fafb;border-top:2px solid #e5e7eb;">
-      <td colspan="3" style="padding:8px 10px;font-size:12px;font-weight:700;color:#374151;">Total</td>
+      <td colspan="4" style="padding:8px 10px;font-size:12px;font-weight:700;color:#374151;">Total</td>
       <td style="padding:8px 10px;text-align:right;font-weight:700;color:#16a34a;">${crFmt(totalGiven)}</td>
       <td style="padding:8px 10px;text-align:right;font-weight:700;color:#dc2626;">${crFmt(totalSpent)}</td>
       <td style="padding:8px 10px;text-align:right;font-weight:700;color:${cashBalance>0?'#b45309':'#16a34a'};">${crFmt(Math.abs(cashBalance))}</td>
