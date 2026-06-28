@@ -1007,7 +1007,7 @@ async function loadMyExpenses() {
   el.innerHTML = list.map(e => {
     const badge = getStatusBadge(e);
     const canCancel = !e.confirmed_paid && e.status !== 'cancelled' && e.action !== 'REJECTED';
-    const ts = (e.timestamp||'').slice(0,16).replace('T',' ');
+    const ts = fmtDate((e.timestamp||'').slice(0,10)) + ' ' + (e.timestamp||'').slice(11,16);
     const hasQuery = e.query_state === 'waiting_vincent' || (e.queries && e.queries.length);
     const queryThread = (e.queries||[]).map(qi => `
       <div class="mt-2 p-2 rounded" style="background:#fff8e1;border-left:3px solid #f59e0b">
@@ -1079,7 +1079,7 @@ async function loadRecentExpensesForPhotos() {
     const data = await r.json();
     _allExpenses = data.expenses || [];
     sel.innerHTML = '<option value="">— select expense —</option>' +
-      _allExpenses.map(e => `<option value="${e.id}">${e.date} · ${e.vendor} · ₹${e.amount}</option>`).join('');
+      _allExpenses.map(e => `<option value="${e.id}">${fmtDate(e.date)} · ${e.vendor} · ₹${e.amount}</option>`).join('');
   } catch { sel.innerHTML = '<option value="">Failed to load</option>'; }
 }
 
@@ -1131,7 +1131,7 @@ function lookupBillExpense() {
     (e.vendor || '').toLowerCase().includes(q)
   );
   if (match) {
-    info.innerHTML = `<span class="text-success fw-semibold">✓ ${match.date} · ${match.vendor} · ₹${match.amount}</span>`;
+    info.innerHTML = `<span class="text-success fw-semibold">✓ ${fmtDate(match.date)} · ${match.vendor} · ₹${match.amount}</span>`;
     info.dataset.expenseId = match.id;
   } else {
     info.innerHTML = '<span class="text-danger">No matching expense found</span>';
@@ -1346,7 +1346,7 @@ async function loadApprovals(selectedMonth) {
   const ub = document.getElementById('unauthBody');
   ub.innerHTML = d.unauthorized.length
     ? d.unauthorized.map(e => `<tr>
-        <td>${e.date}</td><td>${e.bank}</td><td>${e.vendor}</td>
+        <td>${fmtDate(e.date)}</td><td>${e.bank}</td><td>${e.vendor}</td>
         <td class="text-end text-danger fw-semibold">₹${Number(e.amount).toLocaleString('en-IN')}</td>
         <td><button class="btn btn-sm btn-outline-secondary" onclick="ignoreUnauth('${e.gmail_id}')">Ignore</button></td>
       </tr>`).join('')
@@ -1499,6 +1499,24 @@ function parseDateVal(s) {
   return new Date(s).getTime() || 0;
 }
 
+function fmtDate(s) {
+  if (!s) return '—';
+  // YYYY-MM-DD
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}-${m[2]}-${m[1].slice(2)}`;
+  // DD/MM/YYYY or DD-MM-YYYY
+  m = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3].slice(2)}`;
+  // DD/MM/YY or DD-MM-YY
+  m = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{2})$/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  // DD-MMM-YY (e.g. 01-Apr-26)
+  const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+  m = s.match(/^(\d{2})-([A-Za-z]{3})-(\d{2,4})$/);
+  if (m) { const mo = months[m[2].toLowerCase()]; if (mo) return `${m[1]}-${mo}-${String(m[3]).slice(-2)}`; }
+  return s;
+}
+
 function sortedLedger(txns) {
   if (!_sortCol) return txns;
   return [...txns].sort((a, b) => {
@@ -1548,7 +1566,7 @@ function renderLedger(txns) {
     const serial = t.seq || (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || '—';
     return `<tr class="${unc}" onclick="openEdit('${t.txn_id}','${txnJ}')">
       <td style="white-space:nowrap;font-size:.75rem;font-weight:600;color:#374151;">${serial}</td>
-      <td style="white-space:nowrap">${t.date}</td>
+      <td style="white-space:nowrap">${fmtDate(t.date)}</td>
       <td><span class="badge bg-light text-dark border">${t.account||'—'}</span></td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.raw_description||''}">${t.raw_description||'—'}</td>
       <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.paid_to||'—'}</td>
@@ -1615,7 +1633,7 @@ function renderNotSure(txns) {
     const serial = t.seq || (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || '—';
     return `<tr id="ns-${t.txn_id}" class="uncertain-row">
       <td style="white-space:nowrap;font-size:.75rem;font-weight:600;color:#374151;">${serial}</td>
-      <td style="white-space:nowrap">${t.date}</td>
+      <td style="white-space:nowrap">${fmtDate(t.date)}</td>
       <td><span class="badge bg-light text-dark border">${t.account||'—'}</span></td>
       <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.raw_description||''}">${t.raw_description||'—'}</td>
       <td><input class="inline-inp" value="${t.paid_to||''}" id="nsp-${t.txn_id}" onclick="event.stopPropagation()"></td>
@@ -2327,7 +2345,7 @@ async function renderProjectTxns(p) {
     const amt = parseFloat(t.debit||0);
     total += amt;
     return `<tr>
-      <td style="white-space:nowrap">${t.date||''}</td>
+      <td style="white-space:nowrap">${fmtDate(t.date)}</td>
       <td><span class="badge bg-light text-dark border">${t.account||'—'}</span></td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.paid_to||t.raw_description||'—'}</td>
       <td>${t.heading||'—'}</td>
@@ -2465,7 +2483,7 @@ function _reclassifyBtn(txnId, extra) {
 function _transferRow(t, rowClass) {
   return `<tr class="${rowClass}" id="unrecon-row-${t.txn_id}">
     <td style="font-size:.75rem;font-weight:600;color:#374151;">${t.seq ?? '—'}</td>
-    <td>${t.date||'—'}</td>
+    <td>${fmtDate(t.date)}</td>
     <td><small>${t.account}</small></td>
     <td class="text-end fw-semibold">${fmt(t.amount)}</td>
     <td><small class="text-muted">${(t.description||'').slice(0,55)}</small></td>
@@ -2479,7 +2497,7 @@ function renderSuspected(rows) {
     ? rows.map(t => `
       <tr id="unrecon-row-${t.txn_id}">
         <td style="font-size:.75rem;font-weight:600;color:#374151;">${t.seq??'—'}</td>
-        <td>${t.date||'—'}</td>
+        <td>${fmtDate(t.date)}</td>
         <td><small>${t.account}</small></td>
         <td><span class="badge ${t.direction==='debit'?'bg-danger':'bg-primary'}">${t.direction}</span></td>
         <td class="text-end fw-semibold">${fmt(t.amount)}</td>
@@ -2811,7 +2829,7 @@ function renderCashRegister() {
     const label = isGiven ? 'Cash Given' : (e.heading || 'Cash Spent');
     return `<tr style="border-bottom:0.5px solid #f3f4f6;${isGiven?'background:#f9fafb;':''}">
       <td style="padding:7px 10px;text-align:right;font-size:11px;font-weight:600;color:#374151;white-space:nowrap;">${e.seq||'—'}</td>
-      <td style="padding:7px 10px;white-space:nowrap;color:#6b7280;font-size:11px;">${e.date_iso||e.date||''}</td>
+      <td style="padding:7px 10px;white-space:nowrap;color:#6b7280;font-size:11px;">${fmtDate(e.date_iso||e.date)}</td>
       <td style="padding:7px 10px;font-size:12px;">${methodIcon} ${e.narration||''}${noteTip}</td>
       <td style="padding:7px 10px;font-size:11px;color:#9ca3af;">${label}</td>
       <td style="padding:7px 10px;text-align:right;">${inCell}</td>
@@ -2842,7 +2860,7 @@ function renderCashRegister() {
   } else {
     uEl.innerHTML = d.upi_staff.map(u => `
       <div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:0.5px solid #e9d5ff;">
-        <span style="font-size:11px;color:#6b7280;min-width:82px;">${u.date}</span>
+        <span style="font-size:11px;color:#6b7280;min-width:82px;">${fmtDate(u.date)}</span>
         <span style="font-size:15px;">📲</span>
         <div style="flex:1;min-width:0;">
           <div style="font-size:12px;font-weight:600;color:#7c3aed;">${u.staff}</div>
@@ -2861,7 +2879,7 @@ function renderCashRegister() {
     eEl.innerHTML = crEntries.map(e => `
       <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:0.5px solid #f3f4f6;">
         <span style="font-size:10px;color:#d1d5db;min-width:36px;font-weight:600;">#${e.seq||''}</span>
-        <span style="font-size:11px;color:#6b7280;min-width:76px;">${e.date_iso||e.date||''}</span>
+        <span style="font-size:11px;color:#6b7280;min-width:76px;">${fmtDate(e.date_iso||e.date)}</span>
         <span style="font-size:14px;">${e.method==='upi'?'📲':'💵'}</span>
         <div style="flex:1;min-width:0;">
           <div style="font-size:12px;font-weight:600;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.narration||'—'}</div>
