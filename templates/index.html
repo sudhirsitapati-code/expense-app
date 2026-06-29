@@ -783,9 +783,8 @@
             <input id="crVendor" class="form-control form-control-sm" placeholder="Vendor / shop name">
           </div>
           <div class="mb-2 d-none" id="crStaffRow">
-            <select id="crStaff" class="form-select form-select-sm">
-              <option value="">— select staff —</option>
-            </select>
+            <input id="crStaff" class="form-control form-control-sm" placeholder="Staff name" list="crStaffList" autocomplete="off">
+            <datalist id="crStaffList"></datalist>
           </div>
           <div class="row g-2 mb-2">
             <div class="col">
@@ -2915,9 +2914,8 @@ function renderCrStaffBtns(staff) {
     `<button class="btn btn-sm" style="background:#ede9fe;color:#5b21b6;border:none;font-size:12px;padding:4px 12px;border-radius:20px;"
       onclick="crQuickStaff('${s.id}','${s.name}')">${s.name}</button>`
   ).join('');
-  const sel = document.getElementById('crStaff');
-  sel.innerHTML = '<option value="">— select staff —</option>' +
-    (staff||[]).map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+  document.getElementById('crStaffList').innerHTML =
+    (staff||[]).map(s => `<option value="${s.name}">`).join('');
 }
 
 function renderCrStaffSettings(staff) {
