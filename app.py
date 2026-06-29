@@ -2141,6 +2141,21 @@ def api_debug_mis_actuals():
     return jsonify({"included": fy27_actual, "skipped_count": len(skipped), "skipped_sample": skipped[:30]})
 
 
+@app.route("/api/ledger/<txn_id>", methods=["DELETE"])
+@login_required
+def api_ledger_delete(txn_id):
+    """Delete an SBI entry from the master ledger."""
+    ledger = db.load("master_ledger") or []
+    entry = next((t for t in ledger if t.get("txn_id") == txn_id), None)
+    if not entry:
+        return jsonify({"error": "not found"}), 404
+    if not (entry.get("account") or "").upper().startswith("SBI"):
+        return jsonify({"error": "only SBI entries can be deleted"}), 403
+    ledger = [t for t in ledger if t.get("txn_id") != txn_id]
+    db.save("master_ledger", ledger)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/master-ledger/<txn_id>", methods=["PATCH"])
 @login_required
 def api_ledger_update(txn_id):

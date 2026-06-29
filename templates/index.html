@@ -1546,6 +1546,17 @@ function cycleSort(col) {
 
 function filterLedger() { _sortCol = null; _sortDir = 0; loadLedger(); }
 
+async function deleteLedgerEntry(txnId, label) {
+  if (!confirm(`Delete entry: ${label}?\n\nThis cannot be undone.`)) return;
+  const r = await fetch(`/api/ledger/${txnId}`, {method:'DELETE'});
+  if (r.ok) {
+    window._ledgerAll = (window._ledgerAll||[]).filter(t => t.txn_id !== txnId);
+    renderLedger(sortedLedger(window._ledgerAll));
+  } else {
+    alert('Delete failed');
+  }
+}
+
 function renderLedger(txns) {
   const tbody = document.getElementById('ledgerBody');
   if (!txns.length) {
@@ -1564,6 +1575,9 @@ function renderLedger(txns) {
       : '';
     const txnJ = encodeURIComponent(JSON.stringify(t));
     const serial = t.seq || (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || '—';
+    const isSBI = (t.account||'').toUpperCase().startsWith('SBI');
+    const delBtn = isSBI ? `<button onclick="event.stopPropagation();deleteLedgerEntry('${t.txn_id}','${(t.paid_to||t.raw_description||'').replace(/'/g,'')}')"
+      style="background:none;border:none;color:#d1d5db;font-size:12px;cursor:pointer;padding:0 4px;" title="Delete entry">✕</button>` : '';
     return `<tr class="${unc}" onclick="openEdit('${t.txn_id}','${txnJ}')">
       <td style="white-space:nowrap;font-size:.75rem;font-weight:600;color:#374151;">${serial}</td>
       <td style="white-space:nowrap">${fmtDate(t.date)}</td>
@@ -1577,6 +1591,7 @@ function renderLedger(txns) {
       <td class="text-muted">${t.remarks||''}</td>
       <td>${t.project ? `<span class="badge bg-info text-dark" style="font-size:.65rem">${_projectName(t.project)}</span>` : ''}</td>
       <td>${tip}</td>
+      <td>${delBtn}</td>
     </tr>`;
   }).join('');
 }
