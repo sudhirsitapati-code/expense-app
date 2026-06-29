@@ -141,6 +141,14 @@ Reply ONLY with JSON."""
     def evaluate(self, req: ExpenseRequest) -> ApprovalDecision:
         decision = ApprovalDecision(request_id=req.request_id, action="", reason="")
 
+        # Rule 0: Salary heading submitted by Vincent — always auto-approve
+        if req.submitter.lower() == "vincent" and (req.heading or "").lower() == "salary":
+            decision.action = "AUTO_APPROVE"
+            decision.reason = "Salary payment submitted by Vincent — auto-approved"
+            decision.confirmed_paid = True
+            self._save_to_log(req, decision)
+            return decision
+
         # Rule 1: Recurring — always auto-approve
         matched = self._match_recurring(req)
         if matched:
@@ -207,12 +215,14 @@ Reply ONLY with JSON."""
     def _build_escalation_message(self, req: ExpenseRequest, extra_note: str = "") -> str:
         payment_tag = "💵 Cash" if req.payment_method == "cash" else "🏦 SBI-3152"
         post_tag = " [POST-FACTO]" if req.is_post_facto else ""
+        heading_line = f"Heading: {req.heading}\n" if req.heading else ""
         return (
             f"💰 *Expense Approval Required{post_tag}*\n"
             f"From: {req.submitter.title()}\n"
             f"Vendor: {req.vendor}\n"
             f"Amount: Rs {req.amount:,.0f}\n"
             f"Category: {req.category}\n"
+            f"{heading_line}"
             f"Purpose: {req.description}\n"
             f"Payment: {payment_tag}{extra_note}\n\n"
             f"Reply *Y* to approve | *N* to reject | *L [amount]* for lower\n"
