@@ -1310,7 +1310,7 @@ def api_submit_expense():
                 description=data["description"],
                 payment_method=data.get("payment_method", "upi"),
                 is_post_facto=data.get("is_post_facto", False),
-                heading=data.get("heading", ""),
+                heading=data.get("heading") or data.get("category", ""),
                 expense_type=data.get("expense_type", "expense"),
             )
         except (KeyError, ValueError) as e:
