@@ -115,6 +115,11 @@ def _open_pdf(pdf_bytes: bytes):
     raise ValueError(f"No password worked for SBI PDF (tried {len(candidates)} variants)")
 
 
+# Known SBI account aliases — all map to the canonical account name
+_SBI_ACCOUNT_ALIASES = {
+    "3152": "SBI-4852",  # same physical account, different digit extraction
+}
+
 def _extract_account_from_text(text: str) -> str:
     """Extract last 4 digits of SBI account number."""
     for pat in [
@@ -126,7 +131,8 @@ def _extract_account_from_text(text: str) -> str:
         m = re.search(pat, text[:3000])
         if m:
             digits = m.group(1) if len(m.groups()) >= 1 else m.group(0)
-            return f"SBI-{digits[-4:]}"
+            last4 = digits[-4:]
+            return _SBI_ACCOUNT_ALIASES.get(last4, f"SBI-{last4}")
     return "SBI-????"
 
 

@@ -533,6 +533,126 @@ def api_mis():
                         "period_months": list(FY25_MONTHLY.get("Groceries", {}).keys()),
                         "groups": groups, "grand": grand})
 
+    # ── monthly_full: one column per FY27 month + FY26 avg/mo ────────────────
+    elif period == "monthly_full":
+        from src.master_ledger import _parse_date as _ml_parse_date
+        FY27_MONTHS = ["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar"]
+        MON_TO_YM = {
+            "Apr":"2026-04","May":"2026-05","Jun":"2026-06","Jul":"2026-07",
+            "Aug":"2026-08","Sep":"2026-09","Oct":"2026-10","Nov":"2026-11",
+            "Dec":"2026-12","Jan":"2027-01","Feb":"2027-02","Mar":"2027-03",
+        }
+        _fy27_start = datetime(2026, 4, 1)
+        fy27_by_ym: dict = {}
+        for txn in load_ledger():
+            if (txn.get("type") or "").lower() not in ("expense", "official"):
+                continue
+            if txn.get("uncertain"):
+                continue
+            dt = _ml_parse_date(txn.get("date", ""))
+            if not dt or dt < _fy27_start:
+                continue
+            ym = dt.strftime("%Y-%m")
+            if ym not in MON_TO_YM.values():
+                continue
+            heading = _norm_heading(txn.get("heading", "") or "")
+            if heading is None:
+                continue
+            amt = float(txn.get("debit", 0) or 0)
+            if amt > 0:
+                fy27_by_ym.setdefault(heading, {})
+                fy27_by_ym[heading][ym] = fy27_by_ym[heading].get(ym, 0) + amt
+
+        by_super: dict = {s: [] for s in SUPER_ORDER}
+        for heading in sorted(_CANONICAL):
+            super_cat = HEADING_SUPER.get(heading, "Household")
+            fy26_avg = round(_fy26_full_year(heading) / 12)
+            monthly = {mon: round(fy27_by_ym.get(heading, {}).get(MON_TO_YM[mon], 0)) for mon in FY27_MONTHS}
+            by_super.setdefault(super_cat, []).append({"category": heading, "fy26_avg": fy26_avg, "monthly": monthly})
+
+        groups = []
+        grand_monthly = {mon: 0 for mon in FY27_MONTHS}
+        grand_avg = 0
+        for super_cat in SUPER_ORDER:
+            rows = by_super.get(super_cat, [])
+            if not rows:
+                continue
+            sub_monthly = {mon: sum(r["monthly"].get(mon, 0) for r in rows) for mon in FY27_MONTHS}
+            sub_avg = sum(r["fy26_avg"] for r in rows)
+            for mon in FY27_MONTHS:
+                grand_monthly[mon] += sub_monthly[mon]
+            grand_avg += sub_avg
+            groups.append({"super_category": super_cat, "rows": rows,
+                           "subtotal": {"fy26_avg": sub_avg, "monthly": sub_monthly}})
+        grand = {"fy26_avg": grand_avg, "monthly": grand_monthly}
+        return jsonify({"period": "monthly_full", "months": FY27_MONTHS, "groups": groups, "grand": grand})
+
+    # ── quarterly_full: Q1-Q4 FY26 + Q1-Q4 FY27 ─────────────────────────────
+    elif period == "quarterly_full":
+        from src.master_ledger import _parse_date as _ml_parse_date
+        FY26_Q = {
+            "Q1": ["Apr","May","Jun"], "Q2": ["Jul","Aug","Sep"],
+            "Q3": ["Oct","Nov","Dec"], "Q4": ["Jan","Feb","Mar"],
+        }
+        FY27_Q_YMS = {
+            "Q1": ["2026-04","2026-05","2026-06"],
+            "Q2": ["2026-07","2026-08","2026-09"],
+            "Q3": ["2026-10","2026-11","2026-12"],
+            "Q4": ["2027-01","2027-02","2027-03"],
+        }
+        _fy27_start = datetime(2026, 4, 1)
+        fy27_by_ym: dict = {}
+        for txn in load_ledger():
+            if (txn.get("type") or "").lower() not in ("expense", "official"):
+                continue
+            if txn.get("uncertain"):
+                continue
+            dt = _ml_parse_date(txn.get("date", ""))
+            if not dt or dt < _fy27_start:
+                continue
+            heading = _norm_heading(txn.get("heading", "") or "")
+            if heading is None:
+                continue
+            amt = float(txn.get("debit", 0) or 0)
+            if amt > 0:
+                ym = dt.strftime("%Y-%m")
+                fy27_by_ym.setdefault(heading, {})
+                fy27_by_ym[heading][ym] = fy27_by_ym[heading].get(ym, 0) + amt
+
+        def _fy26_q(heading, mons):
+            return round(sum(FY26_MONTHLY.get(heading, {}).get(m, 0) for m in mons))
+
+        def _fy27_q(heading, yms):
+            return round(sum(fy27_by_ym.get(heading, {}).get(ym, 0) for ym in yms))
+
+        QCOLS = ["fy26_q1","fy26_q2","fy26_q3","fy26_q4","fy27_q1","fy27_q2","fy27_q3","fy27_q4"]
+        by_super: dict = {s: [] for s in SUPER_ORDER}
+        for heading in sorted(_CANONICAL):
+            super_cat = HEADING_SUPER.get(heading, "Household")
+            row = {
+                "category": heading,
+                "fy26_q1": _fy26_q(heading, FY26_Q["Q1"]),
+                "fy26_q2": _fy26_q(heading, FY26_Q["Q2"]),
+                "fy26_q3": _fy26_q(heading, FY26_Q["Q3"]),
+                "fy26_q4": _fy26_q(heading, FY26_Q["Q4"]),
+                "fy27_q1": _fy27_q(heading, FY27_Q_YMS["Q1"]),
+                "fy27_q2": _fy27_q(heading, FY27_Q_YMS["Q2"]),
+                "fy27_q3": 0, "fy27_q4": 0,
+            }
+            by_super.setdefault(super_cat, []).append(row)
+
+        groups = []
+        grand = {k: 0 for k in QCOLS}
+        for super_cat in SUPER_ORDER:
+            rows = by_super.get(super_cat, [])
+            if not rows:
+                continue
+            sub = {k: sum(r[k] for r in rows) for k in QCOLS}
+            for k in QCOLS:
+                grand[k] += sub[k]
+            groups.append({"super_category": super_cat, "rows": rows, "subtotal": sub})
+        return jsonify({"period": "quarterly_full", "groups": groups, "grand": grand})
+
     # ── FY27 actual from master ledger ────────────────────────────────────────
     from src.master_ledger import _parse_date as _ml_parse_date
     fy27_actual: dict = {}

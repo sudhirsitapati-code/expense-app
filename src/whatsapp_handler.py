@@ -13,13 +13,9 @@ FROM_NUMBER = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
 
 SUDHIR = os.getenv("SUDHIR_WHATSAPP")
 VINCENT = os.getenv("VINCENT_WHATSAPP")
-KETKI = os.getenv("KETKI_WHATSAPP")
-SANTOSH = os.getenv("SANTOSH_WHATSAPP")
 
 HOUSEHOLD_MEMBERS = {
     "vincent": VINCENT,
-    "ketki": KETKI,
-    "santosh": SANTOSH,
 }
 
 

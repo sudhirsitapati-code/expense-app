@@ -367,14 +367,14 @@
 <!-- ── Budget Tracker (MIS) ── -->
 <div id="rp-mis" class="d-none">
   <div class="d-flex align-items-center gap-2 mb-3" id="misPeriodBtns">
-    <button class="btn btn-sm btn-outline-primary" id="misBtnMonth" onclick="loadMIS('month',this)">This Month</button>
-    <button class="btn btn-sm btn-outline-primary" id="misBtnQtr"   onclick="loadMIS('quarter',this)">This Quarter</button>
+    <button class="btn btn-sm btn-outline-primary" id="misBtnMonth" onclick="loadMIS('monthly_full',this)">Monthly</button>
+    <button class="btn btn-sm btn-outline-primary" id="misBtnQtr"   onclick="loadMIS('quarterly_full',this)">Quarterly</button>
     <button class="btn btn-sm btn-outline-primary active" id="misBtnYtd" onclick="loadMIS('ytd',this)">YTD</button>
     <span class="text-muted small ms-2" id="misPeriodLabel"></span>
   </div>
   <div class="table-wrap">
   <table class="table table-sm mb-0">
-    <thead><tr>
+    <thead><tr id="misHead">
       <th style="width:28%">Category</th>
       <th class="text-end" id="misColFy24" style="display:none">FY24</th>
       <th class="text-end" id="misColFy25" style="display:none">FY25</th>
@@ -1794,6 +1794,98 @@ async function loadMIS(period, btn) {
   ['misBtnMonth','misBtnQtr','misBtnYtd'].forEach(id =>
     document.getElementById(id)?.classList.remove('active'));
   if (btn) btn.classList.add('active');
+
+  // ── Monthly full view ────────────────────────────────────────────────────
+  if (period === 'monthly_full') {
+    document.getElementById('misPeriodBtns').style.display = '';
+    document.getElementById('misPeriodLabel').textContent = '(FY27 Monthly Breakdown)';
+    const r = await fetch('/api/mis?period=monthly_full&fy=FY27');
+    const d = await r.json();
+    const months = d.months || [];
+    // Determine which months have data (up to and including current YM)
+    const nowYM = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; })();
+    const MON_YM = {Apr:'2026-04',May:'2026-05',Jun:'2026-06',Jul:'2026-07',
+                    Aug:'2026-08',Sep:'2026-09',Oct:'2026-10',Nov:'2026-11',
+                    Dec:'2026-12',Jan:'2027-01',Feb:'2027-02',Mar:'2027-03'};
+    const misHead = document.getElementById('misHead');
+    misHead.innerHTML = `<th style="min-width:140px">Category</th>
+      <th class="text-end" style="background:#f0f4ff;min-width:70px">FY26 Avg</th>
+      ${months.map(m => `<th class="text-end" style="min-width:65px${MON_YM[m]<=nowYM?'':';color:#bbb'}">${m}</th>`).join('')}`;
+    const tbody = document.getElementById('misBody');
+    const fmtCell = (v, ym) => ym > nowYM ? '<td class="text-end" style="color:#ccc">—</td>'
+                                           : `<td class="text-end">${v ? fmt(v) : '—'}</td>`;
+    let html = '';
+    (d.groups || []).forEach(g => {
+      const cols = 2 + months.length;
+      html += `<tr class="mis-super"><td colspan="${cols}" class="ps-2">${g.super_category}</td></tr>`;
+      (g.rows || []).forEach(row => {
+        html += `<tr>
+          <td class="ps-4">${row.category}</td>
+          <td class="text-end" style="background:#f8f9ff;font-weight:500">${fmt(row.fy26_avg)}</td>
+          ${months.map(m => fmtCell(row.monthly[m], MON_YM[m])).join('')}
+        </tr>`;
+      });
+      html += `<tr class="mis-sub">
+        <td class="ps-2">Sub-total ${g.super_category}</td>
+        <td class="text-end" style="background:#f0f4ff">${fmt(g.subtotal.fy26_avg)}</td>
+        ${months.map(m => fmtCell(g.subtotal.monthly[m], MON_YM[m])).join('')}
+      </tr>`;
+    });
+    html += `<tr class="mis-grand">
+      <td class="ps-2">GRAND TOTAL</td>
+      <td class="text-end" style="background:#e8edff">${fmt(d.grand?.fy26_avg)}</td>
+      ${months.map(m => fmtCell(d.grand?.monthly?.[m], MON_YM[m])).join('')}
+    </tr>`;
+    tbody.innerHTML = html;
+    return;
+  }
+
+  // ── Quarterly full view ──────────────────────────────────────────────────
+  if (period === 'quarterly_full') {
+    document.getElementById('misPeriodBtns').style.display = '';
+    document.getElementById('misPeriodLabel').textContent = '(Q1–Q4 FY26 vs FY27)';
+    const r = await fetch('/api/mis?period=quarterly_full&fy=FY27');
+    const d = await r.json();
+    const misHead = document.getElementById('misHead');
+    misHead.innerHTML = `<th style="min-width:140px">Category</th>
+      <th class="text-end" style="background:#f5f5f5;min-width:72px">Q1 FY26</th>
+      <th class="text-end" style="background:#f5f5f5;min-width:72px">Q2 FY26</th>
+      <th class="text-end" style="background:#f5f5f5;min-width:72px">Q3 FY26</th>
+      <th class="text-end" style="background:#f5f5f5;min-width:72px">Q4 FY26</th>
+      <th class="text-end" style="background:#f0f4ff;min-width:72px">Q1 FY27</th>
+      <th class="text-end" style="background:#f0f4ff;min-width:88px">Q2 FY27 QTD</th>
+      <th class="text-end" style="color:#bbb;min-width:72px">Q3 FY27</th>
+      <th class="text-end" style="color:#bbb;min-width:72px">Q4 FY27</th>`;
+    const tbody = document.getElementById('misBody');
+    const QCOLS = ['fy26_q1','fy26_q2','fy26_q3','fy26_q4','fy27_q1','fy27_q2','fy27_q3','fy27_q4'];
+    const futureQ = new Set(['fy27_q3','fy27_q4']);
+    const qCell = (v, k) => futureQ.has(k) ? '<td class="text-end" style="color:#ccc">—</td>'
+                                            : `<td class="text-end">${v ? fmt(v) : '—'}</td>`;
+    let html = '';
+    (d.groups || []).forEach(g => {
+      html += `<tr class="mis-super"><td colspan="9" class="ps-2">${g.super_category}</td></tr>`;
+      (g.rows || []).forEach(row => {
+        html += `<tr><td class="ps-4">${row.category}</td>${QCOLS.map(k => qCell(row[k],k)).join('')}</tr>`;
+      });
+      html += `<tr class="mis-sub"><td class="ps-2">Sub-total ${g.super_category}</td>
+        ${QCOLS.map(k => qCell(g.subtotal[k],k)).join('')}</tr>`;
+    });
+    html += `<tr class="mis-grand"><td class="ps-2">GRAND TOTAL</td>
+      ${QCOLS.map(k => qCell(d.grand?.[k],k)).join('')}</tr>`;
+    tbody.innerHTML = html;
+    return;
+  }
+
+  // Restore standard thead (may have been replaced by monthly/quarterly views)
+  document.getElementById('misHead').innerHTML = `
+    <th style="width:28%">Category</th>
+    <th class="text-end" id="misColFy24" style="display:none">FY24</th>
+    <th class="text-end" id="misColFy25" style="display:none">FY25</th>
+    <th class="text-end" id="misColFy26Label">FY26</th>
+    <th class="text-end" id="misColFy26FY" style="display:none">FY26 Full Year</th>
+    <th class="text-end" id="misColBudgetHdr">FY27 Budget</th>
+    <th class="text-end" id="misColActualHdr">FY27 Actual</th>
+    <th style="width:90px">Used %</th>`;
 
   const isHistorical = _activeYear !== 'FY27';
   document.getElementById('misPeriodBtns').style.display = isHistorical ? 'none' : '';

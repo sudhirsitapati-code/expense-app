@@ -67,6 +67,61 @@ body { background:#f8f9fa; font-size:14px; }
 .note { font-size:12px; color:#94a3b8; margin-top:12px; padding:8px 14px; background:#f8fafc; border-radius:6px; border-left:3px solid #e2e8f0; }
 .tab-panel { display:none; padding:18px 20px; }
 .tab-panel.active { display:block; }
+
+/* ── Asset Registry ── */
+.ar-class { background:#fff; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:8px; overflow:hidden; }
+.ar-class-hdr { display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; user-select:none; background:#f8fafc; }
+.ar-class-hdr:hover { background:#f1f5f9; }
+.ar-class-hdr .ar-icon { font-size:16px; color:#1e3a5f; width:20px; text-align:center; flex-shrink:0; }
+.ar-class-hdr .ar-label { font-size:13px; font-weight:600; color:#1e293b; flex:1; }
+.ar-class-hdr .ar-total { font-size:13px; font-weight:700; color:#1e3a5f; min-width:90px; text-align:right; }
+.ar-class-hdr .ar-add-btn { font-size:11px; padding:2px 10px; border-radius:5px; border:1px solid #cbd5e1; background:#fff; color:#475569; cursor:pointer; white-space:nowrap; }
+.ar-class-hdr .ar-add-btn:hover { background:#1e3a5f; color:#fff; border-color:#1e3a5f; }
+.ar-class-hdr .ar-expand { font-size:12px; font-weight:700; width:18px; height:18px; border-radius:4px; background:#e2e8f0; color:#475569; display:flex;align-items:center;justify-content:center; flex-shrink:0; transition:background .1s; }
+.ar-class-hdr .ar-expand.open { background:#1e3a5f; color:#fff; }
+.ar-class-body { display:none; border-top:1px solid #e2e8f0; }
+.ar-class-body.open { display:block; }
+.ar-item { border-bottom:0.5px solid #f1f5f9; }
+.ar-item:last-child { border-bottom:none; }
+.ar-item-row { display:grid; grid-template-columns:1fr 110px 110px 110px 80px; align-items:center; padding:8px 14px 8px 28px; cursor:pointer; gap:8px; }
+.ar-item-row:hover { background:#fafbff; }
+.ar-item-name { font-size:13px; color:#1e293b; display:flex; align-items:center; gap:6px; }
+.ar-item-name .ar-expand { flex-shrink:0; }
+.ar-val { font-size:12px; font-variant-numeric:tabular-nums; text-align:right; color:#475569; }
+.ar-val.highlight { color:#1e3a5f; font-weight:600; }
+.ar-col-hdr { display:grid; grid-template-columns:1fr 110px 110px 110px 80px; padding:5px 14px 5px 28px; gap:8px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
+.ar-col-hdr span { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; color:#94a3b8; text-align:right; }
+.ar-col-hdr span:first-child { text-align:left; }
+.ar-detail { display:none; background:#fafbff; border-top:0.5px solid #e2e8f0; padding:14px 28px; }
+.ar-detail.open { display:block; }
+.ar-detail-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px; }
+.ar-field { display:flex; flex-direction:column; gap:3px; }
+.ar-field label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; color:#94a3b8; }
+.ar-field input, .ar-field textarea { border:1px solid #e2e8f0; border-radius:5px; padding:5px 8px; font-size:12px; color:#1e293b; background:#fff; font-family:inherit; }
+.ar-field textarea { resize:vertical; min-height:52px; }
+.ar-field input:focus, .ar-field textarea:focus { outline:none; border-color:#3b82f6; }
+.ar-field .ar-field-val { font-size:13px; color:#1e293b; font-weight:500; padding:4px 0; }
+.ar-sub-table { width:100%; border-collapse:collapse; margin-top:8px; font-size:12px; }
+.ar-sub-table th { text-align:left; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; color:#94a3b8; padding:4px 8px; border-bottom:1px solid #e2e8f0; }
+.ar-sub-table td { padding:5px 8px; border-bottom:0.5px solid #f1f5f9; color:#1e293b; }
+.ar-sub-table td.r { text-align:right; font-variant-numeric:tabular-nums; }
+.ar-docs { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
+.ar-doc-chip { font-size:11px; padding:3px 10px; background:#eff6ff; color:#1d4ed8; border-radius:12px; border:1px solid #bfdbfe; }
+.ar-btns { display:flex; gap:8px; margin-top:10px; }
+.ar-btn { font-size:11px; padding:4px 14px; border-radius:5px; cursor:pointer; border:1px solid; }
+.ar-btn.save { background:#1e3a5f; color:#fff; border-color:#1e3a5f; }
+.ar-btn.cancel { background:#fff; color:#475569; border-color:#cbd5e1; }
+.ar-btn.edit { background:#fff; color:#1e3a5f; border-color:#1e3a5f; }
+.ar-btn.del { background:#fff; color:#dc2626; border-color:#fca5a5; }
+.ar-edit-mode .ar-field-val { display:none; }
+.ar-view-mode .ar-field input, .ar-view-mode .ar-field textarea { display:none; }
+.ar-edit-mode .ar-btns .save, .ar-edit-mode .ar-btns .cancel { display:inline-block; }
+.ar-view-mode .ar-btns .save, .ar-view-mode .ar-btns .cancel { display:none; }
+.ar-liability .ar-class-hdr { background:#fff5f5; }
+.ar-liability .ar-class-hdr .ar-icon, .ar-liability .ar-class-hdr .ar-label { color:#7f1d1d; }
+.ar-liability .ar-class-hdr .ar-total { color:#dc2626; }
+.ar-liability .ar-class-hdr .ar-expand.open { background:#dc2626; }
+.ar-ins-note { font-size:11px; color:#f59e0b; font-weight:600; margin-left:6px; }
 </style>
 </head>
 <body>
@@ -131,17 +186,22 @@ body { background:#f8f9fa; font-size:14px; }
 
 <!-- Assets & Liabilities Detail Tab -->
 <div id="tab-detail" class="tab-panel">
-  <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#64748b; margin-bottom:8px;">Assets — Market Value (₹ Crores)</div>
-  <table class="fs-table"><thead><tr>
-    <th>Asset</th><th>Type</th>
-    <th class="r">FY24 (₹ Cr)</th><th class="r">FY25 (₹ Cr)</th><th class="r">FY26 (₹ Cr)</th>
-  </tr></thead><tbody id="assets-body"></tbody></table>
+  <div id="ar-kpis" class="kpi-row" style="margin-bottom:14px;"></div>
 
-  <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#64748b; margin:20px 0 8px;">Liabilities (₹ Crores)</div>
-  <table class="fs-table"><thead><tr>
-    <th>Liability</th><th>Type</th>
-    <th class="r">FY24 (₹ Cr)</th><th class="r">FY25 (₹ Cr)</th><th class="r">FY26 (₹ Cr)</th>
-  </tr></thead><tbody id="liabilities-body"></tbody></table>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;">Assets</div>
+    <button class="btn btn-sm" style="font-size:11px;background:#1e3a5f;color:#fff;border:none;padding:3px 12px;border-radius:6px;" onclick="addNewClass('assets')">+ New Class</button>
+  </div>
+  <div id="ar-assets"></div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 6px;">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;">Liabilities</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-sm" style="font-size:11px;background:#7f1d1d;color:#fff;border:none;padding:3px 12px;border-radius:6px;" onclick="addNewClass('liabilities')">+ New Class</button>
+      <button class="btn btn-sm" style="font-size:11px;background:#fff;color:#94a3b8;border:1px solid #e2e8f0;padding:3px 12px;border-radius:6px;" onclick="resetRegistry()" title="Restore seed data (will overwrite any edits)">↺ Reset defaults</button>
+    </div>
+  </div>
+  <div id="ar-liabilities"></div>
 </div>
 
 <script>
@@ -154,14 +214,7 @@ let _visibleFY = new Set(['FY24','FY25','FY26']);
 const fmtCr  = v => v != null ? (v/100).toLocaleString('en-IN', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' Cr' : '—';
 const fmtCrK = v => v != null ? '₹' + (v/100).toLocaleString('en-IN', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' Cr' : '—';
 const fmt    = fmtCr;   // P&L table cells reuse same formatter
-const fmtL   = fmtCrK;  // P&L KPI cards
-
-function switchTab(name, el) {
-  document.querySelectorAll('.fs-tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-}
+const fmtCrKpi = fmtCrK;  // P&L KPI cards (fmtL redefined below for registry)
 
 function typeColor(type) {
   const map = {
@@ -203,10 +256,10 @@ function renderPL(d) {
   const fy = ALL_FY;
 
   document.getElementById('pl-kpis').innerHTML = `
-    <div class="kpi"><div class="kpi-label">FY24 Net Surplus</div><div class="kpi-val ${p.FY24.net_surplus>=0?'green':'red'}">${fmtL(p.FY24.net_surplus)}</div></div>
-    <div class="kpi"><div class="kpi-label">FY25 Net Surplus</div><div class="kpi-val ${p.FY25.net_surplus>=0?'green':'red'}">${fmtL(p.FY25.net_surplus)}</div></div>
-    <div class="kpi"><div class="kpi-label">FY26 Net Surplus</div><div class="kpi-val ${p.FY26.net_surplus>=0?'green':'red'}">${fmtL(p.FY26.net_surplus)}</div></div>
-    <div class="kpi"><div class="kpi-label">FY26 Total Income</div><div class="kpi-val blue">${fmtL(p.FY26.total_income)}</div></div>`;
+    <div class="kpi"><div class="kpi-label">FY24 Net Surplus</div><div class="kpi-val ${p.FY24.net_surplus>=0?'green':'red'}">${fmtCrK(p.FY24.net_surplus)}</div></div>
+    <div class="kpi"><div class="kpi-label">FY25 Net Surplus</div><div class="kpi-val ${p.FY25.net_surplus>=0?'green':'red'}">${fmtCrK(p.FY25.net_surplus)}</div></div>
+    <div class="kpi"><div class="kpi-label">FY26 Net Surplus</div><div class="kpi-val ${p.FY26.net_surplus>=0?'green':'red'}">${fmtCrK(p.FY26.net_surplus)}</div></div>
+    <div class="kpi"><div class="kpi-label">FY26 Total Income</div><div class="kpi-val blue">${fmtCrK(p.FY26.total_income)}</div></div>`;
 
   const NON_FIN = ['Household','Personal','Family','Giving','Lifestyle','Property'];
   const cols = fy.length + 1;
@@ -394,36 +447,259 @@ function renderBS(d) {
   document.getElementById('bs-body').innerHTML = html;
 }
 
-function renderDetail(d) {
-  const typeColor2 = t => `<span class="badge ${typeColor(t)}">${t}</span>`;
-  const v = x => x != null ? fmtCr(x) : '<span style="color:#cbd5e1">—</span>';
-
-  document.getElementById('assets-body').innerHTML = d.assets.map(a => {
-    return `<tr><td class="i">${a.name}</td><td>${typeColor2(a.type)}</td><td class="r">${v(a.fy24)}</td><td class="r">${v(a.fy25)}</td><td class="r">${v(a.fy26)}</td></tr>`;
-  }).join('') + `<tr class="tot"><td colspan="2">Total Assets</td>
-    <td class="r">${fmtCr(d.balance_sheet.FY24.total_assets)}</td>
-    <td class="r">${fmtCr(d.balance_sheet.FY25.total_assets)}</td>
-    <td class="r">${fmtCr(d.balance_sheet.FY26.total_assets)}</td></tr>`;
-
-  document.getElementById('liabilities-body').innerHTML = d.liabilities.map(l =>
-    `<tr><td class="i">${l.name}</td><td>${typeColor2(l.type)}</td><td class="r">${v(l.fy24)}</td><td class="r">${v(l.fy25)}</td><td class="r">${v(l.fy26)}</td></tr>`
-  ).join('') + `<tr class="totr"><td colspan="2">Total Liabilities</td>
-    <td class="r">${fmtCr(d.balance_sheet.FY24.total_liabilities)}</td>
-    <td class="r">${fmtCr(d.balance_sheet.FY25.total_liabilities)}</td>
-    <td class="r">${fmtCr(d.balance_sheet.FY26.total_liabilities)}</td></tr>`;
-}
-
 function renderAll() {
   if (!_data) return;
   renderPL(_data);
   renderBS(_data);
-  renderDetail(_data);
 }
 
 async function loadData() {
   const r = await fetch('/api/financial-statements');
   _data = await r.json();
   renderAll();
+}
+
+// ── Asset Registry ──────────────────────────────────────────────────────────
+let _registry = null;
+let _arExpand = {};   // classId → bool
+let _itemExpand = {}; // itemId → bool
+
+const fmtL = v => v != null ? '₹' + (v/100).toLocaleString('en-IN',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' Cr' : '—';
+const fmtLshort = v => v != null ? (v/100).toLocaleString('en-IN',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' Cr' : '—';
+
+function arClassTotal(cls) {
+  return cls.items.reduce((s, it) => {
+    const v = it.value_mar26_L;
+    return s + (v != null ? v : 0);
+  }, 0);
+}
+
+function renderRegistry() {
+  if (!_registry) return;
+  const assets = _registry.classes.filter(c => c.section === 'assets');
+  const liabs  = _registry.classes.filter(c => c.section === 'liabilities');
+
+  let totalA = 0, totalL = 0;
+  assets.forEach(c => { totalA += arClassTotal(c); });
+  liabs.forEach(c => { totalL += arClassTotal(c); });
+
+  document.getElementById('ar-kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-label">Total Assets (Mar 31 '26)</div><div class="kpi-val blue">${fmtL(totalA)}</div></div>
+    <div class="kpi"><div class="kpi-label">Total Liabilities</div><div class="kpi-val red">${fmtL(totalL)}</div></div>
+    <div class="kpi"><div class="kpi-label">Net Worth</div><div class="kpi-val ${totalA-totalL>=0?'green':'red'}">${fmtL(totalA-totalL)}</div></div>
+    <div class="kpi"><div class="kpi-label">Asset Classes</div><div class="kpi-val">${assets.length + liabs.length}</div></div>`;
+
+  document.getElementById('ar-assets').innerHTML     = assets.map(c => renderClass(c, false)).join('');
+  document.getElementById('ar-liabilities').innerHTML = liabs.map(c => renderClass(c, true)).join('');
+}
+
+function renderClass(cls, isLiab) {
+  const total = arClassTotal(cls);
+  const open = !!_arExpand[cls.id];
+  const liabCls = isLiab ? ' ar-liability' : '';
+  const hasItems = cls.items.length > 0;
+  const insNote = cls.id === 'insurance' ? `<span class="ar-ins-note">⚠ review &amp; complete</span>` : '';
+
+  let html = `<div class="ar-class${liabCls}" id="arc-${cls.id}">
+    <div class="ar-class-hdr" onclick="toggleArClass('${cls.id}')">
+      <span class="ar-expand${open?' open':''}" id="arce-${cls.id}">${open?'−':'+'}</span>
+      <i class="bi ${cls.icon} ar-icon"></i>
+      <span class="ar-label">${cls.label}${insNote}</span>
+      <span class="ar-total">${total > 0 ? fmtLshort(total) : '—'}</span>
+      <button class="ar-add-btn" onclick="addArItem('${cls.id}',event)">+ Add</button>
+    </div>
+    <div class="ar-class-body${open?' open':''}" id="arcb-${cls.id}">`;
+
+  if (hasItems) {
+    html += `<div class="ar-col-hdr">
+      <span>Asset</span>
+      <span>Acquired</span>
+      <span>Purchase (₹)</span>
+      <span>Mar 31 '26</span>
+      <span>Today</span>
+    </div>`;
+    cls.items.forEach(item => { html += renderItem(item, cls.id, isLiab); });
+  } else {
+    html += `<div style="padding:12px 28px;font-size:12px;color:#94a3b8;">No items yet — click + Add above.</div>`;
+  }
+  html += `</div></div>`;
+  return html;
+}
+
+function renderItem(item, clsId, isLiab) {
+  const detOpen = !!_itemExpand[item.id];
+  const hasSubs = item.sub_items && item.sub_items.length > 0;
+
+  let row = `<div class="ar-item" id="ari-${item.id}">
+    <div class="ar-item-row" onclick="toggleArItem('${item.id}')">
+      <div class="ar-item-name">
+        <span class="ar-expand${detOpen?' open':''}" id="arie-${item.id}">${detOpen?'−':'+'}</span>
+        ${item.name}
+      </div>
+      <div class="ar-val">${item.date_acquired || '—'}</div>
+      <div class="ar-val">${item.purchase_value_L != null ? fmtLshort(item.purchase_value_L) : '—'}</div>
+      <div class="ar-val highlight">${item.value_mar26_L != null ? fmtLshort(item.value_mar26_L) : '—'}</div>
+      <div class="ar-val">${item.value_today_L != null ? fmtLshort(item.value_today_L) : '—'}</div>
+    </div>
+    <div class="ar-detail${detOpen?' open':''} ar-view-mode" id="arid-${item.id}">`;
+
+  // Detail fields
+  row += `<div class="ar-detail-grid">
+    <div class="ar-field"><label>Date Acquired</label>
+      <div class="ar-field-val">${item.date_acquired || '—'}</div>
+      <input type="text" value="${item.date_acquired||''}" placeholder="e.g. Apr 2021">
+    </div>
+    <div class="ar-field"><label>Purchase Value (₹ Lakhs)</label>
+      <div class="ar-field-val">${item.purchase_value_L != null ? item.purchase_value_L + 'L' : '—'}</div>
+      <input type="number" value="${item.purchase_value_L||''}" placeholder="e.g. 200">
+    </div>
+    <div class="ar-field"><label>Value Mar 31 '26 (₹ Lakhs)</label>
+      <div class="ar-field-val">${item.value_mar26_L != null ? item.value_mar26_L + 'L' : '—'}</div>
+      <input type="number" value="${item.value_mar26_L||''}" placeholder="e.g. 350">
+    </div>
+    <div class="ar-field"><label>Current Value (₹ Lakhs)</label>
+      <div class="ar-field-val">${item.value_today_L != null ? item.value_today_L + 'L' : '—'}</div>
+      <input type="number" value="${item.value_today_L||''}" placeholder="e.g. 380">
+    </div>
+    <div class="ar-field" style="grid-column:span 2"><label>Notes</label>
+      <div class="ar-field-val" style="white-space:pre-wrap;font-size:12px;color:#475569;">${item.notes || '—'}</div>
+      <textarea placeholder="Policy details, loan terms, account numbers…">${item.notes||''}</textarea>
+    </div>
+  </div>`;
+
+  // Documents
+  if (item.documents && item.documents.length > 0) {
+    row += `<div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:#94a3b8;margin-bottom:4px;">Key Documents</div>
+    <div class="ar-docs">`;
+    item.documents.forEach(docPath => {
+      const label = docPath.split('/').pop();
+      const encodedPath = docPath.split('/').map(s => encodeURIComponent(s)).join('/');
+      row += `<a class="ar-doc-chip" href="/api/data-file/${encodedPath}" target="_blank" rel="noopener" style="text-decoration:none;"><i class="bi bi-file-earmark-text me-1"></i>${label}</a>`;
+    });
+    row += `</div>`;
+  }
+
+  // Sub-items table (e.g. StanChart breakdown)
+  if (hasSubs) {
+    row += `<div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:#94a3b8;margin:10px 0 4px;">Breakdown</div>
+    <table class="ar-sub-table"><thead><tr><th>Component</th><th class="r">Mar 31 '26</th><th>Notes</th></tr></thead><tbody>`;
+    item.sub_items.forEach(si => {
+      row += `<tr><td>${si.name}</td><td class="r">${si.value_mar26_L != null ? fmtLshort(si.value_mar26_L) : '—'}</td><td style="color:#94a3b8;font-size:11px;">${si.notes||''}</td></tr>`;
+    });
+    row += `</tbody></table>`;
+  }
+
+  // Buttons
+  row += `<div class="ar-btns">
+    <button class="ar-btn edit" onclick="arEditMode('${item.id}', '${clsId}', event)">Edit</button>
+    <button class="ar-btn save" onclick="arSaveItem('${item.id}', '${clsId}', event)" style="display:none">Save</button>
+    <button class="ar-btn cancel" onclick="arCancelEdit('${item.id}', event)" style="display:none">Cancel</button>
+    <button class="ar-btn del" onclick="arDeleteItem('${item.id}', '${clsId}', event)">Delete</button>
+  </div>`;
+
+  row += `</div></div>`;
+  return row;
+}
+
+function toggleArClass(clsId) {
+  _arExpand[clsId] = !_arExpand[clsId];
+  document.getElementById('arce-' + clsId).classList.toggle('open', !!_arExpand[clsId]);
+  document.getElementById('arce-' + clsId).textContent = _arExpand[clsId] ? '−' : '+';
+  document.getElementById('arcb-' + clsId).classList.toggle('open', !!_arExpand[clsId]);
+}
+
+function toggleArItem(itemId) {
+  _itemExpand[itemId] = !_itemExpand[itemId];
+  document.getElementById('arie-' + itemId).classList.toggle('open', !!_itemExpand[itemId]);
+  document.getElementById('arie-' + itemId).textContent = _itemExpand[itemId] ? '−' : '+';
+  document.getElementById('arid-' + itemId).classList.toggle('open', !!_itemExpand[itemId]);
+}
+
+function arEditMode(itemId, clsId, e) {
+  e && e.stopPropagation();
+  const det = document.getElementById('arid-' + itemId);
+  det.classList.remove('ar-view-mode'); det.classList.add('ar-edit-mode');
+  det.querySelector('.ar-btn.edit').style.display = 'none';
+  det.querySelector('.ar-btn.save').style.display = 'inline-block';
+  det.querySelector('.ar-btn.cancel').style.display = 'inline-block';
+}
+
+function arCancelEdit(itemId, e) {
+  e && e.stopPropagation();
+  const det = document.getElementById('arid-' + itemId);
+  det.classList.remove('ar-edit-mode'); det.classList.add('ar-view-mode');
+  det.querySelector('.ar-btn.edit').style.display = 'inline-block';
+  det.querySelector('.ar-btn.save').style.display = 'none';
+  det.querySelector('.ar-btn.cancel').style.display = 'none';
+}
+
+function arSaveItem(itemId, clsId, e) {
+  e && e.stopPropagation();
+  const det = document.getElementById('arid-' + itemId);
+  const inputs = det.querySelectorAll('input, textarea');
+  const cls = _registry.classes.find(c => c.id === clsId);
+  const item = cls && cls.items.find(it => it.id === itemId);
+  if (!item) return;
+  item.date_acquired    = inputs[0].value.trim() || null;
+  item.purchase_value_L = inputs[1].value !== '' ? parseFloat(inputs[1].value) : null;
+  item.value_mar26_L    = inputs[2].value !== '' ? parseFloat(inputs[2].value) : null;
+  item.value_today_L    = inputs[3].value !== '' ? parseFloat(inputs[3].value) : null;
+  item.notes            = inputs[4].value.trim() || null;
+  saveRegistry().then(() => renderRegistry());
+}
+
+function arDeleteItem(itemId, clsId, e) {
+  e && e.stopPropagation();
+  if (!confirm('Delete this item?')) return;
+  const cls = _registry.classes.find(c => c.id === clsId);
+  if (!cls) return;
+  cls.items = cls.items.filter(it => it.id !== itemId);
+  saveRegistry().then(() => renderRegistry());
+}
+
+function addArItem(clsId, e) {
+  e && e.stopPropagation();
+  const cls = _registry.classes.find(c => c.id === clsId);
+  if (!cls) return;
+  const name = prompt('Asset / item name:');
+  if (!name) return;
+  const id = clsId + '_' + Date.now();
+  cls.items.push({id, name, date_acquired:null, purchase_value_L:null, value_mar26_L:null, value_today_L:null, notes:'', documents:[], sub_items:[]});
+  _arExpand[clsId] = true;
+  _itemExpand[id] = true;
+  saveRegistry().then(() => renderRegistry());
+}
+
+function addNewClass(section) {
+  const label = prompt('Class name (e.g. "Crypto"):');
+  if (!label) return;
+  const id = label.toLowerCase().replace(/\s+/g,'_') + '_' + Date.now();
+  _registry.classes.push({id, label, section, icon:'bi-folder', items:[]});
+  saveRegistry().then(() => renderRegistry());
+}
+
+async function saveRegistry() {
+  await fetch('/api/asset-registry', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_registry)});
+}
+
+async function resetRegistry() {
+  if (!confirm('Reset to defaults? This will overwrite any edits you\'ve made.')) return;
+  await fetch('/api/asset-registry/reset', {method:'POST'});
+  await loadRegistry();
+}
+
+async function loadRegistry() {
+  const r = await fetch('/api/asset-registry');
+  _registry = await r.json();
+  renderRegistry();
+}
+
+function switchTab(name, el) {
+  document.querySelectorAll('.fs-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'detail') loadRegistry();
 }
 
 loadData();
