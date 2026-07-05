@@ -1790,6 +1790,15 @@ async function syncLedger() {
 }
 
 // ── MIS (Budget Tracker) ───────────────────────────────────────────────────
+const _misCollapsed = {};
+function toggleMisGroup(slug) {
+  _misCollapsed[slug] = !_misCollapsed[slug];
+  const collapsed = _misCollapsed[slug];
+  document.querySelectorAll(`.mis-row-${slug}`).forEach(r => r.style.display = collapsed ? 'none' : '');
+  const hdr = document.querySelector(`.mis-super-${slug} .mis-toggle`);
+  if (hdr) hdr.textContent = collapsed ? '+' : '−';
+}
+
 async function loadMIS(period, btn) {
   ['misBtnMonth','misBtnQtr','misBtnYtd'].forEach(id =>
     document.getElementById(id)?.classList.remove('active'));
@@ -1820,9 +1829,13 @@ async function loadMIS(period, btn) {
     months.forEach(m => nfMonthly[m] = 0);
     (d.groups || []).forEach(g => {
       const cols = 2 + months.length;
-      html += `<tr class="mis-super"><td colspan="${cols}" class="ps-2">${g.super_category}</td></tr>`;
+      const slug = g.super_category.replace(/\s+/g,'_');
+      const collapsed = !!_misCollapsed[slug];
+      const icon = collapsed ? '+' : '−';
+      html += `<tr class="mis-super mis-super-${slug}" onclick="toggleMisGroup('${slug}')" style="cursor:pointer">
+        <td colspan="${cols}" class="ps-2"><span class="mis-toggle" style="display:inline-block;width:18px;font-weight:bold">${icon}</span>${g.super_category}</td></tr>`;
       (g.rows || []).forEach(row => {
-        html += `<tr>
+        html += `<tr class="mis-row-${slug}" style="${collapsed?'display:none':''}">
           <td class="ps-4">${row.category}</td>
           <td class="text-end" style="background:#f8f9ff;font-weight:500">${fmt(row.fy26_avg)}</td>
           ${months.map(m => fmtCell(row.monthly[m], MON_YM[m])).join('')}
@@ -1878,9 +1891,13 @@ async function loadMIS(period, btn) {
     let html = '';
     let nfQ = {fy26_q1:0,fy26_q2:0,fy26_q3:0,fy26_q4:0,fy27_q1:0,fy27_q2:0,fy27_q3:0,fy27_q4:0};
     (d.groups || []).forEach(g => {
-      html += `<tr class="mis-super"><td colspan="9" class="ps-2">${g.super_category}</td></tr>`;
+      const slug = g.super_category.replace(/\s+/g,'_');
+      const collapsed = !!_misCollapsed[slug];
+      const icon = collapsed ? '+' : '−';
+      html += `<tr class="mis-super mis-super-${slug}" onclick="toggleMisGroup('${slug}')" style="cursor:pointer">
+        <td colspan="9" class="ps-2"><span class="mis-toggle" style="display:inline-block;width:18px;font-weight:bold">${icon}</span>${g.super_category}</td></tr>`;
       (g.rows || []).forEach(row => {
-        html += `<tr><td class="ps-4">${row.category}</td>${QCOLS.map(k => qCell(row[k],k)).join('')}</tr>`;
+        html += `<tr class="mis-row-${slug}" style="${collapsed?'display:none':''}"><td class="ps-4">${row.category}</td>${QCOLS.map(k => qCell(row[k],k)).join('')}</tr>`;
       });
       html += `<tr class="mis-sub"><td class="ps-2">Sub-total ${g.super_category}</td>
         ${QCOLS.map(k => qCell(g.subtotal[k],k)).join('')}</tr>`;
@@ -1960,11 +1977,15 @@ async function loadMIS(period, btn) {
   const NON_FIN_SUPERS = ['Household','Personal','Family','Giving','Lifestyle','Property'];
   let nonFinTotal = {fy24:0, fy25:0, fy26:0, fy26fy:0, budget:0, actual:0};
   (d.groups||[]).forEach(g => {
-    html += `<tr class="mis-super"><td colspan="${cols}" class="ps-2">${g.super_category}</td></tr>`;
+    const slug = g.super_category.replace(/\s+/g,'_');
+    const collapsed = !!_misCollapsed[slug];
+    const icon = collapsed ? '+' : '−';
+    html += `<tr class="mis-super mis-super-${slug}" onclick="toggleMisGroup('${slug}')" style="cursor:pointer">
+      <td colspan="${cols}" class="ps-2"><span class="mis-toggle" style="display:inline-block;width:18px;font-weight:bold">${icon}</span>${g.super_category}</td></tr>`;
     (g.rows||[]).forEach(row => {
       const pct = row.pct||0;
       const col = pct>100?'#ef4444':pct>80?'#f59e0b':'#16a34a';
-      html += `<tr>
+      html += `<tr class="mis-row-${slug}" style="${collapsed?'display:none':''}">
         <td class="ps-4">${row.category}</td>
         ${isFY27Ytd ? `<td class="text-end text-muted">${fmt(row.fy24_actual)}</td>` : ''}
         ${isFY27Ytd ? `<td class="text-end text-muted">${fmt(row.fy25_actual)}</td>` : ''}
