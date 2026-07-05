@@ -1353,6 +1353,11 @@ def repair_pdf_descriptions() -> int:
             txn["type"] = "Expense"; txn["heading"] = "Financial Expense"; txn["uncertain"] = False
             det_fixed += 1; continue
 
+        # 8019 = ICICI official credit card — all debits are official expenses
+        if "8019" in account and debit > 0:
+            txn["type"] = "official"; txn["uncertain"] = False
+            det_fixed += 1; continue
+
         # Ketki = domestic help — always expense regardless of heading
         if any(kw in desc for kw in KETKI_KW):
             txn["type"] = "Expense"; txn["heading"] = "Staff Salary"; txn["uncertain"] = False
