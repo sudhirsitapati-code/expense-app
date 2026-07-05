@@ -609,7 +609,7 @@ def fetch_and_parse_statements(force_reprocess: bool = False) -> dict:
         q=f"(from:customernotification@icici.bank.in OR from:alert@icici.bank.in "
           f"OR from:estatement@icici.bank.in OR {label_query}) "
           "has:attachment filename:pdf",
-        maxResults=5
+        maxResults=50
     ).execute()
 
     msgs_to_process = [

@@ -556,7 +556,7 @@ def fetch_and_parse_sbi_statements(force_reprocess: bool = False) -> dict:
         q=f"(from:alerts@sbi.co.in OR from:sbialerts@sbi.co.in OR from:noreply@onlinesbi.com "
           f"OR from:yonobysbi@alerts.sbi.bank.in OR {label_query}) "
           "has:attachment filename:pdf",
-        maxResults=10
+        maxResults=50
     ).execute()
 
     msgs_to_process = [
