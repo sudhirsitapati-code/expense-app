@@ -1814,7 +1814,10 @@ async function loadMIS(period, btn) {
     const tbody = document.getElementById('misBody');
     const fmtCell = (v, ym) => ym > nowYM ? '<td class="text-end" style="color:#ccc">—</td>'
                                            : `<td class="text-end">${v ? fmt(v) : '—'}</td>`;
+    const NON_FIN = new Set(['Household','Personal','Family','Giving','Lifestyle','Property']);
     let html = '';
+    let nfAvg = 0, nfMonthly = {};
+    months.forEach(m => nfMonthly[m] = 0);
     (d.groups || []).forEach(g => {
       const cols = 2 + months.length;
       html += `<tr class="mis-super"><td colspan="${cols}" class="ps-2">${g.super_category}</td></tr>`;
@@ -1830,6 +1833,16 @@ async function loadMIS(period, btn) {
         <td class="text-end" style="background:#f0f4ff">${fmt(g.subtotal.fy26_avg)}</td>
         ${months.map(m => fmtCell(g.subtotal.monthly[m], MON_YM[m])).join('')}
       </tr>`;
+      if (NON_FIN.has(g.super_category)) {
+        nfAvg += g.subtotal.fy26_avg || 0;
+        months.forEach(m => nfMonthly[m] += g.subtotal.monthly[m] || 0);
+      }
+      if (g.super_category === 'Property') {
+        html += `<tr class="mis-op"><td class="ps-2">NON FINANCIAL EXPENSE</td>
+          <td class="text-end" style="background:#f0f4ff">${fmt(nfAvg)}</td>
+          ${months.map(m => fmtCell(nfMonthly[m], MON_YM[m])).join('')}
+        </tr>`;
+      }
     });
     html += `<tr class="mis-grand">
       <td class="ps-2">GRAND TOTAL</td>
@@ -1861,7 +1874,9 @@ async function loadMIS(period, btn) {
     const futureQ = new Set(['fy27_q3','fy27_q4']);
     const qCell = (v, k) => futureQ.has(k) ? '<td class="text-end" style="color:#ccc">—</td>'
                                             : `<td class="text-end">${v ? fmt(v) : '—'}</td>`;
+    const NON_FIN_Q = new Set(['Household','Personal','Family','Giving','Lifestyle','Property']);
     let html = '';
+    let nfQ = {fy26_q1:0,fy26_q2:0,fy26_q3:0,fy26_q4:0,fy27_q1:0,fy27_q2:0,fy27_q3:0,fy27_q4:0};
     (d.groups || []).forEach(g => {
       html += `<tr class="mis-super"><td colspan="9" class="ps-2">${g.super_category}</td></tr>`;
       (g.rows || []).forEach(row => {
@@ -1869,6 +1884,13 @@ async function loadMIS(period, btn) {
       });
       html += `<tr class="mis-sub"><td class="ps-2">Sub-total ${g.super_category}</td>
         ${QCOLS.map(k => qCell(g.subtotal[k],k)).join('')}</tr>`;
+      if (NON_FIN_Q.has(g.super_category)) {
+        QCOLS.forEach(k => nfQ[k] += g.subtotal[k] || 0);
+      }
+      if (g.super_category === 'Property') {
+        html += `<tr class="mis-op"><td class="ps-2">NON FINANCIAL EXPENSE</td>
+          ${QCOLS.map(k => qCell(nfQ[k], k)).join('')}</tr>`;
+      }
     });
     html += `<tr class="mis-grand"><td class="ps-2">GRAND TOTAL</td>
       ${QCOLS.map(k => qCell(d.grand?.[k],k)).join('')}</tr>`;
