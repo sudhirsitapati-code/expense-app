@@ -1183,8 +1183,11 @@ def repair_pdf_descriptions() -> int:
     # Normalise legacy / truncated account names
     _ACCT_RE    = re.compile(r"^icic(\d{3,4})$", re.IGNORECASE)
     _ALIAS_MAP  = {"331": "1331", "281": "7281"}   # 3-digit → 4-digit canonical
+    _SBI_ALIAS  = {"SBI-3152": "SBI-4852"}          # same account, wrong digit extraction
 
     def _fix_account(name: str) -> str:
+        if (name or "").upper() in _SBI_ALIAS:
+            return _SBI_ALIAS[(name or "").upper()]
         m = _ACCT_RE.match(name or "")
         if m:
             sfx = m.group(1)
