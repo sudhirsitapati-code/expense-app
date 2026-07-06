@@ -1020,13 +1020,19 @@ def _default_asset_registry():
             {"id":"sbi_4852","name":"SBI 4852 (savings)","date_acquired":None,"purchase_value_L":None,"value_mar26_L":5,"value_today_L":None,
              "notes":"SBI savings account. Approximate balance.","documents":[],"sub_items":[]},
         ]},
-        {"id":"insurance","label":"Insurance","section":"assets","icon":"bi-umbrella","items":[
-            {"id":"ins_term","name":"Term Life Insurance","date_acquired":None,"purchase_value_L":None,"value_mar26_L":None,"value_today_L":None,
-             "notes":"Add policy details: insurer, sum assured, premium, expiry, nominee.","documents":[],"sub_items":[]},
-            {"id":"ins_health","name":"Health Insurance","date_acquired":None,"purchase_value_L":None,"value_mar26_L":None,"value_today_L":None,
-             "notes":"Add policy details: insurer, cover amount, premium, renewal date, dependants covered.","documents":[],"sub_items":[]},
-            {"id":"ins_other","name":"Other Insurance (property / vehicle / travel)","date_acquired":None,"purchase_value_L":None,"value_mar26_L":None,"value_today_L":None,
-             "notes":"Add policy details as needed.","documents":[],"sub_items":[]},
+        {"id":"insurance","label":"Insurance — LIC Policies","section":"assets","icon":"bi-umbrella","items":[
+            {"id":"ins_895456071","name":"LIC 895456071 — Sudhir (Plan 823, 15yr)","date_acquired":"24/03/2014","purchase_value_L":None,"value_mar26_L":None,"value_today_L":None,
+             "notes":"LIC Plan 823, Term 15yr, Premium 15yr. Sum Assured ₹4 Cr. Premium ₹1,00,000 p.a. (incl. GST). FUP 03/27. Maturity 03/29. Nominee: Ketaki. NACH mode.",
+             "documents":["data/2026 Policy Register.pdf"],"sub_items":[]},
+            {"id":"ins_896050907","name":"LIC 896050907 — Sudhir (Plan 823, 20yr)","date_acquired":"28/12/2016","purchase_value_L":None,"value_mar26_L":None,"value_today_L":None,
+             "notes":"LIC Plan 823, Term 20yr, Premium 20yr. Sum Assured ₹4 Cr. Premium ₹1,42,800 p.a. FUP 12/26. Maturity 12/36. Nominee: Kamala Ganesh R P. NACH mode.",
+             "documents":["data/2026 Policy Register.pdf"],"sub_items":[]},
+            {"id":"ins_934301314","name":"LIC 934301314 — Sudhir (Plan 855, 10yr)","date_acquired":"04/10/2022","purchase_value_L":None,"value_mar26_L":None,"value_today_L":None,
+             "notes":"LIC Plan 855, Term 10yr, Premium 10yr. Sum Assured ₹4 Cr. Premium ₹1,01,320 p.a. (incl. GST). FUP 10/26. Maturity 10/32. Nominee: Ketaki. NACH mode.",
+             "documents":["data/2026 Policy Register.pdf"],"sub_items":[]},
+            {"id":"ins_895992110","name":"LIC 895992110 — Ketaki (Plan 815, 21yr)","date_acquired":"04/07/2016","purchase_value_L":None,"value_mar26_L":None,"value_today_L":None,
+             "notes":"LIC Plan 815, Term 21yr, Premium 21yr. Sum Assured ₹75L + Accidental Benefit ₹75L. Premium ₹4,17,915 p.a. (incl. GST). FUP 07/26. Maturity 07/37. Nominee: Sudhir. NACH mode.",
+             "documents":["data/2026 Policy Register.pdf"],"sub_items":[]},
         ]},
         # ── LIABILITIES ──────────────────────────────────────────────────────────
         {"id":"home_loans","label":"Home Loans","section":"liabilities","icon":"bi-house","items":[
