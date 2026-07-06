@@ -199,7 +199,7 @@ def _parse_sbi_statement_text(text: str) -> list:
             continue
 
         date_str = dt.strftime("%d/%m/%Y")
-        key = f"{date_str}|{desc[:40]}|{amount}"
+        key = f"{date_str}|{desc}|{amount}|{bal}"
         if key in seen:
             continue
         seen.add(key)
@@ -232,7 +232,7 @@ def _parse_sbi_statement_text(text: str) -> list:
             continue
         direction = "credit" if dr_cr.lower().startswith("cr") else "debit"
         date_str = dt.strftime("%d/%m/%Y")
-        key = f"{date_str}|{desc[:40]}|{amount}"
+        key = f"{date_str}|{desc}|{amount}"
         if key in seen:
             continue
         seen.add(key)
@@ -430,7 +430,7 @@ def _parse_sbi_tables(pdf) -> list:
                     continue
 
                 date_str = dt.strftime("%d/%m/%Y")
-                key = f"{date_str}|{desc[:40]}|{amount}"
+                key = f"{date_str}|{desc}|{amount}|{balance}"
                 if key in seen:
                     continue
                 seen.add(key)
