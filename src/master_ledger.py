@@ -1513,12 +1513,55 @@ def get_uncertain() -> list:
     return [t for t in load_ledger() if t.get("uncertain")]
 
 
+def _is_sbi_cash_transfer(t: dict) -> bool:
+    """True if this entry represents cash leaving SBI to the cash wallet."""
+    acct = (t.get("account") or "").upper()
+    return ("4852" in acct or "3152" in acct or "3142" in acct) \
+        and "PROV" not in acct \
+        and (t.get("type") or "").lower() == "transfer" \
+        and (t.get("heading") or "").lower() == "cash" \
+        and float(t.get("debit") or 0) > 0
+
+
+def _ensure_cash_in(ledger: list, txn: dict) -> None:
+    """Create paired cash-in credit entry for an SBI→Cash transfer if not already present."""
+    cashin_id = f"cashin_{txn['txn_id']}"
+    if any(t.get("txn_id") == cashin_id for t in ledger):
+        return
+    ledger.append({
+        "txn_id":        cashin_id,
+        "date":          txn.get("date"),
+        "credit":        float(txn.get("debit") or 0),
+        "debit":         0,
+        "account":       "cash",
+        "type":          "transfer",
+        "heading":       "Cash",
+        "paid_to":       "ATM / SBI Withdrawal",
+        "description":   txn.get("raw_description") or txn.get("description") or "",
+        "source":        "transfer",
+        "transfer_from": txn["txn_id"],
+        "bank":          "cash",
+        "uncertain":     False,
+        "confidence":    "confirmed",
+    })
+
+
+def _remove_cash_in(ledger: list, txn_id: str) -> None:
+    """Remove paired cash-in entry when SBI entry is reclassified away from transfer/Cash."""
+    cashin_id = f"cashin_{txn_id}"
+    before = len(ledger)
+    ledger[:] = [t for t in ledger if t.get("txn_id") != cashin_id]
+    return before != len(ledger)
+
+
 def update_transaction(txn_id: str, updates: dict) -> bool:
-    """Update editable fields. Clears uncertain flag if type+heading provided."""
+    """Update editable fields. Clears uncertain flag if type+heading provided.
+    Auto-creates/removes paired cash-in entry for SBI→Cash transfers."""
     ledger = _load_json(LEDGER_PATH)
     allowed = {"paid_to","type","heading","remarks","ai_saving_tip","saving_agreed","account","project"}
     for txn in ledger:
         if txn["txn_id"] == txn_id:
+            was_cash_transfer = _is_sbi_cash_transfer(txn)
             for k, v in updates.items():
                 if k in allowed:
                     txn[k] = v
@@ -1526,6 +1569,11 @@ def update_transaction(txn_id: str, updates: dict) -> bool:
                 txn["confidence"] = "manual"
                 txn["uncertain"]  = False
                 txn["uncertain_fields"] = []
+            is_cash_transfer = _is_sbi_cash_transfer(txn)
+            if is_cash_transfer and not was_cash_transfer:
+                _ensure_cash_in(ledger, txn)
+            elif was_cash_transfer and not is_cash_transfer:
+                _remove_cash_in(ledger, txn_id)
             _save_json(LEDGER_PATH, ledger)
             return True
     return False

@@ -1093,40 +1093,32 @@ def _parse_ledger_date(d):
 
 
 def _sbi_cash_ledger_entries(fy=27):
-    """Return FY-filtered SBI cash movements from master ledger.
+    """Return FY-filtered cash ledger entries.
 
-    Cash Given (credit side): type=transfer with petty-cash/cash heading.
-    Cash Spent (debit side):  type=expense with heading=Cash.
+    Cash Given (credit side): account=cash, source=transfer, credit>0 (cashin_* entries).
+    Cash Spent (debit side):  account=cash, debit>0 (approval_log or cash_register).
     """
     from datetime import datetime
-    # FY26 = 01-Apr-2025 to 31-Mar-2026
     fy_start = datetime(2000 + fy - 1, 4, 1)
     fy_end   = datetime(2000 + fy,     3, 31, 23, 59, 59)
 
     ledger = db.load("master_ledger") or []
     out = []
-    GIVEN_HEADINGS = {"petty cash", "cash", "interbank", "unknown", ""}
     for t in ledger:
         acct = (t.get("account") or "").upper()
-        is_cash_acct = acct == "CASH"  # approval_log cash expenses
-        if "SBI" not in acct and not is_cash_acct:
+        if acct != "CASH":
             continue
-        heading = (t.get("heading") or "").lower().strip()
-        typ = (t.get("type") or "").lower()
-        narr = (t.get("paid_to") or t.get("remarks") or "").lower()
-        debit = float(t.get("debit") or t.get("amount") or 0)
 
-        is_cr = t.get("source") == "cash_register"
-        if is_cr and debit > 0:
-            side = "spent"
-        elif is_cash_acct and t.get("source") == "approval_log" and debit > 0:
-            side = "spent"
-        elif typ == "transfer" and heading in GIVEN_HEADINGS and debit > 0:
-            side = "given"
-        elif typ == "expense" and heading == "cash" and debit > 0:
-            side = "spent"
-        elif ("atm" in narr or "withdrawal" in narr) and debit > 0:
-            side = "given"
+        debit  = float(t.get("debit") or 0)
+        credit = float(t.get("credit") or 0)
+        src    = t.get("source") or ""
+
+        if src == "transfer" and credit > 0:
+            side   = "given"
+            amount = credit
+        elif (src in ("approval_log", "cash_register") or debit > 0) and debit > 0:
+            side   = "spent"
+            amount = debit
         else:
             continue
 
@@ -1139,12 +1131,12 @@ def _sbi_cash_ledger_entries(fy=27):
             "seq":       t.get("seq"),
             "date":      t.get("date") or "",
             "date_iso":  dt.strftime("%Y-%m-%d"),
-            "amount":    debit,
-            "narration": t.get("paid_to") or t.get("remarks") or "SBI Cash",
+            "amount":    amount,
+            "narration": t.get("paid_to") or t.get("remarks") or "ATM / SBI Withdrawal",
             "heading":   (t.get("heading") or "").strip(),
             "side":      side,
-            "source":    t.get("source") or "ledger",
-            "deletable": t.get("source") == "cash_register",
+            "source":    src,
+            "deletable": src == "cash_register",
             "method":    t.get("method") or "",
             "bill_b64":  t.get("bill_b64") or "",
             "notes":     t.get("remarks") or "",
@@ -2579,13 +2571,78 @@ def _merge_approval_to_sbi_internal() -> dict:
         to_remove_ids.add(appr["txn_id"])
         merged += 1
 
-    if to_remove_ids:
+    # ── Pass 2: match uncertain SBI-4852 statement entries directly against ──────
+    # approval_log (no prov entry was ever created for these).
+    # Uses a wider 30-day window because Vincent submits approvals weekly.
+    _SBI_PMS = ("sbi","sbi-4852","sbi4852","sbi3152","sbi-3152","sbi-3142","sbi3142")
+    log = db.load("approval_log")
+    unreconciled_approvals = [
+        e for e in log
+        if e.get("action") in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER")
+        and (e.get("payment_method") or "").lower() in _SBI_PMS
+        and not e.get("reconciled_to")
+        and f"appr_{e.get('request_id','')}" not in {t.get("txn_id") for t in ledger}
+    ]
+
+    uncertain_stmt = [
+        t for t in ledger
+        if "4852" in (t.get("account") or "")
+        and "prov" not in (t.get("account") or "").lower()
+        and t.get("uncertain")
+        and not t.get("merged_from_approval")
+        and float(t.get("debit") or 0) > 0
+    ]
+
+    cands2 = []
+    for stmt in uncertain_stmt:
+        s_amt  = float(stmt.get("debit") or 0)
+        s_date = _ml_pd(stmt.get("date",""))
+        if not s_date: continue
+        raw = (stmt.get("raw_description") or stmt.get("transaction_details") or "").lower()
+        if any(kw in raw for kw in _SBI_CASH_KW): continue
+        for e in unreconciled_approvals:
+            e_amt  = float(e.get("approved_amount") or e.get("amount") or 0)
+            e_date = _ml_pd((e.get("timestamp") or "")[:10])
+            if not e_date: continue
+            diff = abs(s_amt - e_amt)
+            if diff > 200 or diff / max(s_amt, e_amt, 1) > 0.05: continue
+            days = abs((s_date - e_date).days)
+            if days > 30: continue
+            cands2.append((_match_score(s_amt, e_amt, days), stmt, e))
+
+    cands2.sort(key=lambda x: x[0])
+    matched_stmt2 = set(); matched_appr2 = set()
+    direct_merged = 0
+    for _, stmt, e in cands2:
+        if stmt["txn_id"] in matched_stmt2: continue
+        if e.get("request_id","") in matched_appr2: continue
+        matched_stmt2.add(stmt["txn_id"])
+        matched_appr2.add(e.get("request_id",""))
+        cat = e.get("category") or e.get("account_type") or "miscellaneous"
+        stmt["paid_to"]              = e.get("paid_to") or e.get("vendor") or stmt.get("paid_to")
+        stmt["type"]                 = e.get("type") or "personal"
+        stmt["heading"]              = (e.get("heading")
+                                        or _APP_TO_HEADING.get(cat, stmt.get("heading","Misc")))
+        stmt["description"]          = e.get("description") or e.get("remarks") or stmt.get("description")
+        stmt["submitter"]            = e.get("submitter") or stmt.get("submitter")
+        stmt["request_id"]           = e.get("request_id") or stmt.get("request_id")
+        stmt["approval_vendor"]      = e.get("paid_to") or e.get("vendor")
+        stmt["reconciled_with"]      = e.get("request_id")
+        stmt["merged_from_approval"] = f"appr_{e.get('request_id','')}"
+        stmt["uncertain"]            = False
+        stmt["uncertain_fields"]     = []
+        stmt["confidence"]           = "merged"
+        stmt["source"]               = "approval_log"
+        direct_merged += 1
+
+    if to_remove_ids or direct_merged:
         ledger = [t for t in ledger if t.get("txn_id") not in to_remove_ids]
         _save_json(LEDGER_PATH, ledger)
 
     return {
         "merged": merged,
         "approval_entries_removed": len(to_remove_ids),
+        "direct_merged": direct_merged,
         "unmatched_approvals_kept": len(approval_entries) - merged,
     }
 
@@ -3673,14 +3730,20 @@ def _run_acc27_match(xl_list, apply_it=False, limit=5):
             break
 
     if apply_it:
-        # Rule: all SBI ATM withdrawals → type=transfer
+        # Rule: all SBI ATM withdrawals → type=transfer, heading=Cash + paired cash-in credit
+        from src.master_ledger import _ensure_cash_in, _is_sbi_cash_transfer
         atm_fixed = 0
         for t in ledger:
             if not _is_sbi(t): continue
             desc = (t.get("raw_description") or "").lower()
             if any(kw in desc for kw in _ATM_KEYWORDS) and t.get("type") != "transfer":
-                t["type"] = "transfer"
+                t["type"]    = "transfer"
+                t["heading"] = t.get("heading") or "Cash"
                 atm_fixed += 1
+        # Ensure paired cash-in credits exist for all SBI→Cash transfers
+        for t in ledger:
+            if _is_sbi_cash_transfer(t):
+                _ensure_cash_in(ledger, t)
         _assign_seq(ledger)
         _save_json(LEDGER_PATH, ledger)
         sbi_total    = sum(1 for t in ledger if "SBI" in (t.get("account") or "").upper())
