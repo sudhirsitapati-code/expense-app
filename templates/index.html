@@ -121,6 +121,10 @@
         <input class="form-control form-control-sm" name="amount" type="number" step="0.01" required>
       </div>
       <div class="col">
+        <label class="form-label fw-semibold small">Date</label>
+        <input class="form-control form-control-sm" name="expense_date" type="date" id="expenseDate" required>
+      </div>
+      <div class="col">
         <label class="form-label fw-semibold small">Payment</label>
         <select class="form-select form-select-sm" name="payment_method">
           <option value="sbi-4852">SBI-4852prov</option>
@@ -1217,6 +1221,7 @@ async function submitExpense(e) {
     const icon = r.action === 'AUTO_APPROVE' ? '✅ Auto-approved!' : '📤 Sent to Sudhir for approval.';
     div.innerHTML = `<div class="alert alert-success py-2">${icon} Ref: ${r.request_id}</div>`;
     e.target.reset();
+    document.getElementById('expenseDate').value = new Date().toISOString().slice(0,10);
     // Upload staged estimate photos if any
     if (_formEstimatePhotos.length) {
       div.innerHTML += `<div class="alert alert-info py-2 small mt-1">Uploading estimate photo…</div>`;
@@ -3175,7 +3180,9 @@ function crViewBill(id) {
 document.addEventListener('DOMContentLoaded', () => {
   loadApprovals();  // pre-load badge
   refreshSubmitHeadings('expense');  // initialise submit form headings
-  document.getElementById('crDate').value = new Date().toISOString().slice(0,10);
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('crDate').value = today;
+  document.getElementById('expenseDate').value = today;
 });
 </script>
 </body>

@@ -66,12 +66,22 @@ def fy_info(date_str):
         return {"fy_year":"", "fy_month_no":0, "fy_month_name":""}
 
 APP_TO_HEADING = {
-    "groceries":"Groceries","dining":"Dining","transport":"Transport",
-    "utilities":"Utilities","entertainment":"Entertainment","shopping":"Shopping",
-    "health":"Health","education":"Education","travel":"Travel",
+    "groceries":"Groceries","staff":"Staff Salary","utilities":"Electricity & Gas",
+    "miscellaneous":"Misc","personal_care":"Wellness","clothing":"Clothes",
+    "gifts":"Gifts","medical":"Medical","education":"Children Education",
+    "dining":"Eating Out","entertainment":"Entertainment","transport":"Holiday",
     "maintenance":"Maintenance Expense","home_repair":"One Time Charge",
+    "staff_salary":"Staff Salary","electricity":"Electricity & Gas",
+    "charity":"Charity","children_education":"Children Education",
 }
-CANONICAL_HEADINGS = set(APP_TO_HEADING.values()) | {"Misc"}
+CANONICAL_HEADINGS = {
+    "Groceries","Staff Salary","Electricity & Gas","Misc","Cash","Alcohol",
+    "Wellness","Clothes","Gifts","Medical","Amma","Ketki","Children Education",
+    "Charity","Uspaar","Holiday","Eating Out","Entertainment","Malhar",
+    "Maintenance Expense","Home office","One Time Charge","Kalpataru Maintenance",
+    "Financial Expense / OD Interest","Insurance","Home Loan","Tax",
+    "Short Term Advance","Credit Card Loan","Investment",
+}
 
 to_add = []
 skipped = []
@@ -124,7 +134,7 @@ for e in approval_log:
         "credit": 0,
         "paid_to": e.get("vendor",""),
         "heading": heading,
-        "type": "personal",
+        "type": "expense",
         "source": "approval_log",
         "submitter": e.get("submitter",""),
         "request_id": e.get("request_id",""),

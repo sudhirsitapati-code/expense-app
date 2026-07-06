@@ -1414,6 +1414,13 @@ def api_submit_expense():
     else:
         # Fresh submission
         try:
+            # Use submitted date if provided, preserving HH:MM:SS from now
+            _expense_date = data.get("expense_date", "")
+            _timestamp = None
+            if _expense_date:
+                from datetime import datetime as _dt
+                _now = _dt.now()
+                _timestamp = f"{_expense_date}T{_now.strftime('%H:%M:%S')}"
             req = ExpenseRequest(
                 submitter=data["submitter"],
                 vendor=data["vendor"],
@@ -1424,6 +1431,7 @@ def api_submit_expense():
                 is_post_facto=data.get("is_post_facto", False),
                 heading=data.get("heading") or data.get("category", ""),
                 expense_type=data.get("expense_type", "expense"),
+                timestamp=_timestamp or "",
             )
         except (KeyError, ValueError) as e:
             return jsonify({"error": str(e)}), 400
