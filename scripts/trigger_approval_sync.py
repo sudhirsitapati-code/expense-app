@@ -80,7 +80,7 @@ CANONICAL_HEADINGS = {
     "Charity","Uspaar","Holiday","Eating Out","Entertainment","Malhar",
     "Maintenance Expense","Home office","One Time Charge","Kalpataru Maintenance",
     "Financial Expense / OD Interest","Insurance","Home Loan","Tax",
-    "Short Term Advance","Credit Card Loan","Investment",
+    "Short Term Advance","Credit Card Loan","Investment","None",
 }
 
 to_add = []

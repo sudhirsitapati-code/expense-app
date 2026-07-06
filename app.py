@@ -407,6 +407,7 @@ def api_mis():
         "electric": "Electricity & Gas",
         "maintenance": "Maintenance Expense",
         "grocery": "Groceries",
+        "none": "None",
     })
 
     def _norm_heading(h):
@@ -553,7 +554,7 @@ def api_mis():
         _fy27_start = datetime(2026, 4, 1)
         fy27_by_ym: dict = {}
         for txn in load_ledger():
-            if (txn.get("type") or "").lower() not in ("expense", "official"):
+            if (txn.get("type") or "").lower() != "expense":
                 continue
             if txn.get("uncertain"):
                 continue
@@ -611,7 +612,7 @@ def api_mis():
         _fy27_start = datetime(2026, 4, 1)
         fy27_by_ym: dict = {}
         for txn in load_ledger():
-            if (txn.get("type") or "").lower() not in ("expense", "official"):
+            if (txn.get("type") or "").lower() != "expense":
                 continue
             if txn.get("uncertain"):
                 continue
@@ -666,7 +667,7 @@ def api_mis():
     fy27_actual: dict = {}
     _fy27_start = datetime(2026, 4, 1)
     for txn in load_ledger():
-        if (txn.get("type") or "").lower() not in ("expense", "official"):
+        if (txn.get("type") or "").lower() != "expense":
             continue
         if txn.get("uncertain"):
             continue
