@@ -1554,15 +1554,20 @@ def _approval_to_ledger_entry(e: dict) -> dict:
                else cat if cat in _CANONICAL_HEADINGS
                else APP_TO_HEADING.get(cat, "Misc"))
 
+    _pm = (e.get("payment_method") or "cash").lower()
+    _is_sbi = _pm in ("sbi", "sbi-4852", "sbi4852", "sbi3152", "sbi-3152")
+    _acct   = "SBI-4852prov" if _is_sbi else "cash"
+    _bank   = "SBI"          if _is_sbi else "approval"
+
     txn = {
         "txn_id":          txn_id,
         "date":            date_str,
         "fy_month_no":     fy["fy_month_no"],
         "fy_month_name":   fy["fy_month_name"],
         "fy_year":         fy["fy_year"],
-        "account":         "cash/upi",
-        "account_type":    e.get("payment_method","cash"),
-        "bank":            "approval",
+        "account":         _acct,
+        "account_type":    _pm,
+        "bank":            _bank,
         "raw_description": e.get("description",""),
         "paid_to":         e.get("vendor",""),
         "debit":           amount,
@@ -1584,7 +1589,12 @@ def _approval_to_ledger_entry(e: dict) -> dict:
 
 
 def _sync_approvals_to_ledger():
-    """Add all confirmed-paid approval entries to master ledger (idempotent)."""
+    """Add approved approval entries to master ledger (idempotent).
+
+    SBI payments (payment_method=sbi*) are added immediately as SBI-4852prov
+    so they appear in the ledger before the statement arrives.
+    Cash/other entries are only added once confirmed_paid=True.
+    """
     from src.master_ledger import load_ledger
     log    = db.load("approval_log")
     ledger = db.load("master_ledger")
@@ -1592,9 +1602,12 @@ def _sync_approvals_to_ledger():
 
     added = 0
     for e in log:
-        if not e.get("confirmed_paid"):
-            continue
         if e.get("action") not in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER"):
+            continue
+        pm = (e.get("payment_method") or "cash").lower()
+        is_sbi = pm in ("sbi", "sbi-4852", "sbi4852", "sbi3152", "sbi-3152")
+        # SBI entries go in as provisional immediately; others need confirmed_paid
+        if not is_sbi and not e.get("confirmed_paid"):
             continue
         txn = _approval_to_ledger_entry(e)
         if txn["txn_id"] in existing_ids:

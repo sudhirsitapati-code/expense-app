@@ -881,7 +881,7 @@ def reconcile_with_approvals(approval_log: list) -> int:
     for txn in ledger:
         if txn.get("reconciled_with"):
             continue
-        if (txn.get("account") or "").find("3152") < 0:
+        if not any(s in (txn.get("account") or "") for s in ("3152","4852")):
             continue
         if not txn.get("debit"):
             continue
@@ -914,7 +914,7 @@ def reconcile_with_approvals(approval_log: list) -> int:
     # Collect all unreconciled ATM withdrawals from SBI-3152
     atm_txns = [
         t for t in ledger
-        if (t.get("account") or "").find("3152") >= 0
+        if any(s in (t.get("account") or "") for s in ("3152","4852"))
         and float(t.get("debit") or 0) > 0
         and not t.get("reconciled_with")
         and any(kw in (t.get("transaction_details") or t.get("description") or "").lower()
