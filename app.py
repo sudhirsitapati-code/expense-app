@@ -1555,7 +1555,7 @@ def _approval_to_ledger_entry(e: dict) -> dict:
                else APP_TO_HEADING.get(cat, "Misc"))
 
     _pm = (e.get("payment_method") or "cash").lower()
-    _is_sbi = _pm in ("sbi", "sbi-4852", "sbi4852", "sbi3152", "sbi-3152")
+    _is_sbi = _pm in ("sbi", "sbi-4852", "sbi4852", "sbi3152", "sbi-3152", "sbi-3142", "sbi3142")
     _acct   = "SBI-4852prov" if _is_sbi else "cash"
     _bank   = "SBI"          if _is_sbi else "approval"
 
@@ -1605,9 +1605,10 @@ def _sync_approvals_to_ledger():
         if e.get("action") not in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER"):
             continue
         pm = (e.get("payment_method") or "cash").lower()
-        is_sbi = pm in ("sbi", "sbi-4852", "sbi4852", "sbi3152", "sbi-3152")
-        # SBI entries go in as provisional immediately; others need confirmed_paid
-        if not is_sbi and not e.get("confirmed_paid"):
+        is_sbi = pm in ("sbi", "sbi-4852", "sbi4852", "sbi3152", "sbi-3152", "sbi-3142", "sbi3142")
+        # All approved entries sync immediately (SBI as prov, others as cash)
+        # Only skip if it's an old-style cash entry with no confirmed_paid
+        if not is_sbi and pm == "cash" and not e.get("confirmed_paid"):
             continue
         txn = _approval_to_ledger_entry(e)
         if txn["txn_id"] in existing_ids:
