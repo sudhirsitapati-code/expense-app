@@ -2560,21 +2560,22 @@ def _merge_approval_to_sbi_internal() -> dict:
             continue
 
         cat     = appr.get("category") or appr.get("account_type") or "miscellaneous"
-        heading = (appr.get("heading")
-                   or _APP_TO_HEADING.get(cat, best.get("heading", "Misc")))
-        if not best.get("paid_to") or best.get("confidence") != "manual":
-            best["paid_to"]    = appr.get("paid_to") or appr.get("vendor") or best.get("paid_to")
-        best["heading"]              = heading
-        best["type"]                 = appr.get("type") or best.get("type") or "personal"
+        # ── From prov entry (Vincent's data) — always wins ──────────────────
+        best["paid_to"]   = appr.get("paid_to") or appr.get("vendor") or best.get("paid_to")
+        best["type"]      = appr.get("type") or "personal"
+        best["heading"]   = (appr.get("heading")
+                             or _APP_TO_HEADING.get(cat, best.get("heading", "Misc")))
+        best["description"] = appr.get("description") or appr.get("remarks") or best.get("description")
+        # ── Bookkeeping fields ───────────────────────────────────────────────
         best["submitter"]            = appr.get("submitter") or best.get("submitter")
         best["request_id"]           = appr.get("request_id") or best.get("request_id")
         best["approval_vendor"]      = appr.get("paid_to") or appr.get("vendor")
-        best["approval_desc"]        = appr.get("raw_description") or appr.get("description")
         best["reconciled_with"]      = appr.get("reconciled_with") or appr.get("txn_id")
         best["merged_from_approval"] = appr.get("txn_id")
         best["uncertain"]            = False
         best["uncertain_fields"]     = []
         best["confidence"]           = "merged"
+        best["source"]               = "approval_log"
         to_remove_ids.add(appr["txn_id"])
         merged += 1
 
