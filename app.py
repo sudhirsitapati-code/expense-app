@@ -399,6 +399,14 @@ def api_mis():
         "staff salary": "Staff Salary",
         "electricity & gas": "Electricity & Gas",
         "financial expense": "Financial Expense / OD Interest",
+        "education": "Children Education",
+        "gift": "Gifts",
+        "dining": "Eating Out",
+        "unknown": "Misc",
+        "salary": "Staff Salary",
+        "electric": "Electricity & Gas",
+        "maintenance": "Maintenance Expense",
+        "grocery": "Groceries",
     })
 
     def _norm_heading(h):
