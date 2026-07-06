@@ -978,7 +978,7 @@ function switchReport(name, el) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const fmt    = n => n ? '₹' + Math.abs(n).toLocaleString('en-IN', {maximumFractionDigits:0}) : '—';
-const fmtCr  = n => n != null ? '₹' + (Math.abs(n)/1e7).toLocaleString('en-IN', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' Cr' : '—';
+const fmtCr  = n => n != null ? '₹' + (Math.abs(n)/1e7).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' Cr' : '—';
 
 function typeBadge(t) {
   const cls = {
