@@ -2495,13 +2495,21 @@ def _merge_approval_to_sbi_internal() -> dict:
 
     ledger = load_ledger()
 
-    approval_entries = [t for t in ledger if t.get("source") == "approval_log"]
-    sbi_entries      = [t for t in ledger if "SBI" in (t.get("account") or "").upper()
-                        and t.get("source") == "sbi_statement"]
+    approval_entries = [t for t in ledger if t.get("source") == "approval_log"
+                        and "4852prov" in (t.get("account") or "").lower()]
+    sbi_entries      = [t for t in ledger if "4852" in (t.get("account") or "")
+                        and t.get("source") != "approval_log"
+                        and float(t.get("debit") or 0) > 0]
 
     to_remove_ids = set()
     merged = 0
 
+    def _match_score(prov_amt, sbi_amt, days):
+        """Lower is better. Days dominate; amount diff breaks ties."""
+        return days * 10000 + abs(prov_amt - sbi_amt)
+
+    # Build all candidate (score, appr, sbi) pairs then assign optimally
+    candidates = []
     for appr in approval_entries:
         pm = (appr.get("account_type") or appr.get("payment_method") or "").lower()
         log_amt = float(appr.get("debit") or appr.get("amount") or 0)
@@ -2514,11 +2522,6 @@ def _merge_approval_to_sbi_internal() -> dict:
             continue
         if not log_date:
             continue
-
-        is_cash = pm == "cash"
-        best = None
-        best_score = 999
-
         for sbi in sbi_entries:
             sbi_amt  = float(sbi.get("debit") or 0)
             if sbi_amt == 0:
@@ -2526,55 +2529,54 @@ def _merge_approval_to_sbi_internal() -> dict:
             sbi_date = _ml_pd(sbi.get("date", ""))
             if not sbi_date:
                 continue
-            days_diff = abs((sbi_date - log_date).days)
-            raw = (sbi.get("raw_description") or sbi.get("transaction_details") or "").lower()
-            is_atm = any(kw in raw for kw in _SBI_CASH_KW)
-
-            if is_cash:
-                if not is_atm:
-                    continue
-                if sbi_amt < log_amt * 0.9:
-                    continue
-                if days_diff > 30:
-                    continue
-            else:
-                if is_atm:
-                    continue
-                if abs(sbi_amt - log_amt) > 100:
-                    continue
-                if days_diff > 7:
-                    continue
-
-            if days_diff < best_score:
-                best = sbi
-                best_score = days_diff
-
-        if best:
-            # Idempotent — already merged from this exact approval
-            if best.get("merged_from_approval") == appr.get("txn_id"):
-                to_remove_ids.add(appr["txn_id"])
+            diff = abs(sbi_amt - log_amt)
+            if diff > 200 or diff / max(sbi_amt, log_amt, 1) > 0.05:
                 continue
+            days_diff = abs((sbi_date - log_date).days)
+            if days_diff > 7:
+                continue
+            raw = (sbi.get("raw_description") or sbi.get("transaction_details") or "").lower()
+            if any(kw in raw for kw in _SBI_CASH_KW):
+                continue
+            candidates.append((_match_score(log_amt, sbi_amt, days_diff), appr, sbi))
 
-            cat     = appr.get("category") or appr.get("account_type") or "miscellaneous"
-            # Prefer explicit heading stored on prov entry; fall back to category map
-            heading = (appr.get("heading")
-                       or _APP_TO_HEADING.get(cat, best.get("heading", "Misc")))
-            if not best.get("paid_to") or best.get("confidence") != "manual":
-                best["paid_to"]    = appr.get("paid_to") or appr.get("vendor") or best.get("paid_to")
-            best["heading"]              = heading
-            best["type"]                 = appr.get("type") or best.get("type") or "personal"
-            best["submitter"]            = appr.get("submitter") or best.get("submitter")
-            best["request_id"]           = appr.get("request_id") or best.get("request_id")
-            best["approval_vendor"]      = appr.get("paid_to") or appr.get("vendor")
-            best["approval_desc"]        = appr.get("raw_description") or appr.get("description")
-            best["reconciled_with"]      = appr.get("reconciled_with") or appr.get("txn_id")
-            best["merged_from_approval"] = appr.get("txn_id")
-            best["uncertain"]            = False
-            best["uncertain_fields"]     = []
-            best["confidence"]           = "merged"
+    candidates.sort(key=lambda x: x[0])
+    matched_appr_ids = set()
+    matched_sbi_ids  = set()
+    best_matches = []
+    for _, appr, sbi in candidates:
+        if appr["txn_id"] in matched_appr_ids:
+            continue
+        if sbi["txn_id"] in matched_sbi_ids:
+            continue
+        matched_appr_ids.add(appr["txn_id"])
+        matched_sbi_ids.add(sbi["txn_id"])
+        best_matches.append((appr, sbi))
 
+    for appr, best in best_matches:
+        # Idempotent — already merged from this exact approval
+        if best.get("merged_from_approval") == appr.get("txn_id"):
             to_remove_ids.add(appr["txn_id"])
-            merged += 1
+            continue
+
+        cat     = appr.get("category") or appr.get("account_type") or "miscellaneous"
+        heading = (appr.get("heading")
+                   or _APP_TO_HEADING.get(cat, best.get("heading", "Misc")))
+        if not best.get("paid_to") or best.get("confidence") != "manual":
+            best["paid_to"]    = appr.get("paid_to") or appr.get("vendor") or best.get("paid_to")
+        best["heading"]              = heading
+        best["type"]                 = appr.get("type") or best.get("type") or "personal"
+        best["submitter"]            = appr.get("submitter") or best.get("submitter")
+        best["request_id"]           = appr.get("request_id") or best.get("request_id")
+        best["approval_vendor"]      = appr.get("paid_to") or appr.get("vendor")
+        best["approval_desc"]        = appr.get("raw_description") or appr.get("description")
+        best["reconciled_with"]      = appr.get("reconciled_with") or appr.get("txn_id")
+        best["merged_from_approval"] = appr.get("txn_id")
+        best["uncertain"]            = False
+        best["uncertain_fields"]     = []
+        best["confidence"]           = "merged"
+        to_remove_ids.add(appr["txn_id"])
+        merged += 1
 
     if to_remove_ids:
         ledger = [t for t in ledger if t.get("txn_id") not in to_remove_ids]
