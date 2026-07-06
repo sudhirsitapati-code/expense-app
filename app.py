@@ -567,10 +567,10 @@ def api_mis():
             heading = _norm_heading(txn.get("heading", "") or "")
             if heading is None:
                 continue
-            amt = float(txn.get("debit", 0) or 0)
-            if amt > 0:
-                fy27_by_ym.setdefault(heading, {})
-                fy27_by_ym[heading][ym] = fy27_by_ym[heading].get(ym, 0) + amt
+            net = float(txn.get("debit", 0) or 0) - float(txn.get("credit", 0) or 0)
+            fy27_by_ym.setdefault(heading, {})
+            fy27_by_ym[heading][ym] = fy27_by_ym[heading].get(ym, 0) + net
+
 
         by_super: dict = {s: [] for s in SUPER_ORDER}
         for heading in sorted(_CANONICAL):
@@ -622,11 +622,11 @@ def api_mis():
             heading = _norm_heading(txn.get("heading", "") or "")
             if heading is None:
                 continue
-            amt = float(txn.get("debit", 0) or 0)
-            if amt > 0:
-                ym = dt.strftime("%Y-%m")
-                fy27_by_ym.setdefault(heading, {})
-                fy27_by_ym[heading][ym] = fy27_by_ym[heading].get(ym, 0) + amt
+            net = float(txn.get("debit", 0) or 0) - float(txn.get("credit", 0) or 0)
+            ym = dt.strftime("%Y-%m")
+            fy27_by_ym.setdefault(heading, {})
+            fy27_by_ym[heading][ym] = fy27_by_ym[heading].get(ym, 0) + net
+
 
         def _fy26_q(heading, mons):
             return round(sum(FY26_MONTHLY.get(heading, {}).get(m, 0) for m in mons))
@@ -681,9 +681,9 @@ def api_mis():
         heading = _norm_heading(raw_heading)
         if heading is None:
             continue   # investment heading — skip
-        amt = float(txn.get("debit", 0) or 0)
-        if amt > 0:
-            fy27_actual[heading] = fy27_actual.get(heading, 0) + amt
+        net = float(txn.get("debit", 0) or 0) - float(txn.get("credit", 0) or 0)
+        fy27_actual[heading] = fy27_actual.get(heading, 0) + net
+
 
     # ── Build grouped rows — only canonical headings ──────────────────────────
     all_headings = _CANONICAL
