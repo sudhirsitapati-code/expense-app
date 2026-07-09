@@ -3623,6 +3623,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const today = new Date().toISOString().slice(0,10);
   document.getElementById('crDate').value = today;
   document.getElementById('expenseDate').value = today;
+  // Auto-open tab if redirected from home page
+  const openTab = sessionStorage.getItem('openTab');
+  if (openTab) {
+    sessionStorage.removeItem('openTab');
+    const link = document.querySelector(`#mainTabs [onclick*="'${openTab}'"]`);
+    if (link) switchMain(openTab, link);
+  }
 });
 </script>
 </body>
