@@ -83,6 +83,7 @@
     <span id="pendingBadge" class="badge bg-danger ms-1 d-none">0</span>
   </a></li>
   <li class="nav-item"><a class="nav-link" href="#" onclick="switchMain('reports',this)"><i class="bi bi-bar-chart-line me-1"></i>Reports</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="switchMain('tax',this)"><i class="bi bi-receipt-cutoff me-1"></i>Tax</a></li>
 </ul>
 
 <!-- ═══════════════════════════════════════════════════════
@@ -862,7 +863,297 @@
 </div>
 
 </div><!-- /tab-reports -->
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB — TAX
+═══════════════════════════════════════════════════════ -->
+<div id="tab-tax" class="main-tab-content d-none">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="mb-0 fw-bold" style="color:#1e3a5f"><i class="bi bi-receipt-cutoff me-2"></i>Tax Filing</h5>
+    <select id="taxFySelect" class="form-select form-select-sm w-auto" onchange="renderTaxDashboard(this.value)">
+      <option value="FY26">FY 2025–26 (AY 2026–27)</option>
+    </select>
+  </div>
+
+  <div id="taxDashboard"></div>
+</div>
+
 </div><!-- /container -->
+
+<script>
+// ── TAX DATA ─────────────────────────────────────────────────────────────────
+const TAX_DATA = {
+  FY26: {
+    fy: "FY26", ay: "2026-27",
+    status: "pending_filing",
+    regime: "Old Regime",
+    pan: "ARAPS6425N",
+    employer: "Godrej Consumer Products Ltd",
+
+    // ── Form 16 / Salary schedule ──
+    salary: {
+      basic:           25610004,
+      hra:             16646496,
+      education_allow: 6000,
+      supplementary:   26971534,
+      plvr:            42883200,
+      petrol_reimb:    21121,
+      telephone_reimb: 3384,
+      npser:           2561004,
+      food_coupon:     13200,
+      total_17_1:      114715943,
+    },
+    perquisites: {
+      cars:             39600,
+      esop_perquisite:  191994600,   // stock options taxed as salary
+      employer_nps:     4884204,
+      other:            174693,
+      total_17_2:       197093097,
+    },
+    gross_salary:         311809040,
+    standard_deduction:   75000,
+    income_from_salary:   311734040,
+
+    // ── VI-A deductions as per Form 16 ──
+    deductions_form16: {
+      "80C":         0,
+      "80CCC":       0,
+      "80CCD(1)":    0,
+      "80CCD(2)":    2561004,   // employer NPS
+      "80D":         0,
+      total:         2561004,
+    },
+    taxable_income_form16: 309173036,
+    tds_deducted:          120031486,
+
+    // ── Additional deductions claimable in ITR (not in Form 16) ──
+    additional_deductions: {
+      "80C (LIC premiums — cap ₹1.5L)":   150000,   // actual premium ₹3.44L, capped
+      "80CCD(1B) — personal NPS":          null,     // up to ₹50K — needs confirmation
+      "80D — health insurance":            null,     // unknown, need premium certificate
+      "Sec 24(b) — home loan interest":    null,     // need interest certificates
+      "HRA exemption 10(13A)":             null,     // needs rent receipts / verification
+    },
+
+    // ── Additional income not in Form 16 ──
+    other_income: {
+      "Capital gains — ESOP sales":        null,     // need broker statement
+      "Capital gains — MF/equity":         null,     // need broker statement
+      "SGB interest (2.5% on ₹314L)":      785000,   // estimated
+      "Bank / FD interest":                null,     // need bank statements
+      "Dividends":                         null,     // need AIS
+      "Foreign income — StanChart SG":     null,     // need SC statement
+    },
+
+    // ── Documents ──
+    documents: [
+      { name:"Form 16 (Part A + B)",            status:"done",    file:"FY26/Sudhir's Form16-2025-26.pdf" },
+      { name:"AIS / TIS (IT portal)",           status:"missing", file:null },
+      { name:"ICICI demat capital gains stmt",  status:"missing", file:null },
+      { name:"Home loan interest certificates", status:"missing", file:null },
+      { name:"Health insurance premium cert",   status:"missing", file:null },
+      { name:"Rent receipts (if HRA claim)",    status:"missing", file:null },
+      { name:"StanChart SG year-end statement", status:"missing", file:null },
+      { name:"NPS contribution statement",      status:"missing", file:null },
+    ],
+
+    // ── Alerts ──
+    alerts: [
+      { level:"danger",  text:"Schedule FA — Foreign Assets in StanChart Singapore MUST be disclosed. Non-filing attracts Black Money Act penalties regardless of tax amount." },
+      { level:"warning", text:"80C: LIC premiums of ₹3.44L p.a. were not declared to GCPL — ₹1.5L deduction can be claimed in ITR, saving ~₹62K in tax." },
+      { level:"warning", text:"80CCD(1B): Additional personal NPS contribution (up to ₹50K) not claimed — confirm with NPS statement." },
+      { level:"warning", text:"80D: Health insurance premium not captured — add certificate to claim deduction." },
+      { level:"warning", text:"Home loan interest (Sec 24b): C34 + C51 loans have substantial interest — obtain interest certificates from ICICI. Self-occupied cap ₹2L; deemed let-out allows full deduction." },
+      { level:"info",    text:"HRA: ₹1.66Cr HRA received but 0 claimed. If you pay rent for your Santacruz residence, exemption may apply — needs rent agreement + receipts." },
+      { level:"info",    text:"ESOP capital gains: ₹19.19Cr already taxed as perquisite (salary). Any further gain/loss on sale of shares is a separate capital gains entry in ITR." },
+      { level:"info",    text:"AIS not yet downloaded — cross-check against IT department's record of your interest, dividends, and capital gains before filing." },
+    ],
+  }
+};
+
+function fmt(n) {
+  if (n === null || n === undefined) return '<span class="text-muted fst-italic">unknown</span>';
+  const L = n / 100000;
+  return '₹' + (L >= 100 ? (L/100).toFixed(2) + ' Cr' : L.toFixed(2) + ' L');
+}
+function fmtN(n) {
+  if (n === null || n === undefined) return '—';
+  return '₹' + n.toLocaleString('en-IN');
+}
+
+function renderTaxDashboard(fy) {
+  const d = TAX_DATA[fy];
+  if (!d) return;
+
+  // Compute totals
+  const addlDedKnown = Object.values(d.additional_deductions).reduce((s,v) => s + (v||0), 0);
+  const otherIncKnown = Object.values(d.other_income).reduce((s,v) => s + (v||0), 0);
+  const totalDeductions = d.deductions_form16.total + addlDedKnown;
+  const estimatedTaxableIncome = d.taxable_income_form16 - addlDedKnown + otherIncKnown;
+
+  const docsDone = d.documents.filter(x=>x.status==='done').length;
+  const docsTotal = d.documents.length;
+  const docPct = Math.round(docsDone/docsTotal*100);
+
+  const html = `
+  <!-- Summary cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div style="background:#f0f4ff;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Gross Salary</div>
+        <div style="font-size:1.15rem;font-weight:700;color:#1e3a5f;margin-top:4px;">${fmt(d.gross_salary)}</div>
+        <div style="font-size:10px;color:#6b7280;margin-top:2px;">incl. ₹${(d.perquisites.esop_perquisite/100000).toFixed(0)}L ESOP perq.</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div style="background:#f0faf4;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">TDS Paid</div>
+        <div style="font-size:1.15rem;font-weight:700;color:#166534;margin-top:4px;">${fmt(d.tds_deducted)}</div>
+        <div style="font-size:10px;color:#6b7280;margin-top:2px;">fully deposited, status F</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div style="background:#fffbeb;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Taxable Income (est.)</div>
+        <div style="font-size:1.15rem;font-weight:700;color:#92400e;margin-top:4px;">${fmt(estimatedTaxableIncome)}</div>
+        <div style="font-size:10px;color:#6b7280;margin-top:2px;">excl. unknowns</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div style="background:${docPct===100?'#f0faf4':'#fff1f2'};border-radius:10px;padding:14px 16px;">
+        <div style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Documents</div>
+        <div style="font-size:1.15rem;font-weight:700;color:${docPct===100?'#166534':'#991b1b'};margin-top:4px;">${docsDone}/${docsTotal} ready</div>
+        <div style="height:4px;background:#e5e7eb;border-radius:2px;margin-top:6px;"><div style="height:4px;background:${docPct===100?'#16a34a':'#ef4444'};border-radius:2px;width:${docPct}%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <div class="mb-4">
+    ${d.alerts.map(a=>`
+    <div class="alert alert-${a.level} py-2 px-3 mb-2" style="font-size:12.5px;border-radius:8px;">
+      <i class="bi bi-${a.level==='danger'?'exclamation-octagon-fill':a.level==='warning'?'exclamation-triangle-fill':'info-circle'} me-2"></i>${a.text}
+    </div>`).join('')}
+  </div>
+
+  <div class="row g-3">
+    <!-- Left column: Income + Deductions -->
+    <div class="col-lg-7">
+
+      <!-- Income breakdown -->
+      <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:16px;">
+        <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">
+          <i class="bi bi-cash-stack me-2"></i>Income — Salary Schedule (Form 16 Part B)
+        </div>
+        <div style="padding:0;">
+          <table class="table table-sm mb-0" style="font-size:12.5px;">
+            <tbody>
+              <tr class="table-light"><td colspan="2" class="fw-semibold ps-3 py-2">Sec 17(1) — Cash Salary</td></tr>
+              <tr><td class="ps-4 text-muted">Basic Salary</td><td class="text-end pe-3">${fmtN(d.salary.basic)}</td></tr>
+              <tr><td class="ps-4 text-muted">House Rent Allowance (HRA)</td><td class="text-end pe-3">${fmtN(d.salary.hra)}</td></tr>
+              <tr><td class="ps-4 text-muted">Supplementary Allowance</td><td class="text-end pe-3">${fmtN(d.salary.supplementary)}</td></tr>
+              <tr><td class="ps-4 text-muted">PLVR — Collective</td><td class="text-end pe-3">${fmtN(d.salary.plvr)}</td></tr>
+              <tr><td class="ps-4 text-muted">NPSER (NPS employer)</td><td class="text-end pe-3">${fmtN(d.salary.npser)}</td></tr>
+              <tr><td class="ps-4 text-muted">Education / Food / Reimb.</td><td class="text-end pe-3">${fmtN(d.salary.education_allow+d.salary.food_coupon+d.salary.petrol_reimb+d.salary.telephone_reimb)}</td></tr>
+              <tr class="table-light"><td class="ps-3 fw-semibold">Total 17(1)</td><td class="text-end pe-3 fw-semibold">${fmtN(d.salary.total_17_1)}</td></tr>
+              <tr class="table-light"><td colspan="2" class="fw-semibold ps-3 py-2">Sec 17(2) — Perquisites (Form 12BA)</td></tr>
+              <tr><td class="ps-4 text-muted">ESOP / Stock Options</td><td class="text-end pe-3">${fmtN(d.perquisites.esop_perquisite)}</td></tr>
+              <tr><td class="ps-4 text-muted">Employer NPS Fund</td><td class="text-end pe-3">${fmtN(d.perquisites.employer_nps)}</td></tr>
+              <tr><td class="ps-4 text-muted">Cars + Other</td><td class="text-end pe-3">${fmtN(d.perquisites.cars+d.perquisites.other)}</td></tr>
+              <tr class="table-light"><td class="ps-3 fw-semibold">Total 17(2)</td><td class="text-end pe-3 fw-semibold">${fmtN(d.perquisites.total_17_2)}</td></tr>
+              <tr style="background:#1e3a5f;color:#fff;"><td class="ps-3 fw-semibold">Gross Salary</td><td class="text-end pe-3 fw-semibold">${fmtN(d.gross_salary)}</td></tr>
+              <tr><td class="ps-4 text-muted">Less: Standard Deduction 16(ia)</td><td class="text-end pe-3 text-success">(${fmtN(d.standard_deduction)})</td></tr>
+              <tr style="background:#f0f4ff;"><td class="ps-3 fw-semibold">Income from Salaries</td><td class="text-end pe-3 fw-semibold">${fmtN(d.income_from_salary)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Other income -->
+      <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:16px;">
+        <div style="background:#374151;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">
+          <i class="bi bi-plus-circle me-2"></i>Other Income (to be added in ITR)
+        </div>
+        <table class="table table-sm mb-0" style="font-size:12.5px;">
+          <tbody>
+            ${Object.entries(d.other_income).map(([k,v])=>`
+            <tr>
+              <td class="ps-3">${k}</td>
+              <td class="text-end pe-3 ${v===null?'text-muted fst-italic':''}">${v===null?'— pending':'₹'+v.toLocaleString('en-IN')}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- Right column: Deductions + Documents + Tax -->
+    <div class="col-lg-5">
+
+      <!-- Deductions -->
+      <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:16px;">
+        <div style="background:#374151;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">
+          <i class="bi bi-shield-minus me-2"></i>Deductions — Chapter VI-A
+        </div>
+        <table class="table table-sm mb-0" style="font-size:12.5px;">
+          <thead><tr class="table-light"><th class="ps-3">Section</th><th class="text-end pe-3">Amount</th><th class="pe-2 text-center" style="width:60px">Source</th></tr></thead>
+          <tbody>
+            <tr><td class="ps-3">80CCD(2) — Employer NPS</td><td class="text-end pe-3">${fmtN(d.deductions_form16["80CCD(2)"])}</td><td class="text-center pe-2"><span class="badge bg-success" style="font-size:9px">Form 16</span></td></tr>
+            ${Object.entries(d.additional_deductions).map(([k,v])=>`
+            <tr>
+              <td class="ps-3">${k}</td>
+              <td class="text-end pe-3 ${v===null?'text-muted fst-italic':''}">${v===null?'— pending':'₹'+v.toLocaleString('en-IN')}</td>
+              <td class="text-center pe-2"><span class="badge ${v===null?'bg-warning text-dark':'bg-primary'}" style="font-size:9px">${v===null?'ITR':'ITR ✓'}</span></td>
+            </tr>`).join('')}
+            <tr style="background:#f0f4ff;"><td class="ps-3 fw-semibold">Total (known)</td><td class="text-end pe-3 fw-semibold">${fmtN(totalDeductions)}</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tax computation -->
+      <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:16px;">
+        <div style="background:#374151;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">
+          <i class="bi bi-calculator me-2"></i>Tax Computation (Form 16)
+        </div>
+        <table class="table table-sm mb-0" style="font-size:12.5px;">
+          <tbody>
+            <tr><td class="ps-3">Taxable Income (Form 16)</td><td class="text-end pe-3">${fmtN(d.taxable_income_form16)}</td></tr>
+            <tr><td class="ps-3 text-muted ps-4">Tax on total income</td><td class="text-end pe-3">₹9,23,31,912</td></tr>
+            <tr><td class="ps-3 text-muted ps-4">Surcharge</td><td class="text-end pe-3">₹2,30,82,978</td></tr>
+            <tr><td class="ps-3 text-muted ps-4">Health & Education Cess (4%)</td><td class="text-end pe-3">₹46,16,596</td></tr>
+            <tr style="background:#1e3a5f;color:#fff;"><td class="ps-3 fw-semibold">Tax Payable</td><td class="text-end pe-3 fw-semibold">${fmtN(d.tds_deducted)}</td></tr>
+            <tr><td class="ps-3 text-muted">Less: TDS already deducted</td><td class="text-end pe-3 text-success">(${fmtN(d.tds_deducted)})</td></tr>
+            <tr style="background:#f0faf4;"><td class="ps-3 fw-semibold text-success">Balance from salary</td><td class="text-end pe-3 fw-semibold text-success">₹0</td></tr>
+            <tr class="table-light"><td colspan="2" class="ps-3 text-muted fst-italic" style="font-size:11px;">Capital gains / other income tax + potential refund from additional deductions still to be computed</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Documents checklist -->
+      <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+        <div style="background:#374151;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">
+          <i class="bi bi-folder2-open me-2"></i>Document Checklist
+        </div>
+        <div style="padding:8px 12px;">
+          ${d.documents.map(doc=>`
+          <div class="d-flex align-items-center gap-2 py-1" style="border-bottom:1px solid #f3f4f6;">
+            <i class="bi bi-${doc.status==='done'?'check-circle-fill text-success':'x-circle-fill text-danger'}" style="font-size:13px;flex-shrink:0;"></i>
+            <span style="font-size:12px;flex:1;">${doc.name}</span>
+            ${doc.file?`<a href="/data/${doc.file}" target="_blank" style="font-size:10px;color:#1e3a5f;">view</a>`:'<span style="font-size:10px;color:#ef4444;">missing</span>'}
+          </div>`).join('')}
+        </div>
+      </div>
+
+    </div>
+  </div>`;
+
+  document.getElementById('taxDashboard').innerHTML = html;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // pre-render so it's ready when tab is clicked
+});
+</script>
 
 <!-- ═══ Edit Transaction Modal ═══ -->
 <div class="modal fade" id="editModal" tabindex="-1">
@@ -937,6 +1228,7 @@ function switchMain(name, el) {
   document.getElementById('tab-' + name).classList.remove('d-none');
   if (name === 'approvals') loadApprovals();
   if (name === 'reports')   { loadLedger(); }
+  if (name === 'tax')       { renderTaxDashboard(document.getElementById('taxFySelect').value); }
   return false;
 }
 
