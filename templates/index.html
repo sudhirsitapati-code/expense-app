@@ -77,13 +77,13 @@
 
 <!-- ═══ MAIN TABS ═══ -->
 <ul class="nav main-tabs mb-0" id="mainTabs">
-  <li class="nav-item"><a class="nav-link active" href="#" onclick="switchMain('submit',this)"><i class="bi bi-plus-circle me-1"></i>Submit Expense</a></li>
-  <li class="nav-item"><a class="nav-link" href="#" onclick="switchMain('approvals',this)">
+  <li class="nav-item"><a class="nav-link active" href="#" onclick="return switchMain('submit',this)"><i class="bi bi-plus-circle me-1"></i>Submit Expense</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="return switchMain('approvals',this)">
     <i class="bi bi-check2-circle me-1"></i>Approvals
     <span id="pendingBadge" class="badge bg-danger ms-1 d-none">0</span>
   </a></li>
-  <li class="nav-item"><a class="nav-link" href="#" onclick="switchMain('reports',this)"><i class="bi bi-bar-chart-line me-1"></i>Reports</a></li>
-  <li class="nav-item"><a class="nav-link" href="#" onclick="switchMain('tax',this)"><i class="bi bi-receipt-cutoff me-1"></i>Tax</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="return switchMain('reports',this)"><i class="bi bi-bar-chart-line me-1"></i>Reports</a></li>
+  <li class="nav-item"><a class="nav-link" href="#" onclick="return switchMain('tax',this)"><i class="bi bi-receipt-cutoff me-1"></i>Tax</a></li>
 </ul>
 
 <!-- ═══════════════════════════════════════════════════════
@@ -1348,7 +1348,14 @@ function switchMain(name, el) {
   document.getElementById('tab-' + name).classList.remove('d-none');
   if (name === 'approvals') loadApprovals();
   if (name === 'reports')   { loadLedger(); }
-  if (name === 'tax')       { renderTaxDashboard(document.getElementById('taxFySelect').value); }
+  if (name === 'tax') {
+    try { renderTaxDashboard(document.getElementById('taxFySelect').value); }
+    catch(e) {
+      document.getElementById('taxViewIncome').classList.remove('d-none');
+      document.getElementById('taxViewIncome').innerHTML = '<div class="alert alert-danger m-3"><strong>JS Error:</strong> ' + e.message + '</div>';
+      console.error('Tax render error:', e);
+    }
+  }
   return false;
 }
 
