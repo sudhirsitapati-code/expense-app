@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tax Management</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<style>
+body { background:#f8f9fa; font-size:14px; }
+
+.topbar { background:#1e293b; color:#f1f5f9; padding:10px 20px; display:flex; align-items:center; gap:16px; }
+.topbar a { color:#94a3b8; text-decoration:none; font-size:12px; }
+.topbar a:hover { color:#f1f5f9; }
+.topbar-title { font-size:15px; font-weight:600; color:#f1f5f9; }
+
+.tax-tabs { display:flex; background:#fff; border-bottom:1px solid #e2e8f0; padding:0 20px; gap:4px; }
+.tax-tab { padding:11px 18px; font-size:13px; font-weight:500; color:#64748b; border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; text-decoration:none; }
+.tax-tab:hover { color:#1e3a5f; }
+.tax-tab.active { color:#1e3a5f; border-bottom-color:#1e3a5f; }
+
+.fy-bar { background:#fff; border-bottom:1px solid #e2e8f0; padding:8px 20px; display:flex; align-items:center; gap:12px; }
+.fy-bar label { font-size:11px; color:#64748b; font-weight:600; text-transform:uppercase; letter-spacing:.4px; margin:0; }
+
+.content-area { padding:24px 20px; max-width:1100px; margin:0 auto; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <a href="/home"><i class="bi bi-house me-1"></i>Home</a>
+  <span style="color:#475569;">›</span>
+  <span class="topbar-title"><i class="bi bi-receipt-cutoff me-2"></i>Tax Management</span>
+  <span style="margin-left:auto;font-size:11px;color:#64748b;">{{ user }}</span>
+</div>
+
+<!-- Sub-nav tabs -->
+<div class="tax-tabs">
+  <a class="tax-tab active" href="#" data-view="income"      onclick="switchView('income');return false;">Income Summary</a>
+  <a class="tax-tab"        href="#" data-view="deductions"  onclick="switchView('deductions');return false;">Deductions</a>
+  <a class="tax-tab"        href="#" data-view="computation" onclick="switchView('computation');return false;">Tax Computation</a>
+  <a class="tax-tab"        href="#" data-view="checklist"   onclick="switchView('checklist');return false;">Documents &amp; Alerts</a>
+
+  <!-- FY selector pushed right -->
+  <div class="fy-bar ms-auto border-0 p-0 d-flex align-items-center gap-2">
+    <label>FY</label>
+    <select id="taxFySelect" class="form-select form-select-sm w-auto"
+            onchange="switchView(document.querySelector('.tax-tab.active')?.dataset.view||'income')">
+      <option value="FY26">FY 2025–26 (AY 2026–27)</option>
+    </select>
+  </div>
+</div>
+
+<!-- Content panes -->
+<div class="content-area">
+  <div id="taxViewIncome"></div>
+  <div id="taxViewDeductions"  class="d-none"></div>
+  <div id="taxViewComputation" class="d-none"></div>
+  <div id="taxViewChecklist"   class="d-none"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ── TAX DATA ─────────────────────────────────────────────────────────────────
+const TAX = {
+  FY26: {
+    fy:"FY26", ay:"2026-27", regime:"Old Regime", pan:"ARAPS6425N",
+
+    income: [
+      {head:"Salaries", source:"GCPL — Cash Salary",         gross:114715943, tds:null,   note:"Basic, HRA, PLVR, Supplementary, NPSER etc. per Form 16 Annexure"},
+      {head:"Salaries", source:"GCPL — ESOP Perquisite",     gross:191994600, tds:null,   note:"Stock options taxed as salary u/s 17(2). Form 12BA."},
+      {head:"Salaries", source:"GCPL — Employer NPS+other",  gross:4918797,   tds:null,   note:"Employer NPS fund contribution + cars + other perquisites"},
+      {head:"Other Sources", source:"GCPL Dividends",         gross:9943405,   tds:994341, note:"4 interim dividends: May ₹53.3L, Aug ₹13L, Nov ₹13L, Jan ₹20.1L. TDS @10% est.", doc:"FY26/4_Financial_Investments/ICICI_Demat_90174124_Transactions_FY26.pdf"},
+      {head:"Other Sources", source:"SGB Interest",           gross:248430,    tds:24843,  note:"2.5% p.a. on 2,100 GOI Sovereign Gold Bonds. TDS @10% est.", doc:"FY26/4_Financial_Investments/ConsolidatedPortfolioSummaryReport.pdf"},
+      {head:"Other Sources", source:"StanChart USD Interest", gross:5557,      tds:0,      note:"USD 58.49 × ₹95. Credit interest on USD savings a/c 6208256430.", doc:"FY26/1_Bank_Accounts/StanChart_6007_SGD_Statement_Apr26.pdf"},
+      {head:"Other Sources", source:"Bank Savings Interest",  gross:null,      tds:null,   note:"ICICI 1331 + SBI 4852 savings interest — need AIS to confirm"},
+      {head:"Capital Gains", source:"GCPL ESOP Sales",        gross:25600000,  tds:0,      note:"₹256L from tax working file. STCG/LTCG split needs broker statement.", doc:"FY26/4_Financial_Investments/GCPL_CapitalGains.xlsx"},
+      {head:"Capital Gains", source:"PPFAS / MF / ETF",       gross:0,         tds:0,      note:"No redemptions in FY26. PPFAS growth plan, no distributions."},
+      {head:"Capital Gains", source:"StanChart SG ETFs",      gross:null,      tds:0,      note:"Foreign capital gains — need SC year-end statement for Schedule FA"},
+      {head:"House Property", source:"C34 / C51 — Notional Rent", gross:null,  tds:0,      note:"Deemed let-out or actual rental income — needs confirmation"},
+    ],
+
+    deductions: [
+      {section:"16(ia)",    label:"Standard Deduction",                             amount:75000,    source:"Form 16", confirmed:true},
+      {section:"80CCD(2)", label:"Employer NPS Contribution",                       amount:2561004,  source:"Form 16", confirmed:true},
+      {section:"80C",      label:"LIC Premiums (capped)",                           amount:150000,   source:"ITR",     confirmed:true,  note:"Actual premium ₹3.44L p.a., cap ₹1.5L"},
+      {section:"80CCD(1B)",label:"Personal NPS Contribution",                       amount:null,     source:"ITR",     confirmed:false, note:"Up to ₹50,000 — need NPS statement"},
+      {section:"80D",      label:"Health Insurance Premium",                        amount:null,     source:"ITR",     confirmed:false, note:"Need premium certificate"},
+      {section:"24(b)",    label:"Home Loan Interest — C34 TopUp (XX00382)",        amount:null,     source:"ITR",     confirmed:false, note:"Only Jan–Mar 2026 data (₹21.9L for 3 months). Need full year certificate."},
+      {section:"24(b)",    label:"Home Loan Interest — C51 TopUp (XX99508)",        amount:null,     source:"ITR",     confirmed:false, note:"Only Jan–Mar 2026 data (₹28.2L for 3 months). Need full year certificate."},
+      {section:"24(b)",    label:"Home Loan Interest — C51 Original (XX42596)",     amount:44144670, source:"Stmt",    confirmed:true,  note:"Full year ₹44.1L confirmed from loan statement."},
+      {section:"24(b)",    label:"Home Loan Interest — HL5 MaxGain 9175",           amount:null,     source:"ITR",     confirmed:false, note:"Statement available — need to extract interest portion."},
+      {section:"10(13A)", label:"HRA Exemption",                                    amount:null,     source:"ITR",     confirmed:false, note:"HRA received ₹1.66Cr. Needs rent receipts if claiming."},
+    ],
+
+    tds_paid: [
+      {source:"GCPL Salary TDS (Form 16)", amount:120031486, verified:true},
+      {source:"TDS on GCPL Dividends @10%", amount:994341,  verified:false, note:"Est. — confirm via AIS"},
+      {source:"TDS on SGB Interest @10%",  amount:24843,    verified:false, note:"Est. — confirm via AIS"},
+    ],
+
+    slab_rate:0.30, surcharge_rate:0.25, cess_rate:0.04,
+  }
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function inr(n) {
+  if (n===null||n===undefined) return '<span class="text-muted fst-italic small">pending</span>';
+  const L = n/100000;
+  if (L>=100) return '₹'+(L/100).toFixed(2)+' Cr';
+  if (L>=1)   return '₹'+L.toFixed(2)+'L';
+  return '₹'+n.toLocaleString('en-IN');
+}
+
+// ── View switcher ─────────────────────────────────────────────────────────────
+function switchView(view) {
+  document.querySelectorAll('.tax-tab').forEach(l => l.classList.remove('active'));
+  document.querySelector(`.tax-tab[data-view="${view}"]`)?.classList.add('active');
+  ['income','deductions','computation','checklist'].forEach(v =>
+    document.getElementById('taxView'+v.charAt(0).toUpperCase()+v.slice(1)).classList.toggle('d-none', v!==view));
+  const fy = document.getElementById('taxFySelect').value;
+  if (view==='income')      renderIncome(fy);
+  if (view==='deductions')  renderDeductions(fy);
+  if (view==='computation') renderComputation(fy);
+  if (view==='checklist')   renderChecklist(fy);
+}
+
+// ── INCOME SUMMARY ────────────────────────────────────────────────────────────
+function renderIncome(fy) {
+  const d = TAX[fy]; if (!d) return;
+  const el = document.getElementById('taxViewIncome');
+
+  const heads = [...new Set(d.income.map(i=>i.head))];
+  const salaryGross = d.income.filter(i=>i.head==='Salaries').reduce((s,i)=>s+(i.gross||0),0);
+  const salaryDedn  = d.deductions.filter(x=>x.section==='16(ia)'||x.section==='80CCD(2)').reduce((s,x)=>s+(x.amount||0),0);
+  const salaryNet   = salaryGross - salaryDedn;
+  const knownGross  = d.income.filter(i=>i.gross!==null).reduce((s,i)=>s+(i.gross||0),0);
+  const pendingCount= d.income.filter(i=>i.gross===null).length;
+  const tdsTotal    = d.tds_paid.reduce((s,t)=>s+t.amount,0);
+  const roughTax    = Math.round((knownGross - salaryDedn) * d.slab_rate * (1 + d.surcharge_rate) * (1 + d.cess_rate));
+  const roughBalance= roughTax - tdsTotal;
+
+  let rows = '';
+  heads.forEach(head => {
+    const items = d.income.filter(i=>i.head===head);
+    const headGross = items.reduce((s,i)=>s+(i.gross||0),0);
+    const headTDS   = items.reduce((s,i)=>s+(i.tds||0),0);
+    rows += `<tr style="background:#1e3a5f;color:#fff;">
+      <td class="ps-2 fw-semibold" colspan="3">${head}</td>
+      <td class="text-end pe-2 fw-semibold">${inr(headGross||null)}</td>
+      <td class="text-end pe-2 fw-semibold">${headTDS?inr(headTDS):''}</td>
+    </tr>`;
+    items.forEach(item => {
+      const docLink = item.doc ? `<a href="/data/${item.doc}" target="_blank" style="color:#1e3a5f;text-decoration:none;"><i class="bi bi-file-earmark-text"></i></a>` : '';
+      rows += `<tr>
+        <td class="ps-3" style="font-size:12px;">${item.source}</td>
+        <td style="font-size:11px;color:#6b7280;max-width:260px;">${item.note||''}</td>
+        <td class="text-center" style="font-size:11px;">${docLink}</td>
+        <td class="text-end pe-2" style="font-size:12px;">${inr(item.gross)}</td>
+        <td class="text-end pe-2" style="font-size:12px;color:#6b7280;">${item.tds!=null?inr(item.tds):''}</td>
+      </tr>`;
+    });
+    if (head==='Salaries') {
+      rows += `<tr style="background:#e8f0fe;">
+        <td class="ps-3 fw-semibold" style="font-size:12px;" colspan="3">Less: Std. Deduction + Employer NPS (80CCD2)</td>
+        <td class="text-end pe-2 fw-semibold text-success" style="font-size:12px;">(${inr(salaryDedn)})</td>
+        <td></td>
+      </tr>
+      <tr style="background:#dbeafe;">
+        <td class="ps-2 fw-semibold" style="font-size:12px;" colspan="3">Net Taxable — Salaries</td>
+        <td class="text-end pe-2 fw-semibold" style="font-size:12px;">${inr(salaryNet)}</td>
+        <td></td>
+      </tr>`;
+    }
+  });
+
+  el.innerHTML = `
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div style="background:#f0f4ff;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">Total Gross Income</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#1e3a5f;margin-top:4px;">${inr(knownGross)}</div>
+        <div style="font-size:10px;color:#9ca3af;">${pendingCount} sources pending</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div style="background:#f0faf4;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">TDS Deducted</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#166534;margin-top:4px;">${inr(tdsTotal)}</div>
+        <div style="font-size:10px;color:#9ca3af;">salary + dividends + SGB</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div style="background:#fffbeb;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">Est. Tax Liability</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#92400e;margin-top:4px;">${inr(roughTax)}</div>
+        <div style="font-size:10px;color:#9ca3af;">30% + 25% surcharge + 4% cess</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div style="background:${roughBalance>0?'#fff1f2':'#f0faf4'};border-radius:10px;padding:14px 16px;">
+        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">${roughBalance>0?'Est. Balance Payable':'Est. Refund'}</div>
+        <div style="font-size:1.1rem;font-weight:700;color:${roughBalance>0?'#991b1b':'#166534'};margin-top:4px;">${inr(Math.abs(roughBalance))}</div>
+        <div style="font-size:10px;color:#9ca3af;">before ITR deductions</div>
+      </div>
+    </div>
+  </div>
+  <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">
+      Consolidated Income — FY 2025–26 (AY 2026–27)
+    </div>
+    <div style="overflow-x:auto;">
+    <table class="table table-sm table-hover mb-0" style="font-size:12.5px;min-width:600px;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3" style="width:220px;">Source</th>
+          <th style="width:280px;">Notes</th>
+          <th style="width:40px;" class="text-center">Doc</th>
+          <th class="text-end pe-2">Gross Amount</th>
+          <th class="text-end pe-2">TDS</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+      <tfoot>
+        <tr style="background:#0f172a;color:#fff;">
+          <td class="ps-2 fw-bold" colspan="3">TOTAL (confirmed sources)</td>
+          <td class="text-end pe-2 fw-bold">${inr(knownGross)}</td>
+          <td class="text-end pe-2 fw-bold">${inr(tdsTotal)}</td>
+        </tr>
+      </tfoot>
+    </table>
+    </div>
+  </div>
+  <div class="mt-2 text-muted" style="font-size:11px;"><i class="bi bi-info-circle me-1"></i>Est. tax uses flat 39% effective rate (30% + 25% surcharge + 4% cess). Actual liability depends on deductions, capital gains classification (STCG/LTCG), and house property computation.</div>`;
+}
+
+// ── DEDUCTIONS ────────────────────────────────────────────────────────────────
+function renderDeductions(fy) {
+  const d = TAX[fy]; if (!d) return;
+  const el = document.getElementById('taxViewDeductions');
+  const confirmed = d.deductions.filter(x=>x.confirmed&&x.amount);
+  const pending   = d.deductions.filter(x=>!x.confirmed||!x.amount);
+  const totalConfirmed = confirmed.reduce((s,x)=>s+(x.amount||0),0);
+
+  const rows = d.deductions.map(x=>`
+  <tr>
+    <td class="ps-3 fw-semibold" style="font-size:12px;width:100px;">${x.section}</td>
+    <td style="font-size:12px;">${x.label}</td>
+    <td style="font-size:11px;color:#6b7280;">${x.note||''}</td>
+    <td class="text-end pe-2" style="font-size:12px;">${inr(x.amount)}</td>
+    <td class="text-center" style="font-size:11px;">
+      <span class="badge ${x.source==='Form 16'?'bg-success':x.confirmed?'bg-primary':'bg-warning text-dark'}">${x.source}</span>
+    </td>
+  </tr>`).join('');
+
+  el.innerHTML = `
+  <div class="row g-3 mb-3">
+    <div class="col-md-4">
+      <div style="background:#f0faf4;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">Confirmed Deductions</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#166534;margin-top:4px;">${inr(totalConfirmed)}</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div style="background:#fffbeb;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">Pending / To Claim</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#92400e;margin-top:4px;">${pending.length} items</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div style="background:#f0f4ff;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">Tax Saved (confirmed)</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#1e3a5f;margin-top:4px;">${inr(Math.round(totalConfirmed*0.39))}</div>
+        <div style="font-size:10px;color:#9ca3af;">@ 39% effective rate</div>
+      </div>
+    </div>
+  </div>
+  <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">Deductions Tracker</div>
+    <table class="table table-sm table-hover mb-0" style="font-size:12.5px;">
+      <thead class="table-light"><tr>
+        <th class="ps-3">Section</th><th>Deduction</th><th>Note</th><th class="text-end pe-2">Amount</th><th class="text-center">Source</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="background:#e8f0fe;">
+        <td colspan="3" class="ps-3 fw-semibold">Total Confirmed</td>
+        <td class="text-end pe-2 fw-semibold">${inr(totalConfirmed)}</td><td></td>
+      </tr></tfoot>
+    </table>
+  </div>
+  <div class="alert alert-warning mt-3 py-2 px-3" style="font-size:12px;">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    Home loan interest (24b) for C34 TopUp and C51 TopUp only has Jan–Mar 2026 data (₹21.9L + ₹28.2L for 3 months). Full-year interest is ~4× that amount (~₹1.4Cr total across all 4 loans). Under deemed let-out rules, full interest is deductible — obtain annual interest certificates from ICICI for accurate deduction.
+  </div>`;
+}
+
+// ── TAX COMPUTATION ───────────────────────────────────────────────────────────
+function renderComputation(fy) {
+  const d = TAX[fy]; if (!d) return;
+  const el = document.getElementById('taxViewComputation');
+
+  const salaryGross  = d.income.filter(i=>i.head==='Salaries').reduce((s,i)=>s+(i.gross||0),0);
+  const otherGross   = d.income.filter(i=>i.head==='Other Sources'&&i.gross).reduce((s,i)=>s+(i.gross||0),0);
+  const cgGross      = d.income.filter(i=>i.head==='Capital Gains'&&i.gross).reduce((s,i)=>s+(i.gross||0),0);
+  const salaryDedn   = d.deductions.filter(x=>x.section==='16(ia)'||x.section==='80CCD(2)').reduce((s,x)=>s+(x.amount||0),0);
+  const viaConfirmed = d.deductions.filter(x=>x.confirmed&&x.amount&&x.section!=='16(ia)').reduce((s,x)=>s+(x.amount||0),0);
+  const netSalary    = salaryGross - salaryDedn;
+  const totalTaxable = netSalary + otherGross + cgGross - viaConfirmed;
+  const baseTax      = totalTaxable * 0.30;
+  const surcharge    = baseTax * 0.25;
+  const cess         = (baseTax + surcharge) * 0.04;
+  const totalTax     = baseTax + surcharge + cess;
+  const tdsTotal     = d.tds_paid.reduce((s,t)=>s+t.amount,0);
+  const balance      = totalTax - tdsTotal;
+
+  el.innerHTML = `
+  <div style="max-width:600px;">
+  <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">Tax Computation — FY 2025–26</div>
+    <table class="table table-sm mb-0" style="font-size:12.5px;">
+    <tbody>
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Income</td></tr>
+      <tr><td class="ps-4">Salaries (gross)</td><td class="text-end pe-3">${inr(salaryGross)}</td></tr>
+      <tr><td class="ps-4 text-muted">Less: Std. Deduction + 80CCD(2)</td><td class="text-end pe-3 text-success">(${inr(salaryDedn)})</td></tr>
+      <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Net from Salaries</td><td class="text-end pe-3 fw-semibold">${inr(netSalary)}</td></tr>
+      <tr><td class="ps-4">Other Sources (dividends + interest)</td><td class="text-end pe-3">${inr(otherGross)}</td></tr>
+      <tr><td class="ps-4">Capital Gains (ESOP sales — est.)</td><td class="text-end pe-3">${inr(cgGross)}</td></tr>
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Deductions (Chapter VI-A, confirmed)</td></tr>
+      ${d.deductions.filter(x=>x.confirmed&&x.amount&&x.section!=='16(ia)').map(x=>`
+      <tr><td class="ps-4 text-muted">${x.section} — ${x.label}</td><td class="text-end pe-3 text-success">(${inr(x.amount)})</td></tr>`).join('')}
+      <tr style="background:#1e3a5f;color:#fff;"><td class="ps-3 fw-bold">Estimated Taxable Income</td><td class="text-end pe-3 fw-bold">${inr(totalTaxable)}</td></tr>
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Tax Calculation (Old Regime)</td></tr>
+      <tr><td class="ps-4 text-muted">Tax @ 30%</td><td class="text-end pe-3">${inr(baseTax)}</td></tr>
+      <tr><td class="ps-4 text-muted">Surcharge @ 25% (income &gt;₹5Cr)</td><td class="text-end pe-3">${inr(surcharge)}</td></tr>
+      <tr><td class="ps-4 text-muted">Health &amp; Education Cess @ 4%</td><td class="text-end pe-3">${inr(cess)}</td></tr>
+      <tr style="background:#374151;color:#fff;"><td class="ps-3 fw-semibold">Gross Tax Payable</td><td class="text-end pe-3 fw-semibold">${inr(totalTax)}</td></tr>
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">TDS Already Paid</td></tr>
+      ${d.tds_paid.map(t=>`
+      <tr><td class="ps-4 text-muted">${t.source}</td><td class="text-end pe-3 text-success">(${inr(t.amount)})</td></tr>`).join('')}
+      <tr style="background:${balance>0?'#fef2f2':'#f0faf4'};"><td class="ps-3 fw-bold">${balance>0?'Balance Tax Payable':'Estimated Refund'}</td>
+        <td class="text-end pe-3 fw-bold" style="color:${balance>0?'#991b1b':'#166534'};">${inr(Math.abs(balance))}</td></tr>
+    </tbody>
+    </table>
+  </div>
+  <div class="alert alert-info mt-3 py-2 px-3" style="font-size:11.5px;">
+    <i class="bi bi-info-circle me-1"></i>This is an <strong>estimate</strong>. Key unknowns: (1) full home loan interest for 24(b) deduction (~₹1.4Cr total interest across all 4 loans could reduce liability significantly); (2) STCG vs LTCG split on ESOP sales; (3) StanChart foreign income; (4) additional deductions (80D, 80CCD1B). Download the AIS to verify all income figures.
+  </div>
+  </div>`;
+}
+
+// ── DOCUMENTS & ALERTS ───────────────────────────────────────────────────────
+function renderChecklist(fy) {
+  const d = TAX[fy]; if (!d) return;
+  const el = document.getElementById('taxViewChecklist');
+
+  const docs = [
+    {name:"Form 16 — Part A & B",              status:"done",    file:"FY26/Sudhir's Form16-2025-26.pdf"},
+    {name:"Form 12BA (Perquisites)",            status:"done",    file:"FY26/Sudhir's Form16-2025-26.pdf"},
+    {name:"ICICI Demat Transactions FY26",      status:"done",    file:"FY26/4_Financial_Investments/ICICI_Demat_90174124_Transactions_FY26.pdf"},
+    {name:"GCPL Capital Gains Statement",       status:"done",    file:"FY26/4_Financial_Investments/GCPL_CapitalGains.xlsx"},
+    {name:"Home Loan Stmt — C51 Original",      status:"done",    file:"FY26/2_Home_Loans/Statement of Account_TBMUM00006542596 (1).pdf"},
+    {name:"Home Loan Stmt — C34 TopUp",         status:"partial", file:"FY26/2_Home_Loans/Statement of Account_TBMUM00007500382 (1).pdf", note:"Jan–Mar only"},
+    {name:"Home Loan Stmt — C51 TopUp",         status:"partial", file:"FY26/2_Home_Loans/Statement of Account_TBMUM00007499508 (1).pdf", note:"Jan–Mar only"},
+    {name:"Home Loan Interest Cert — HL5 9175", status:"missing", file:null},
+    {name:"StanChart SG Year-End Statement",    status:"partial", file:"FY26/1_Bank_Accounts/StanChart_6007_SGD_Statement_Apr26.pdf", note:"Need full FY income summary"},
+    {name:"LIC Premium Receipts",               status:"done",    file:"data/2026 Policy Register.pdf"},
+    {name:"AIS / TIS (IT Portal)",              status:"missing", file:null},
+    {name:"Health Insurance Certificate",       status:"missing", file:null},
+    {name:"NPS Statement (personal contribution)", status:"missing", file:null},
+    {name:"Rent Receipts (if HRA claim)",       status:"missing", file:null},
+  ];
+
+  const alerts = [
+    {level:"danger",  text:"Schedule FA — StanChart Singapore (A/c 62-1-833928-2) MUST be declared as a foreign asset. Non-disclosure attracts Black Money Act penalties regardless of tax amount."},
+    {level:"warning", text:"80C not claimed via GCPL — LIC premiums ₹3.44L p.a., cap ₹1.5L. File in ITR to claim ₹58,500 tax saving."},
+    {level:"warning", text:"Home loan interest for C34 and C51 TopUp loans only available for Jan–Mar 2026. Request full-year interest certificates from ICICI."},
+    {level:"warning", text:"GCPL dividends ₹99.43L will attract additional tax of ~₹38.8L (at 39%) less TDS ~₹9.94L = ~₹28.9L payable."},
+    {level:"info",    text:"Download AIS from incometax.gov.in → e-File → AIS. Cross-check interest, dividends, and capital gains before filing."},
+    {level:"info",    text:"ESOP capital gains ₹256L — confirm STCG vs LTCG split with GCPL/ICICI. LTCG >₹1L taxed at 12.5%, STCG at 20%."},
+    {level:"info",    text:"Consider deemed let-out treatment for C51 — full interest deductible, net house property loss up to ₹2L can offset salary income."},
+  ];
+
+  const done = docs.filter(d=>d.status==='done').length;
+  const partial = docs.filter(d=>d.status==='partial').length;
+
+  el.innerHTML = `
+  <div class="row g-3 mb-4">
+    <div class="col-md-8">
+      <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+        <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center;">
+          <span><i class="bi bi-folder2-open me-2"></i>Document Checklist</span>
+          <span style="font-size:11px;">${done} done · ${partial} partial · ${docs.length-done-partial} missing</span>
+        </div>
+        <div style="padding:4px 0;">
+          ${docs.map(doc=>{
+            const icon = doc.status==='done'?'check-circle-fill text-success':doc.status==='partial'?'exclamation-circle-fill text-warning':'x-circle text-danger';
+            const docLink = doc.file ? `<a href="/data/${doc.file}" target="_blank" style="font-size:10px;color:#1e3a5f;text-decoration:none;"><i class="bi bi-box-arrow-up-right"></i></a>` : '';
+            return `<div class="d-flex align-items-center gap-2 px-3 py-1" style="border-bottom:1px solid #f3f4f6;">
+              <i class="bi bi-${icon}" style="font-size:13px;flex-shrink:0;"></i>
+              <span style="font-size:12px;flex:1;">${doc.name}${doc.note?` <span class="text-muted">(${doc.note})</span>`:''}</span>
+              ${docLink}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+        <div style="background:#374151;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;"><i class="bi bi-exclamation-triangle me-2"></i>Action Items</div>
+        <div style="padding:8px 10px;">
+          ${alerts.map(a=>`
+          <div class="alert alert-${a.level} py-2 px-2 mb-2" style="font-size:11.5px;border-radius:6px;">
+            <i class="bi bi-${a.level==='danger'?'exclamation-octagon-fill':a.level==='warning'?'exclamation-triangle-fill':'info-circle'} me-1"></i>${a.text}
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => switchView('income'));
+</script>
+</body>
+</html>

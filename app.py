@@ -152,6 +152,11 @@ def index():
     return render_template("index.html", user=session["user"])
 
 
+@app.route("/tax")
+@login_required
+def tax():
+    return render_template("tax.html", user=session["user"])
+
 @app.route("/financial-statements")
 @login_required
 def financial_statements():
