@@ -63,6 +63,7 @@ NUMBER_TO_NAME = {v: k for k, v in HOUSEHOLD_MEMBERS.items() if v}
 PASSWORDS = {
     "vincent": os.getenv("VINCENT_PASSWORD", "vincent123"),
     "sudhir":  os.getenv("SUDHIR_PASSWORD",  "sudhir123"),
+    "vivek":   os.getenv("VIVEK_PASSWORD",   "Vivek123"),
 }
 
 
