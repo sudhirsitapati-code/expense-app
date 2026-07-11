@@ -8,26 +8,21 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 <style>
 body { background:#f8f9fa; font-size:14px; }
-
 .topbar { background:#1e293b; color:#f1f5f9; padding:10px 20px; display:flex; align-items:center; gap:16px; }
 .topbar a { color:#94a3b8; text-decoration:none; font-size:12px; }
 .topbar a:hover { color:#f1f5f9; }
 .topbar-title { font-size:15px; font-weight:600; color:#f1f5f9; }
-
-.tax-tabs { display:flex; background:#fff; border-bottom:1px solid #e2e8f0; padding:0 20px; gap:4px; }
-.tax-tab { padding:11px 18px; font-size:13px; font-weight:500; color:#64748b; border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; text-decoration:none; }
+.tax-tabs { display:flex; background:#fff; border-bottom:1px solid #e2e8f0; padding:0 20px; gap:4px; align-items:center; }
+.tax-tab { padding:11px 18px; font-size:13px; font-weight:500; color:#64748b; border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; text-decoration:none; display:inline-block; }
 .tax-tab:hover { color:#1e3a5f; }
 .tax-tab.active { color:#1e3a5f; border-bottom-color:#1e3a5f; }
-
-.fy-bar { background:#fff; border-bottom:1px solid #e2e8f0; padding:8px 20px; display:flex; align-items:center; gap:12px; }
-.fy-bar label { font-size:11px; color:#64748b; font-weight:600; text-transform:uppercase; letter-spacing:.4px; margin:0; }
-
 .content-area { padding:24px 20px; max-width:1100px; margin:0 auto; }
+.del-btn { background:none; border:none; color:#dc2626; cursor:pointer; padding:0 6px; font-size:13px; opacity:0.5; }
+.del-btn:hover { opacity:1; }
 </style>
 </head>
 <body>
 
-<!-- Top bar -->
 <div class="topbar">
   <a href="/home"><i class="bi bi-house me-1"></i>Home</a>
   <span style="color:#475569;">›</span>
@@ -35,16 +30,13 @@ body { background:#f8f9fa; font-size:14px; }
   <span style="margin-left:auto;font-size:11px;color:#64748b;">{{ user }}</span>
 </div>
 
-<!-- Sub-nav tabs -->
 <div class="tax-tabs">
   <a class="tax-tab active" href="#" data-view="income"      onclick="switchView('income');return false;">Income Summary</a>
   <a class="tax-tab"        href="#" data-view="deductions"  onclick="switchView('deductions');return false;">Deductions</a>
   <a class="tax-tab"        href="#" data-view="computation" onclick="switchView('computation');return false;">Tax Computation</a>
   <a class="tax-tab"        href="#" data-view="checklist"   onclick="switchView('checklist');return false;">Documents &amp; Alerts</a>
-
-  <!-- FY selector pushed right -->
-  <div class="fy-bar ms-auto border-0 p-0 d-flex align-items-center gap-2">
-    <label>FY</label>
+  <div class="ms-auto d-flex align-items-center gap-2 py-1">
+    <label style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin:0;">FY</label>
     <select id="taxFySelect" class="form-select form-select-sm w-auto"
             onchange="switchView(document.querySelector('.tax-tab.active')?.dataset.view||'income')">
       <option value="FY26">FY 2025–26 (AY 2026–27)</option>
@@ -52,7 +44,6 @@ body { background:#f8f9fa; font-size:14px; }
   </div>
 </div>
 
-<!-- Content panes -->
 <div class="content-area">
   <div id="taxViewIncome"></div>
   <div id="taxViewDeductions"  class="d-none"></div>
@@ -60,49 +51,103 @@ body { background:#f8f9fa; font-size:14px; }
   <div id="taxViewChecklist"   class="d-none"></div>
 </div>
 
+<!-- Add Income Modal -->
+<div class="modal fade" id="addIncomeModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2" style="background:#1e3a5f;color:#fff;">
+        <h6 class="modal-title mb-0">Add Income Source</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">Head</label>
+            <select id="addHead" class="form-select form-select-sm">
+              <option>Salaries</option>
+              <option>Other Sources</option>
+              <option>Capital Gains</option>
+              <option>House Property</option>
+            </select>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label small fw-semibold">Source / Description</label>
+            <input id="addSource" type="text" class="form-control form-control-sm" placeholder="e.g. ICICI Savings Interest">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">Gross Amount (₹) <span class="text-muted">(leave blank if unknown)</span></label>
+            <input id="addGross" type="number" class="form-control form-control-sm" placeholder="e.g. 50000">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">TDS (₹) <span class="text-muted">(leave blank if none)</span></label>
+            <input id="addTds" type="number" class="form-control form-control-sm" placeholder="e.g. 5000">
+          </div>
+          <div class="col-md-12">
+            <label class="form-label small fw-semibold">Notes</label>
+            <input id="addNote" type="text" class="form-control form-control-sm" placeholder="Optional notes">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm text-white" style="background:#1e3a5f;" onclick="saveNewIncome()">Add Entry</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// ── TAX DATA ─────────────────────────────────────────────────────────────────
-const TAX = {
+// ── DEFAULT TAX DATA ──────────────────────────────────────────────────────────
+const TAX_DEFAULTS = {
   FY26: {
     fy:"FY26", ay:"2026-27", regime:"Old Regime", pan:"ARAPS6425N",
-
     income: [
-      {head:"Salaries", source:"GCPL — Cash Salary",         gross:114715943, tds:null,   note:"Basic, HRA, PLVR, Supplementary, NPSER etc. per Form 16 Annexure"},
-      {head:"Salaries", source:"GCPL — ESOP Perquisite",     gross:191994600, tds:null,   note:"Stock options taxed as salary u/s 17(2). Form 12BA."},
-      {head:"Salaries", source:"GCPL — Employer NPS+other",  gross:4918797,   tds:null,   note:"Employer NPS fund contribution + cars + other perquisites"},
-      {head:"Other Sources", source:"GCPL Dividends",         gross:9943405,   tds:994341, note:"4 interim dividends: May ₹53.3L, Aug ₹13L, Nov ₹13L, Jan ₹20.1L. TDS @10% est.", doc:"FY26/4_Financial_Investments/ICICI_Demat_90174124_Transactions_FY26.pdf"},
-      {head:"Other Sources", source:"SGB Interest",           gross:248430,    tds:24843,  note:"2.5% p.a. on 2,100 GOI Sovereign Gold Bonds. TDS @10% est.", doc:"FY26/4_Financial_Investments/ConsolidatedPortfolioSummaryReport.pdf"},
-      {head:"Other Sources", source:"StanChart USD Interest", gross:5557,      tds:0,      note:"USD 58.49 × ₹95. Credit interest on USD savings a/c 6208256430.", doc:"FY26/1_Bank_Accounts/StanChart_6007_SGD_Statement_Apr26.pdf"},
-      {head:"Other Sources", source:"Bank Savings Interest",  gross:null,      tds:null,   note:"ICICI 1331 + SBI 4852 savings interest — need AIS to confirm"},
-      {head:"Capital Gains", source:"GCPL ESOP Sales",        gross:25600000,  tds:0,      note:"₹256L from tax working file. STCG/LTCG split needs broker statement.", doc:"FY26/4_Financial_Investments/GCPL_CapitalGains.xlsx"},
-      {head:"Capital Gains", source:"PPFAS / MF / ETF",       gross:0,         tds:0,      note:"No redemptions in FY26. PPFAS growth plan, no distributions."},
-      {head:"Capital Gains", source:"StanChart SG ETFs",      gross:null,      tds:0,      note:"Foreign capital gains — need SC year-end statement for Schedule FA"},
-      {head:"House Property", source:"C34 / C51 — Notional Rent", gross:null,  tds:0,      note:"Deemed let-out or actual rental income — needs confirmation"},
+      {head:"Salaries",      source:"GCPL — Cash Salary",         gross:114715943, tds:null,   note:"Basic, HRA, PLVR, Supplementary, NPSER etc. per Form 16 Annexure"},
+      {head:"Salaries",      source:"GCPL — ESOP Perquisite",     gross:191994600, tds:null,   note:"Stock options taxed as salary u/s 17(2). Form 12BA."},
+      {head:"Salaries",      source:"GCPL — Employer NPS+other",  gross:4918797,   tds:null,   note:"Employer NPS fund contribution + cars + other perquisites"},
+      {head:"Other Sources", source:"GCPL Dividends",              gross:9943405,   tds:994341, note:"4 interim dividends: May ₹53.3L, Aug ₹13L, Nov ₹13L, Jan ₹20.1L. TDS @10% est.", doc:"FY26/4_Financial_Investments/ICICI_Demat_90174124_Transactions_FY26.pdf"},
+      {head:"Other Sources", source:"SGB Interest",                gross:248430,    tds:24843,  note:"2.5% p.a. on 2,100 GOI Sovereign Gold Bonds. TDS @10% est.", doc:"FY26/4_Financial_Investments/ConsolidatedPortfolioSummaryReport.pdf"},
+      {head:"Other Sources", source:"StanChart USD Interest",      gross:5557,      tds:0,      note:"USD 58.49 × ₹95. Credit interest on USD savings a/c 6208256430.", doc:"FY26/1_Bank_Accounts/StanChart_6007_SGD_Statement_Apr26.pdf"},
+      {head:"Other Sources", source:"Bank Savings Interest",       gross:null,      tds:null,   note:"ICICI 1331 + SBI 4852 savings interest — need AIS to confirm"},
+      {head:"Capital Gains", source:"GCPL ESOP Sales",             gross:25600000,  tds:0,      note:"₹256L from tax working file. STCG/LTCG split needs broker statement.", doc:"FY26/4_Financial_Investments/GCPL_CapitalGains.xlsx"},
+      {head:"Capital Gains", source:"PPFAS / MF / ETF",            gross:0,         tds:0,      note:"No redemptions in FY26. PPFAS growth plan, no distributions."},
+      {head:"Capital Gains", source:"StanChart SG ETFs",           gross:null,      tds:0,      note:"Foreign capital gains — need SC year-end statement for Schedule FA"},
+      {head:"House Property",source:"C34 / C51 — Notional Rent",   gross:null,      tds:0,      note:"Deemed let-out or actual rental income — needs confirmation"},
     ],
-
     deductions: [
-      {section:"16(ia)",    label:"Standard Deduction",                             amount:75000,    source:"Form 16", confirmed:true},
-      {section:"80CCD(2)", label:"Employer NPS Contribution",                       amount:2561004,  source:"Form 16", confirmed:true},
-      {section:"80C",      label:"LIC Premiums (capped)",                           amount:150000,   source:"ITR",     confirmed:true,  note:"Actual premium ₹3.44L p.a., cap ₹1.5L"},
-      {section:"80CCD(1B)",label:"Personal NPS Contribution",                       amount:null,     source:"ITR",     confirmed:false, note:"Up to ₹50,000 — need NPS statement"},
-      {section:"80D",      label:"Health Insurance Premium",                        amount:null,     source:"ITR",     confirmed:false, note:"Need premium certificate"},
-      {section:"24(b)",    label:"Home Loan Interest — C34 TopUp (XX00382)",        amount:null,     source:"ITR",     confirmed:false, note:"Only Jan–Mar 2026 data (₹21.9L for 3 months). Need full year certificate."},
-      {section:"24(b)",    label:"Home Loan Interest — C51 TopUp (XX99508)",        amount:null,     source:"ITR",     confirmed:false, note:"Only Jan–Mar 2026 data (₹28.2L for 3 months). Need full year certificate."},
-      {section:"24(b)",    label:"Home Loan Interest — C51 Original (XX42596)",     amount:44144670, source:"Stmt",    confirmed:true,  note:"Full year ₹44.1L confirmed from loan statement."},
-      {section:"24(b)",    label:"Home Loan Interest — HL5 MaxGain 9175",           amount:null,     source:"ITR",     confirmed:false, note:"Statement available — need to extract interest portion."},
-      {section:"10(13A)", label:"HRA Exemption",                                    amount:null,     source:"ITR",     confirmed:false, note:"HRA received ₹1.66Cr. Needs rent receipts if claiming."},
+      {section:"16(ia)",    label:"Standard Deduction",                         amount:75000,    source:"Form 16", confirmed:true},
+      {section:"80CCD(2)", label:"Employer NPS Contribution",                   amount:2561004,  source:"Form 16", confirmed:true},
+      {section:"80C",      label:"LIC Premiums (capped)",                       amount:150000,   source:"ITR",     confirmed:true,  note:"Actual premium ₹3.44L p.a., cap ₹1.5L"},
+      {section:"80CCD(1B)",label:"Personal NPS Contribution",                   amount:null,     source:"ITR",     confirmed:false, note:"Up to ₹50,000 — need NPS statement"},
+      {section:"80D",      label:"Health Insurance Premium",                    amount:null,     source:"ITR",     confirmed:false, note:"Need premium certificate"},
+      {section:"24(b)",    label:"Home Loan Interest — C34 TopUp (XX00382)",    amount:null,     source:"ITR",     confirmed:false, note:"Only Jan–Mar 2026 data (₹21.9L for 3 months). Need full year certificate."},
+      {section:"24(b)",    label:"Home Loan Interest — C51 TopUp (XX99508)",    amount:null,     source:"ITR",     confirmed:false, note:"Only Jan–Mar 2026 data (₹28.2L for 3 months). Need full year certificate."},
+      {section:"24(b)",    label:"Home Loan Interest — C51 Original (XX42596)", amount:44144670, source:"Stmt",    confirmed:true,  note:"Full year ₹44.1L confirmed from loan statement."},
+      {section:"24(b)",    label:"Home Loan Interest — HL5 MaxGain 9175",       amount:null,     source:"ITR",     confirmed:false, note:"Statement available — need to extract interest portion."},
+      {section:"10(13A)", label:"HRA Exemption",                                amount:null,     source:"ITR",     confirmed:false, note:"HRA received ₹1.66Cr. Needs rent receipts if claiming."},
     ],
-
     tds_paid: [
       {source:"GCPL Salary TDS (Form 16)", amount:120031486, verified:true},
       {source:"TDS on GCPL Dividends @10%", amount:994341,  verified:false, note:"Est. — confirm via AIS"},
       {source:"TDS on SGB Interest @10%",  amount:24843,    verified:false, note:"Est. — confirm via AIS"},
     ],
-
     slab_rate:0.30, surcharge_rate:0.25, cess_rate:0.04,
   }
 };
+
+// ── State — income stored in localStorage, rest from defaults ─────────────────
+function loadIncome(fy) {
+  const stored = localStorage.getItem('tax_income_' + fy);
+  return stored ? JSON.parse(stored) : TAX_DEFAULTS[fy].income.map((x,i)=>({...x, _id:i}));
+}
+function saveIncome(fy, income) {
+  localStorage.setItem('tax_income_' + fy, JSON.stringify(income));
+}
+function getD(fy) {
+  const base = TAX_DEFAULTS[fy];
+  return base ? {...base, income: loadIncome(fy)} : null;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function inr(n) {
@@ -116,7 +161,7 @@ function inr(n) {
 // ── View switcher ─────────────────────────────────────────────────────────────
 function switchView(view) {
   document.querySelectorAll('.tax-tab').forEach(l => l.classList.remove('active'));
-  document.querySelector(`.tax-tab[data-view="${view}"]`)?.classList.add('active');
+  document.querySelector('.tax-tab[data-view="'+view+'"]')?.classList.add('active');
   ['income','deductions','computation','checklist'].forEach(v =>
     document.getElementById('taxView'+v.charAt(0).toUpperCase()+v.slice(1)).classList.toggle('d-none', v!==view));
   const fy = document.getElementById('taxFySelect').value;
@@ -126,51 +171,92 @@ function switchView(view) {
   if (view==='checklist')   renderChecklist(fy);
 }
 
+// ── Delete / Add income ───────────────────────────────────────────────────────
+function deleteIncome(fy, id) {
+  const income = loadIncome(fy).filter(x => x._id !== id);
+  saveIncome(fy, income);
+  renderIncome(fy);
+}
+
+let _addModal;
+function openAddIncome() {
+  document.getElementById('addSource').value = '';
+  document.getElementById('addGross').value  = '';
+  document.getElementById('addTds').value    = '';
+  document.getElementById('addNote').value   = '';
+  _addModal = _addModal || new bootstrap.Modal(document.getElementById('addIncomeModal'));
+  _addModal.show();
+}
+
+function saveNewIncome() {
+  const fy     = document.getElementById('taxFySelect').value;
+  const head   = document.getElementById('addHead').value;
+  const source = document.getElementById('addSource').value.trim();
+  const gross  = document.getElementById('addGross').value;
+  const tds    = document.getElementById('addTds').value;
+  const note   = document.getElementById('addNote').value.trim();
+  if (!source) { alert('Source is required.'); return; }
+  const income = loadIncome(fy);
+  const maxId  = income.reduce((m,x)=>Math.max(m,x._id||0), 0);
+  income.push({
+    head, source,
+    gross: gross !== '' ? parseFloat(gross) : null,
+    tds:   tds   !== '' ? parseFloat(tds)   : null,
+    note,
+    _id: maxId + 1,
+  });
+  saveIncome(fy, income);
+  _addModal.hide();
+  renderIncome(fy);
+}
+
 // ── INCOME SUMMARY ────────────────────────────────────────────────────────────
 function renderIncome(fy) {
-  const d = TAX[fy]; if (!d) return;
+  const d = getD(fy); if (!d) return;
   const el = document.getElementById('taxViewIncome');
 
-  const heads = [...new Set(d.income.map(i=>i.head))];
-  const salaryGross = d.income.filter(i=>i.head==='Salaries').reduce((s,i)=>s+(i.gross||0),0);
-  const salaryDedn  = d.deductions.filter(x=>x.section==='16(ia)'||x.section==='80CCD(2)').reduce((s,x)=>s+(x.amount||0),0);
-  const salaryNet   = salaryGross - salaryDedn;
-  const knownGross  = d.income.filter(i=>i.gross!==null).reduce((s,i)=>s+(i.gross||0),0);
-  const pendingCount= d.income.filter(i=>i.gross===null).length;
-  const tdsTotal    = d.tds_paid.reduce((s,t)=>s+t.amount,0);
-  const roughTax    = Math.round((knownGross - salaryDedn) * d.slab_rate * (1 + d.surcharge_rate) * (1 + d.cess_rate));
-  const roughBalance= roughTax - tdsTotal;
+  const heads      = [...new Set(d.income.map(i=>i.head))];
+  const salaryDedn = d.deductions.filter(x=>x.section==='16(ia)'||x.section==='80CCD(2)').reduce((s,x)=>s+(x.amount||0),0);
+  const salaryGross= d.income.filter(i=>i.head==='Salaries').reduce((s,i)=>s+(i.gross||0),0);
+  const salaryNet  = salaryGross - salaryDedn;
+  const knownGross = d.income.filter(i=>i.gross!==null).reduce((s,i)=>s+(i.gross||0),0);
+  const pendingCount=d.income.filter(i=>i.gross===null).length;
+  const tdsTotal   = d.tds_paid.reduce((s,t)=>s+t.amount,0);
+  const roughTax   = Math.round((knownGross - salaryDedn) * d.slab_rate * (1+d.surcharge_rate) * (1+d.cess_rate));
+  const roughBal   = roughTax - tdsTotal;
 
   let rows = '';
   heads.forEach(head => {
-    const items = d.income.filter(i=>i.head===head);
-    const headGross = items.reduce((s,i)=>s+(i.gross||0),0);
-    const headTDS   = items.reduce((s,i)=>s+(i.tds||0),0);
+    const items    = d.income.filter(i=>i.head===head);
+    const headGross= items.reduce((s,i)=>s+(i.gross||0),0);
+    const headTDS  = items.reduce((s,i)=>s+(i.tds||0),0);
     rows += `<tr style="background:#1e3a5f;color:#fff;">
-      <td class="ps-2 fw-semibold" colspan="3">${head}</td>
+      <td class="ps-2 fw-semibold" colspan="4">${head}</td>
       <td class="text-end pe-2 fw-semibold">${inr(headGross||null)}</td>
       <td class="text-end pe-2 fw-semibold">${headTDS?inr(headTDS):''}</td>
+      <td></td>
     </tr>`;
     items.forEach(item => {
       const docLink = item.doc ? `<a href="/data/${item.doc}" target="_blank" style="color:#1e3a5f;text-decoration:none;"><i class="bi bi-file-earmark-text"></i></a>` : '';
       rows += `<tr>
         <td class="ps-3" style="font-size:12px;">${item.source}</td>
-        <td style="font-size:11px;color:#6b7280;max-width:260px;">${item.note||''}</td>
+        <td style="font-size:11px;color:#6b7280;max-width:220px;">${item.note||''}</td>
         <td class="text-center" style="font-size:11px;">${docLink}</td>
         <td class="text-end pe-2" style="font-size:12px;">${inr(item.gross)}</td>
         <td class="text-end pe-2" style="font-size:12px;color:#6b7280;">${item.tds!=null?inr(item.tds):''}</td>
+        <td class="text-center"><button class="del-btn" onclick="deleteIncome('${fy}',${item._id})" title="Remove"><i class="bi bi-x-lg"></i></button></td>
       </tr>`;
     });
     if (head==='Salaries') {
       rows += `<tr style="background:#e8f0fe;">
         <td class="ps-3 fw-semibold" style="font-size:12px;" colspan="3">Less: Std. Deduction + Employer NPS (80CCD2)</td>
         <td class="text-end pe-2 fw-semibold text-success" style="font-size:12px;">(${inr(salaryDedn)})</td>
-        <td></td>
+        <td></td><td></td>
       </tr>
       <tr style="background:#dbeafe;">
         <td class="ps-2 fw-semibold" style="font-size:12px;" colspan="3">Net Taxable — Salaries</td>
         <td class="text-end pe-2 fw-semibold" style="font-size:12px;">${inr(salaryNet)}</td>
-        <td></td>
+        <td></td><td></td>
       </tr>`;
     }
   });
@@ -199,26 +285,28 @@ function renderIncome(fy) {
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div style="background:${roughBalance>0?'#fff1f2':'#f0faf4'};border-radius:10px;padding:14px 16px;">
-        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">${roughBalance>0?'Est. Balance Payable':'Est. Refund'}</div>
-        <div style="font-size:1.1rem;font-weight:700;color:${roughBalance>0?'#991b1b':'#166534'};margin-top:4px;">${inr(Math.abs(roughBalance))}</div>
+      <div style="background:${roughBal>0?'#fff1f2':'#f0faf4'};border-radius:10px;padding:14px 16px;">
+        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">${roughBal>0?'Est. Balance Payable':'Est. Refund'}</div>
+        <div style="font-size:1.1rem;font-weight:700;color:${roughBal>0?'#991b1b':'#166534'};margin-top:4px;">${inr(Math.abs(roughBal))}</div>
         <div style="font-size:10px;color:#9ca3af;">before ITR deductions</div>
       </div>
     </div>
   </div>
   <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
-    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">
-      Consolidated Income — FY 2025–26 (AY 2026–27)
+    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between;">
+      <span>Consolidated Income — FY 2025–26 (AY 2026–27)</span>
+      <button class="btn btn-sm btn-light" style="font-size:11px;" onclick="openAddIncome()"><i class="bi bi-plus-lg me-1"></i>Add Entry</button>
     </div>
     <div style="overflow-x:auto;">
-    <table class="table table-sm table-hover mb-0" style="font-size:12.5px;min-width:600px;">
+    <table class="table table-sm table-hover mb-0" style="font-size:12.5px;min-width:620px;">
       <thead class="table-light">
         <tr>
-          <th class="ps-3" style="width:220px;">Source</th>
-          <th style="width:280px;">Notes</th>
-          <th style="width:40px;" class="text-center">Doc</th>
+          <th class="ps-3" style="width:200px;">Source</th>
+          <th style="width:240px;">Notes</th>
+          <th style="width:36px;" class="text-center">Doc</th>
           <th class="text-end pe-2">Gross Amount</th>
           <th class="text-end pe-2">TDS</th>
+          <th style="width:36px;"></th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -227,21 +315,22 @@ function renderIncome(fy) {
           <td class="ps-2 fw-bold" colspan="3">TOTAL (confirmed sources)</td>
           <td class="text-end pe-2 fw-bold">${inr(knownGross)}</td>
           <td class="text-end pe-2 fw-bold">${inr(tdsTotal)}</td>
+          <td></td>
         </tr>
       </tfoot>
     </table>
     </div>
   </div>
-  <div class="mt-2 text-muted" style="font-size:11px;"><i class="bi bi-info-circle me-1"></i>Est. tax uses flat 39% effective rate (30% + 25% surcharge + 4% cess). Actual liability depends on deductions, capital gains classification (STCG/LTCG), and house property computation.</div>`;
+  <div class="mt-2 text-muted" style="font-size:11px;"><i class="bi bi-info-circle me-1"></i>Est. tax uses flat 39% effective rate (30% + 25% surcharge + 4% cess). Actual liability depends on deductions, capital gains classification, and house property computation.</div>`;
 }
 
 // ── DEDUCTIONS ────────────────────────────────────────────────────────────────
 function renderDeductions(fy) {
-  const d = TAX[fy]; if (!d) return;
+  const d = getD(fy); if (!d) return;
   const el = document.getElementById('taxViewDeductions');
-  const confirmed = d.deductions.filter(x=>x.confirmed&&x.amount);
-  const pending   = d.deductions.filter(x=>!x.confirmed||!x.amount);
-  const totalConfirmed = confirmed.reduce((s,x)=>s+(x.amount||0),0);
+  const confirmed     = d.deductions.filter(x=>x.confirmed&&x.amount);
+  const pending       = d.deductions.filter(x=>!x.confirmed||!x.amount);
+  const totalConfirmed= confirmed.reduce((s,x)=>s+(x.amount||0),0);
 
   const rows = d.deductions.map(x=>`
   <tr>
@@ -291,13 +380,13 @@ function renderDeductions(fy) {
   </div>
   <div class="alert alert-warning mt-3 py-2 px-3" style="font-size:12px;">
     <i class="bi bi-exclamation-triangle-fill me-2"></i>
-    Home loan interest (24b) for C34 TopUp and C51 TopUp only has Jan–Mar 2026 data (₹21.9L + ₹28.2L for 3 months). Full-year interest is ~4× that amount (~₹1.4Cr total across all 4 loans). Under deemed let-out rules, full interest is deductible — obtain annual interest certificates from ICICI for accurate deduction.
+    Home loan interest (24b) for C34 TopUp and C51 TopUp only has Jan–Mar 2026 data (₹21.9L + ₹28.2L for 3 months). Full-year interest is ~4× that amount (~₹1.4Cr total across all 4 loans). Obtain annual interest certificates from ICICI for accurate deduction.
   </div>`;
 }
 
 // ── TAX COMPUTATION ───────────────────────────────────────────────────────────
 function renderComputation(fy) {
-  const d = TAX[fy]; if (!d) return;
+  const d = getD(fy); if (!d) return;
   const el = document.getElementById('taxViewComputation');
 
   const salaryGross  = d.income.filter(i=>i.head==='Salaries').reduce((s,i)=>s+(i.gross||0),0);
@@ -344,31 +433,31 @@ function renderComputation(fy) {
     </table>
   </div>
   <div class="alert alert-info mt-3 py-2 px-3" style="font-size:11.5px;">
-    <i class="bi bi-info-circle me-1"></i>This is an <strong>estimate</strong>. Key unknowns: (1) full home loan interest for 24(b) deduction (~₹1.4Cr total interest across all 4 loans could reduce liability significantly); (2) STCG vs LTCG split on ESOP sales; (3) StanChart foreign income; (4) additional deductions (80D, 80CCD1B). Download the AIS to verify all income figures.
+    <i class="bi bi-info-circle me-1"></i>This is an <strong>estimate</strong>. Key unknowns: (1) full home loan interest for 24(b) (~₹1.4Cr total could reduce liability significantly); (2) STCG vs LTCG split on ESOP sales; (3) StanChart foreign income; (4) additional deductions (80D, 80CCD1B).
   </div>
   </div>`;
 }
 
 // ── DOCUMENTS & ALERTS ───────────────────────────────────────────────────────
 function renderChecklist(fy) {
-  const d = TAX[fy]; if (!d) return;
+  const d = getD(fy); if (!d) return;
   const el = document.getElementById('taxViewChecklist');
 
   const docs = [
-    {name:"Form 16 — Part A & B",              status:"done",    file:"FY26/Sudhir's Form16-2025-26.pdf"},
-    {name:"Form 12BA (Perquisites)",            status:"done",    file:"FY26/Sudhir's Form16-2025-26.pdf"},
-    {name:"ICICI Demat Transactions FY26",      status:"done",    file:"FY26/4_Financial_Investments/ICICI_Demat_90174124_Transactions_FY26.pdf"},
-    {name:"GCPL Capital Gains Statement",       status:"done",    file:"FY26/4_Financial_Investments/GCPL_CapitalGains.xlsx"},
-    {name:"Home Loan Stmt — C51 Original",      status:"done",    file:"FY26/2_Home_Loans/Statement of Account_TBMUM00006542596 (1).pdf"},
-    {name:"Home Loan Stmt — C34 TopUp",         status:"partial", file:"FY26/2_Home_Loans/Statement of Account_TBMUM00007500382 (1).pdf", note:"Jan–Mar only"},
-    {name:"Home Loan Stmt — C51 TopUp",         status:"partial", file:"FY26/2_Home_Loans/Statement of Account_TBMUM00007499508 (1).pdf", note:"Jan–Mar only"},
-    {name:"Home Loan Interest Cert — HL5 9175", status:"missing", file:null},
-    {name:"StanChart SG Year-End Statement",    status:"partial", file:"FY26/1_Bank_Accounts/StanChart_6007_SGD_Statement_Apr26.pdf", note:"Need full FY income summary"},
-    {name:"LIC Premium Receipts",               status:"done",    file:"data/2026 Policy Register.pdf"},
-    {name:"AIS / TIS (IT Portal)",              status:"missing", file:null},
-    {name:"Health Insurance Certificate",       status:"missing", file:null},
-    {name:"NPS Statement (personal contribution)", status:"missing", file:null},
-    {name:"Rent Receipts (if HRA claim)",       status:"missing", file:null},
+    {name:"Form 16 — Part A & B",               status:"done",    file:"FY26/Sudhir's Form16-2025-26.pdf"},
+    {name:"Form 12BA (Perquisites)",             status:"done",    file:"FY26/Sudhir's Form16-2025-26.pdf"},
+    {name:"ICICI Demat Transactions FY26",       status:"done",    file:"FY26/4_Financial_Investments/ICICI_Demat_90174124_Transactions_FY26.pdf"},
+    {name:"GCPL Capital Gains Statement",        status:"done",    file:"FY26/4_Financial_Investments/GCPL_CapitalGains.xlsx"},
+    {name:"Home Loan Stmt — C51 Original",       status:"done",    file:"FY26/2_Home_Loans/Statement of Account_TBMUM00006542596 (1).pdf"},
+    {name:"Home Loan Stmt — C34 TopUp",          status:"partial", file:"FY26/2_Home_Loans/Statement of Account_TBMUM00007500382 (1).pdf", note:"Jan–Mar only"},
+    {name:"Home Loan Stmt — C51 TopUp",          status:"partial", file:"FY26/2_Home_Loans/Statement of Account_TBMUM00007499508 (1).pdf", note:"Jan–Mar only"},
+    {name:"Home Loan Interest Cert — HL5 9175",  status:"missing", file:null},
+    {name:"StanChart SG Year-End Statement",     status:"partial", file:"FY26/1_Bank_Accounts/StanChart_6007_SGD_Statement_Apr26.pdf", note:"Need full FY income summary"},
+    {name:"LIC Premium Receipts",                status:"done",    file:"data/2026 Policy Register.pdf"},
+    {name:"AIS / TIS (IT Portal)",               status:"done",    file:"FY26/AIS"},
+    {name:"Health Insurance Certificate",        status:"missing", file:null},
+    {name:"NPS Statement (personal contribution)",status:"missing", file:null},
+    {name:"Rent Receipts (if HRA claim)",        status:"missing", file:null},
   ];
 
   const alerts = [
@@ -376,12 +465,12 @@ function renderChecklist(fy) {
     {level:"warning", text:"80C not claimed via GCPL — LIC premiums ₹3.44L p.a., cap ₹1.5L. File in ITR to claim ₹58,500 tax saving."},
     {level:"warning", text:"Home loan interest for C34 and C51 TopUp loans only available for Jan–Mar 2026. Request full-year interest certificates from ICICI."},
     {level:"warning", text:"GCPL dividends ₹99.43L will attract additional tax of ~₹38.8L (at 39%) less TDS ~₹9.94L = ~₹28.9L payable."},
-    {level:"info",    text:"Download AIS from incometax.gov.in → e-File → AIS. Cross-check interest, dividends, and capital gains before filing."},
+    {level:"info",    text:"Cross-check AIS with your income entries — flag any discrepancies before filing."},
     {level:"info",    text:"ESOP capital gains ₹256L — confirm STCG vs LTCG split with GCPL/ICICI. LTCG >₹1L taxed at 12.5%, STCG at 20%."},
     {level:"info",    text:"Consider deemed let-out treatment for C51 — full interest deductible, net house property loss up to ₹2L can offset salary income."},
   ];
 
-  const done = docs.filter(d=>d.status==='done').length;
+  const done    = docs.filter(d=>d.status==='done').length;
   const partial = docs.filter(d=>d.status==='partial').length;
 
   el.innerHTML = `
@@ -393,12 +482,12 @@ function renderChecklist(fy) {
           <span style="font-size:11px;">${done} done · ${partial} partial · ${docs.length-done-partial} missing</span>
         </div>
         <div style="padding:4px 0;">
-          ${docs.map(doc=>{
+          ${docs.map(doc => {
             const icon = doc.status==='done'?'check-circle-fill text-success':doc.status==='partial'?'exclamation-circle-fill text-warning':'x-circle text-danger';
             const docLink = doc.file ? `<a href="/data/${doc.file}" target="_blank" style="font-size:10px;color:#1e3a5f;text-decoration:none;"><i class="bi bi-box-arrow-up-right"></i></a>` : '';
             return `<div class="d-flex align-items-center gap-2 px-3 py-1" style="border-bottom:1px solid #f3f4f6;">
               <i class="bi bi-${icon}" style="font-size:13px;flex-shrink:0;"></i>
-              <span style="font-size:12px;flex:1;">${doc.name}${doc.note?` <span class="text-muted">(${doc.note})</span>`:''}</span>
+              <span style="font-size:12px;flex:1;">${doc.name}${doc.note?' <span class="text-muted">('+doc.note+')</span>':''}</span>
               ${docLink}
             </div>`;
           }).join('')}
@@ -419,7 +508,6 @@ function renderChecklist(fy) {
   </div>`;
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => switchView('income'));
 </script>
 </body>
