@@ -101,7 +101,7 @@ body { background:#f8f9fa; font-size:14px; }
 // ── DEFAULT TAX DATA ──────────────────────────────────────────────────────────
 const TAX_DEFAULTS = {
   FY26: {
-    fy:"FY26", ay:"2026-27", regime:"Old Regime", pan:"ARAPS6425N",
+    fy:"FY26", ay:"2026-27", regime:"New Regime", pan:"ARAPS6425N",
     income: [
       {head:"Salaries",      source:"GCPL — Cash Salary",         gross:114715943, tds:null,   note:"Basic, HRA, PLVR, Supplementary, NPSER etc. per Form 16 Annexure"},
       {head:"Salaries",      source:"GCPL — ESOP Perquisite",     gross:191994600, tds:null,   note:"Stock options taxed as salary u/s 17(2). Form 12BA."},
@@ -116,16 +116,16 @@ const TAX_DEFAULTS = {
       {head:"House Property",source:"C34 / C51 — Notional Rent",   gross:null,      tds:0,      note:"Deemed let-out or actual rental income — needs confirmation"},
     ],
     deductions: [
-      {section:"16(ia)",    label:"Standard Deduction",                         amount:75000,    source:"Form 16", confirmed:true},
-      {section:"80CCD(2)", label:"Employer NPS Contribution",                   amount:2561004,  source:"Form 16", confirmed:true},
-      {section:"80C",      label:"LIC Premiums (capped)",                       amount:150000,   source:"ITR",     confirmed:true,  note:"Actual premium ₹3.44L p.a., cap ₹1.5L"},
-      {section:"80CCD(1B)",label:"Personal NPS Contribution",                   amount:null,     source:"ITR",     confirmed:false, note:"Up to ₹50,000 — need NPS statement"},
-      {section:"80D",      label:"Health Insurance Premium",                    amount:null,     source:"ITR",     confirmed:false, note:"Need premium certificate"},
-      {section:"24(b)",    label:"Home Loan Interest — C34 TopUp (XX00382)",    amount:null,     source:"ITR",     confirmed:false, note:"Only Jan–Mar 2026 data (₹21.9L for 3 months). Need full year certificate."},
-      {section:"24(b)",    label:"Home Loan Interest — C51 TopUp (XX99508)",    amount:null,     source:"ITR",     confirmed:false, note:"Only Jan–Mar 2026 data (₹28.2L for 3 months). Need full year certificate."},
-      {section:"24(b)",    label:"Home Loan Interest — C51 Original (XX42596)", amount:44144670, source:"Stmt",    confirmed:true,  note:"Full year ₹44.1L confirmed from loan statement."},
-      {section:"24(b)",    label:"Home Loan Interest — HL5 MaxGain 9175",       amount:null,     source:"ITR",     confirmed:false, note:"Statement available — need to extract interest portion."},
-      {section:"10(13A)", label:"HRA Exemption",                                amount:null,     source:"ITR",     confirmed:false, note:"HRA received ₹1.66Cr. Needs rent receipts if claiming."},
+      {section:"16(ia)",    label:"Standard Deduction",                         amount:75000,    source:"Form 16", confirmed:true,  new_regime:true},
+      {section:"80CCD(2)", label:"Employer NPS Contribution",                   amount:2561004,  source:"Form 16", confirmed:true,  new_regime:true},
+      {section:"80C",      label:"LIC Premiums (capped)",                       amount:150000,   source:"ITR",     confirmed:true,  new_regime:false, note:"Not claimable under new regime. Actual premium ₹3.44L p.a."},
+      {section:"80CCD(1B)",label:"Personal NPS Contribution",                   amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime."},
+      {section:"80D",      label:"Health Insurance Premium",                    amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime."},
+      {section:"24(b)",    label:"Home Loan Interest — C34 TopUp (XX00382)",    amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime. Jan–Mar 2026 data only (₹21.9L for 3 months)."},
+      {section:"24(b)",    label:"Home Loan Interest — C51 TopUp (XX99508)",    amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime. Jan–Mar 2026 data only (₹28.2L for 3 months)."},
+      {section:"24(b)",    label:"Home Loan Interest — C51 Original (XX42596)", amount:44144670, source:"Stmt",    confirmed:true,  new_regime:false, note:"Not claimable under new regime. ₹44.1L confirmed from statement."},
+      {section:"24(b)",    label:"Home Loan Interest — HL5 MaxGain 9175",       amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime."},
+      {section:"10(13A)", label:"HRA Exemption",                                amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime."},
     ],
     tds_paid: [
       {source:"GCPL Salary TDS (Form 16)", amount:120031486, verified:true},
@@ -186,6 +186,57 @@ function openAddIncome() {
   document.getElementById('addNote').value   = '';
   _addModal = _addModal || new bootstrap.Modal(document.getElementById('addIncomeModal'));
   _addModal.show();
+}
+
+async function importFromLedger() {
+  const fy  = document.getElementById('taxFySelect').value;
+  const btn = document.getElementById('ledgerImportBtn');
+  btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading…';
+  try {
+    const res  = await fetch('/api/tax/ledger-income/' + fy);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const income  = loadIncome(fy);
+    const maxId   = income.reduce((m,x)=>Math.max(m,x._id||0), 0);
+    let added = 0, skipped = 0, counter = maxId;
+
+    data.credits.forEach(group => {
+      const h = group.heading;
+      const amt = Math.round(group.total);
+      if (amt < 100) return;
+
+      // Map ledger heading to tax head
+      let head = 'Other Sources';
+      if (h === 'Dividends' || h === 'GCPL Dividends') head = 'Other Sources';
+      if (h === 'Investment') { skipped++; return; }  // not income
+
+      // Avoid duplicate if same heading+amount already exists (rough check)
+      const alreadyExists = income.some(x =>
+        x.note && x.note.includes('ledger') && x.note.includes(h)
+      );
+      if (alreadyExists) { skipped++; return; }
+
+      counter++;
+      income.push({
+        head, _id: counter,
+        source: h || 'Ledger credit',
+        gross: amt,
+        tds: null,
+        note: `Estimated from expense ledger (${data.ledger_year} credits). Verify against AIS.`,
+      });
+      added++;
+    });
+
+    saveIncome(fy, income);
+    renderIncome(fy);
+    btn.innerHTML = `<i class="bi bi-check-lg me-1"></i>${added} added${skipped?' ('+skipped+' skipped)':''}`;
+    setTimeout(()=>{ btn.disabled=false; btn.innerHTML='<i class="bi bi-database-up me-1"></i>Import from Ledger'; }, 3000);
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-database-up me-1"></i>Import from Ledger';
+    alert('Error: ' + e.message);
+  }
 }
 
 function saveNewIncome() {
@@ -295,7 +346,10 @@ function renderIncome(fy) {
   <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
     <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between;">
       <span>Consolidated Income — FY 2025–26 (AY 2026–27)</span>
-      <button class="btn btn-sm btn-light" style="font-size:11px;" onclick="openAddIncome()"><i class="bi bi-plus-lg me-1"></i>Add Entry</button>
+      <div class="d-flex gap-2">
+        <button id="ledgerImportBtn" class="btn btn-sm" style="font-size:11px;background:#2d4a7a;color:#fff;" onclick="importFromLedger()"><i class="bi bi-database-up me-1"></i>Import from Ledger</button>
+        <button class="btn btn-sm btn-light" style="font-size:11px;" onclick="openAddIncome()"><i class="bi bi-plus-lg me-1"></i>Add Entry</button>
+      </div>
     </div>
     <div style="overflow-x:auto;">
     <table class="table table-sm table-hover mb-0" style="font-size:12.5px;min-width:620px;">
@@ -328,59 +382,64 @@ function renderIncome(fy) {
 function renderDeductions(fy) {
   const d = getD(fy); if (!d) return;
   const el = document.getElementById('taxViewDeductions');
-  const confirmed     = d.deductions.filter(x=>x.confirmed&&x.amount);
-  const pending       = d.deductions.filter(x=>!x.confirmed||!x.amount);
-  const totalConfirmed= confirmed.reduce((s,x)=>s+(x.amount||0),0);
+  const isNew = d.regime === 'New Regime';
+  const applicable = d.deductions.filter(x => !isNew || x.new_regime);
+  const notApplicable = d.deductions.filter(x => isNew && !x.new_regime);
+  const totalAllowed = applicable.filter(x=>x.confirmed&&x.amount).reduce((s,x)=>s+(x.amount||0),0);
 
-  const rows = d.deductions.map(x=>`
-  <tr>
+  const makeRows = (list) => list.map(x=>`
+  <tr style="${isNew&&!x.new_regime?'opacity:0.45;':''}">
     <td class="ps-3 fw-semibold" style="font-size:12px;width:100px;">${x.section}</td>
     <td style="font-size:12px;">${x.label}</td>
     <td style="font-size:11px;color:#6b7280;">${x.note||''}</td>
     <td class="text-end pe-2" style="font-size:12px;">${inr(x.amount)}</td>
     <td class="text-center" style="font-size:11px;">
-      <span class="badge ${x.source==='Form 16'?'bg-success':x.confirmed?'bg-primary':'bg-warning text-dark'}">${x.source}</span>
+      <span class="badge ${!x.new_regime&&isNew?'bg-secondary':x.source==='Form 16'?'bg-success':x.confirmed?'bg-primary':'bg-warning text-dark'}">${!x.new_regime&&isNew?'N/A':x.source}</span>
     </td>
   </tr>`).join('');
 
   el.innerHTML = `
+  <div class="alert alert-info py-2 px-3 mb-3" style="font-size:12px;">
+    <i class="bi bi-info-circle me-1"></i><strong>New Regime:</strong> Only Standard Deduction (₹75,000) and Employer NPS u/s 80CCD(2) are claimable. Home loan interest, 80C, HRA, 80D, and personal NPS are <strong>not available</strong>.
+  </div>
   <div class="row g-3 mb-3">
     <div class="col-md-4">
       <div style="background:#f0faf4;border-radius:10px;padding:14px 16px;">
-        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">Confirmed Deductions</div>
-        <div style="font-size:1.1rem;font-weight:700;color:#166534;margin-top:4px;">${inr(totalConfirmed)}</div>
+        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">Allowed Deductions</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#166534;margin-top:4px;">${inr(totalAllowed)}</div>
+        <div style="font-size:10px;color:#9ca3af;">Std. deduction + Employer NPS</div>
       </div>
     </div>
     <div class="col-md-4">
-      <div style="background:#fffbeb;border-radius:10px;padding:14px 16px;">
-        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">Pending / To Claim</div>
-        <div style="font-size:1.1rem;font-weight:700;color:#92400e;margin-top:4px;">${pending.length} items</div>
+      <div style="background:#fff1f2;border-radius:10px;padding:14px 16px;">
+        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">Foregone (not claimable)</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#991b1b;margin-top:4px;">${inr(notApplicable.filter(x=>x.amount).reduce((s,x)=>s+(x.amount||0),0))}</div>
+        <div style="font-size:10px;color:#9ca3af;">Home loan interest + 80C confirmed</div>
       </div>
     </div>
     <div class="col-md-4">
       <div style="background:#f0f4ff;border-radius:10px;padding:14px 16px;">
-        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">Tax Saved (confirmed)</div>
-        <div style="font-size:1.1rem;font-weight:700;color:#1e3a5f;margin-top:4px;">${inr(Math.round(totalConfirmed*0.39))}</div>
-        <div style="font-size:10px;color:#9ca3af;">@ 39% effective rate</div>
+        <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;">Tax Cost of New Regime</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#1e3a5f;margin-top:4px;">${inr(Math.round(notApplicable.filter(x=>x.amount).reduce((s,x)=>s+(x.amount||0),0)*0.39))}</div>
+        <div style="font-size:10px;color:#9ca3af;">@ 39% on foregone deductions</div>
       </div>
     </div>
   </div>
   <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
-    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">Deductions Tracker</div>
+    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">Deductions — New Regime</div>
     <table class="table table-sm table-hover mb-0" style="font-size:12.5px;">
       <thead class="table-light"><tr>
-        <th class="ps-3">Section</th><th>Deduction</th><th>Note</th><th class="text-end pe-2">Amount</th><th class="text-center">Source</th>
+        <th class="ps-3">Section</th><th>Deduction</th><th>Note</th><th class="text-end pe-2">Amount</th><th class="text-center">Status</th>
       </tr></thead>
-      <tbody>${rows}</tbody>
+      <tbody>
+        ${makeRows(applicable)}
+        ${notApplicable.length ? `<tr class="table-light"><td colspan="5" class="ps-3 py-1" style="font-size:11px;color:#6b7280;font-weight:600;">NOT CLAIMABLE UNDER NEW REGIME</td></tr>${makeRows(notApplicable)}` : ''}
+      </tbody>
       <tfoot><tr style="background:#e8f0fe;">
-        <td colspan="3" class="ps-3 fw-semibold">Total Confirmed</td>
-        <td class="text-end pe-2 fw-semibold">${inr(totalConfirmed)}</td><td></td>
+        <td colspan="3" class="ps-3 fw-semibold">Total Allowable</td>
+        <td class="text-end pe-2 fw-semibold">${inr(totalAllowed)}</td><td></td>
       </tr></tfoot>
     </table>
-  </div>
-  <div class="alert alert-warning mt-3 py-2 px-3" style="font-size:12px;">
-    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-    Home loan interest (24b) for C34 TopUp and C51 TopUp only has Jan–Mar 2026 data (₹21.9L + ₹28.2L for 3 months). Full-year interest is ~4× that amount (~₹1.4Cr total across all 4 loans). Obtain annual interest certificates from ICICI for accurate deduction.
   </div>`;
 }
 
@@ -388,41 +447,66 @@ function renderDeductions(fy) {
 function renderComputation(fy) {
   const d = getD(fy); if (!d) return;
   const el = document.getElementById('taxViewComputation');
+  const isNew = d.regime === 'New Regime';
+
+  // Under new regime only 16(ia) and 80CCD(2) are allowed
+  const allowedDedns = d.deductions.filter(x => isNew ? x.new_regime : (x.confirmed && x.amount));
 
   const salaryGross  = d.income.filter(i=>i.head==='Salaries').reduce((s,i)=>s+(i.gross||0),0);
   const otherGross   = d.income.filter(i=>i.head==='Other Sources'&&i.gross).reduce((s,i)=>s+(i.gross||0),0);
   const cgGross      = d.income.filter(i=>i.head==='Capital Gains'&&i.gross).reduce((s,i)=>s+(i.gross||0),0);
-  const salaryDedn   = d.deductions.filter(x=>x.section==='16(ia)'||x.section==='80CCD(2)').reduce((s,x)=>s+(x.amount||0),0);
-  const viaConfirmed = d.deductions.filter(x=>x.confirmed&&x.amount&&x.section!=='16(ia)').reduce((s,x)=>s+(x.amount||0),0);
+  const salaryDedn   = allowedDedns.filter(x=>x.section==='16(ia)'||x.section==='80CCD(2)').reduce((s,x)=>s+(x.amount||0),0);
+  const otherDedns   = allowedDedns.filter(x=>x.section!=='16(ia)'&&x.section!=='80CCD(2)'&&x.amount).reduce((s,x)=>s+(x.amount||0),0);
   const netSalary    = salaryGross - salaryDedn;
-  const totalTaxable = netSalary + otherGross + cgGross - viaConfirmed;
-  const baseTax      = totalTaxable * 0.30;
-  const surcharge    = baseTax * 0.25;
-  const cess         = (baseTax + surcharge) * 0.04;
-  const totalTax     = baseTax + surcharge + cess;
+  // Capital gains taxed separately at special rates; regular income taxed at slab
+  const regularIncome= netSalary + otherGross - otherDedns;
+  const totalTaxable = regularIncome + cgGross;
+
+  // Slab tax on regular income (new regime slabs, income clearly >₹15L so 30% on most)
+  // For simplicity at this income level: effectively 30% on everything above ₹15L
+  function slabTax(income) {
+    if (income <= 300000)  return 0;
+    if (income <= 700000)  return (income-300000)*0.05;
+    if (income <= 1000000) return 20000+(income-700000)*0.10;
+    if (income <= 1200000) return 50000+(income-1000000)*0.15;
+    if (income <= 1500000) return 80000+(income-1200000)*0.20;
+    return 140000+(income-1500000)*0.30;
+  }
+  const baseTaxIncome = slabTax(regularIncome);
+  // Capital gains: assume all STCG for now (20%) — conservative
+  const cgTax        = cgGross * 0.20;
+  const totalBase    = baseTaxIncome + cgTax;
+  const surcharge    = totalBase * 0.25;  // >₹5Cr income
+  const cess         = (totalBase + surcharge) * 0.04;
+  const totalTax     = totalBase + surcharge + cess;
   const tdsTotal     = d.tds_paid.reduce((s,t)=>s+t.amount,0);
   const balance      = totalTax - tdsTotal;
 
   el.innerHTML = `
-  <div style="max-width:600px;">
+  <div style="max-width:620px;">
+  <div class="alert alert-info py-2 px-3 mb-3" style="font-size:12px;">
+    <i class="bi bi-info-circle me-1"></i><strong>New Regime.</strong> Only Standard Deduction + Employer NPS apply. Capital gains taxed at special rates (assumed STCG @20% — update when STCG/LTCG split is confirmed).
+  </div>
   <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
-    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">Tax Computation — FY 2025–26</div>
+    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">Tax Computation — FY 2025–26 (New Regime)</div>
     <table class="table table-sm mb-0" style="font-size:12.5px;">
     <tbody>
-      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Income</td></tr>
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Salary Income</td></tr>
       <tr><td class="ps-4">Salaries (gross)</td><td class="text-end pe-3">${inr(salaryGross)}</td></tr>
-      <tr><td class="ps-4 text-muted">Less: Std. Deduction + 80CCD(2)</td><td class="text-end pe-3 text-success">(${inr(salaryDedn)})</td></tr>
-      <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Net from Salaries</td><td class="text-end pe-3 fw-semibold">${inr(netSalary)}</td></tr>
-      <tr><td class="ps-4">Other Sources (dividends + interest)</td><td class="text-end pe-3">${inr(otherGross)}</td></tr>
-      <tr><td class="ps-4">Capital Gains (ESOP sales — est.)</td><td class="text-end pe-3">${inr(cgGross)}</td></tr>
-      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Deductions (Chapter VI-A, confirmed)</td></tr>
-      ${d.deductions.filter(x=>x.confirmed&&x.amount&&x.section!=='16(ia)').map(x=>`
-      <tr><td class="ps-4 text-muted">${x.section} — ${x.label}</td><td class="text-end pe-3 text-success">(${inr(x.amount)})</td></tr>`).join('')}
-      <tr style="background:#1e3a5f;color:#fff;"><td class="ps-3 fw-bold">Estimated Taxable Income</td><td class="text-end pe-3 fw-bold">${inr(totalTaxable)}</td></tr>
-      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Tax Calculation (Old Regime)</td></tr>
-      <tr><td class="ps-4 text-muted">Tax @ 30%</td><td class="text-end pe-3">${inr(baseTax)}</td></tr>
-      <tr><td class="ps-4 text-muted">Surcharge @ 25% (income &gt;₹5Cr)</td><td class="text-end pe-3">${inr(surcharge)}</td></tr>
-      <tr><td class="ps-4 text-muted">Health &amp; Education Cess @ 4%</td><td class="text-end pe-3">${inr(cess)}</td></tr>
+      <tr><td class="ps-4 text-muted">Less: Standard Deduction</td><td class="text-end pe-3 text-success">(${inr(75000)})</td></tr>
+      <tr><td class="ps-4 text-muted">Less: Employer NPS 80CCD(2)</td><td class="text-end pe-3 text-success">(${inr(2561004)})</td></tr>
+      <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Net Salary</td><td class="text-end pe-3 fw-semibold">${inr(netSalary)}</td></tr>
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Other Income (taxed at slab)</td></tr>
+      <tr><td class="ps-4">Dividends + Interest</td><td class="text-end pe-3">${inr(otherGross)}</td></tr>
+      <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Regular Taxable Income</td><td class="text-end pe-3 fw-semibold">${inr(regularIncome)}</td></tr>
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Capital Gains (special rates)</td></tr>
+      <tr><td class="ps-4">ESOP Sales (est. — STCG assumed @20%)</td><td class="text-end pe-3">${inr(cgGross)}</td></tr>
+      <tr style="background:#1e3a5f;color:#fff;"><td class="ps-3 fw-bold">Total Taxable (regular + CG)</td><td class="text-end pe-3 fw-bold">${inr(totalTaxable)}</td></tr>
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Tax Calculation</td></tr>
+      <tr><td class="ps-4 text-muted">Slab tax on regular income</td><td class="text-end pe-3">${inr(baseTaxIncome)}</td></tr>
+      <tr><td class="ps-4 text-muted">CG tax (STCG @20%)</td><td class="text-end pe-3">${inr(cgTax)}</td></tr>
+      <tr><td class="ps-4 text-muted">Surcharge @25% (total income &gt;₹5Cr)</td><td class="text-end pe-3">${inr(surcharge)}</td></tr>
+      <tr><td class="ps-4 text-muted">Health &amp; Education Cess @4%</td><td class="text-end pe-3">${inr(cess)}</td></tr>
       <tr style="background:#374151;color:#fff;"><td class="ps-3 fw-semibold">Gross Tax Payable</td><td class="text-end pe-3 fw-semibold">${inr(totalTax)}</td></tr>
       <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">TDS Already Paid</td></tr>
       ${d.tds_paid.map(t=>`
@@ -432,8 +516,8 @@ function renderComputation(fy) {
     </tbody>
     </table>
   </div>
-  <div class="alert alert-info mt-3 py-2 px-3" style="font-size:11.5px;">
-    <i class="bi bi-info-circle me-1"></i>This is an <strong>estimate</strong>. Key unknowns: (1) full home loan interest for 24(b) (~₹1.4Cr total could reduce liability significantly); (2) STCG vs LTCG split on ESOP sales; (3) StanChart foreign income; (4) additional deductions (80D, 80CCD1B).
+  <div class="alert alert-warning mt-3 py-2 px-3" style="font-size:11.5px;">
+    <i class="bi bi-exclamation-triangle me-1"></i>Key unknowns: STCG vs LTCG split on ESOP sales (LTCG @12.5% vs STCG @20%); StanChart foreign income (Schedule FA); bank savings interest (pending AIS). Surcharge applies as total income exceeds ₹5Cr.
   </div>
   </div>`;
 }

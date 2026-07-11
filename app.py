@@ -157,6 +157,47 @@ def index():
 def tax():
     return render_template("tax.html", user=session["user"])
 
+@app.route("/api/tax/ledger-income/<fy>")
+@login_required
+def tax_ledger_income(fy):
+    """Return credit entries from the master ledger for the given tax FY.
+    Tax FY26 (Apr 2025–Mar 2026) = ledger fy_year 2025.
+    Tax FY27 (Apr 2026–Mar 2027) = ledger fy_year 2026.
+    """
+    fy_map = {"FY25": 2024, "FY26": 2025, "FY27": 2026}
+    ledger_year = fy_map.get(fy)
+    if not ledger_year:
+        return jsonify({"error": "Unknown FY"}), 400
+
+    ledger = db.load("master_ledger") or []
+    entries = [t for t in ledger if t.get("fy_year") == ledger_year]
+
+    from collections import defaultdict
+    credits = defaultdict(float)
+    samples = defaultdict(list)
+    for t in entries:
+        cr = float(t.get("credit") or 0)
+        if cr < 10:
+            continue
+        heading = t.get("heading") or ""
+        credits[heading] += cr
+        if len(samples[heading]) < 5:
+            samples[heading].append({
+                "date": t.get("date",""),
+                "paid_to": t.get("paid_to",""),
+                "amount": cr,
+                "account": t.get("account",""),
+            })
+
+    result = []
+    for heading, total in sorted(credits.items(), key=lambda x: -x[1]):
+        result.append({
+            "heading": heading or "(no heading)",
+            "total": total,
+            "samples": samples[heading],
+        })
+    return jsonify({"fy": fy, "ledger_year": ledger_year, "credits": result})
+
 @app.route("/financial-statements")
 @login_required
 def financial_statements():
