@@ -317,8 +317,10 @@
         <option value="__none__">— None / blank —</option>
       </select>
     </div>
-    <div class="col-sm-2">
-      <input type="month" class="form-control form-control-sm" id="ledgerMonth" onchange="filterLedger()">
+    <div class="col-auto d-flex align-items-center gap-1">
+      <input type="date" class="form-control form-control-sm" id="ledgerDateFrom" placeholder="From" title="From date" onchange="filterLedger()" style="width:130px;">
+      <span class="text-muted small">–</span>
+      <input type="date" class="form-control form-control-sm" id="ledgerDateTo" placeholder="To" title="To date" onchange="filterLedger()" style="width:130px;">
     </div>
     <div class="col-sm-2">
       <input class="form-control form-control-sm" id="ledgerAmount" placeholder="Exact amount…" oninput="filterLedger()">
@@ -1460,13 +1462,15 @@ async function loadLedger() {
   const ac = document.getElementById('ledgerAccount')?.value;
   const ty = document.getElementById('ledgerType')?.value;
   const he = document.getElementById('ledgerHeading')?.value;
-  const mo = document.getElementById('ledgerMonth')?.value;
+  const df = document.getElementById('ledgerDateFrom')?.value;
+  const dt = document.getElementById('ledgerDateTo')?.value;
   if (s)  params.set('q', s);
   if (ac) params.set('account', ac);
   if (ty) params.set('type', ty);
   if (he) params.set('heading', he);
-  if (mo) params.set('month', mo);
-  params.set('fy', _activeYear);
+  if (df) params.set('date_from', df);
+  if (dt) params.set('date_to', dt);
+  if (!df && !dt) params.set('fy', _activeYear);
   const qs = '?' + params.toString();
 
   const r = await fetch('/api/master-ledger' + qs);

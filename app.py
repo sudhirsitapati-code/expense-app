@@ -1874,18 +1874,22 @@ def api_master_ledger():
     """Return master ledger entries. Filters: uncertain, account, bank, type, heading, month, q, fy."""
     txns = load_ledger()
 
-    # Fiscal year filter: FY26=Apr2025-Mar2026, FY27=Apr2026-Mar2027 (default)
-    fy = request.args.get("fy", "FY27")
-    _FY_RANGES = {"FY24": ("2023-04-01","2024-03-31"), "FY25": ("2024-04-01","2025-03-31"), "FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
-    if fy in _FY_RANGES:
-        from src.master_ledger import _parse_date as _ml_pd2
-        from datetime import date as _date
-        _fy_lo = _date.fromisoformat(_FY_RANGES[fy][0])
-        _fy_hi = _date.fromisoformat(_FY_RANGES[fy][1])
-        def _in_fy(t):
-            d = _ml_pd2(t.get("date",""))
-            return d and _fy_lo <= d.date() <= _fy_hi
-        txns = [t for t in txns if _in_fy(t)]
+    from src.master_ledger import _parse_date as _ml_pd2
+    from datetime import date as _date
+    date_from = request.args.get("date_from")  # YYYY-MM-DD, overrides FY filter
+    date_to   = request.args.get("date_to")
+    if date_from or date_to:
+        _lo = _date.fromisoformat(date_from) if date_from else _date(2000, 1, 1)
+        _hi = _date.fromisoformat(date_to)   if date_to   else _date(2099, 12, 31)
+        txns = [t for t in txns if (d := _ml_pd2(t.get("date",""))) and _lo <= d.date() <= _hi]
+    else:
+        # Fiscal year filter: FY26=Apr2025-Mar2026, FY27=Apr2026-Mar2027 (default)
+        fy = request.args.get("fy", "FY27")
+        _FY_RANGES = {"FY24": ("2023-04-01","2024-03-31"), "FY25": ("2024-04-01","2025-03-31"), "FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
+        if fy in _FY_RANGES:
+            _fy_lo = _date.fromisoformat(_FY_RANGES[fy][0])
+            _fy_hi = _date.fromisoformat(_FY_RANGES[fy][1])
+            txns = [t for t in txns if (d := _ml_pd2(t.get("date",""))) and _fy_lo <= d.date() <= _fy_hi]
 
     # Optional filters
     only_uncertain = request.args.get("uncertain") == "1"
