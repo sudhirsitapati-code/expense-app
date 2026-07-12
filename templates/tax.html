@@ -34,6 +34,7 @@ body { background:#f8f9fa; font-size:14px; }
   <a class="tax-tab active" href="#" data-view="income"      onclick="switchView('income');return false;">Income Summary</a>
   <a class="tax-tab"        href="#" data-view="deductions"  onclick="switchView('deductions');return false;">Deductions</a>
   <a class="tax-tab"        href="#" data-view="computation" onclick="switchView('computation');return false;">Tax Computation</a>
+  <a class="tax-tab"        href="#" data-view="esop"        onclick="switchView('esop');return false;">ESOP Holdings</a>
   <a class="tax-tab"        href="#" data-view="checklist"   onclick="switchView('checklist');return false;">Documents &amp; Alerts</a>
   <div class="ms-auto d-flex align-items-center gap-2 py-1">
     <label style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin:0;">FY</label>
@@ -48,6 +49,7 @@ body { background:#f8f9fa; font-size:14px; }
   <div id="taxViewIncome"></div>
   <div id="taxViewDeductions"  class="d-none"></div>
   <div id="taxViewComputation" class="d-none"></div>
+  <div id="taxViewEsop"        class="d-none"></div>
   <div id="taxViewChecklist"   class="d-none"></div>
 </div>
 
@@ -179,12 +181,13 @@ function inr(n) {
 function switchView(view) {
   document.querySelectorAll('.tax-tab').forEach(l => l.classList.remove('active'));
   document.querySelector('.tax-tab[data-view="'+view+'"]')?.classList.add('active');
-  ['income','deductions','computation','checklist'].forEach(v =>
+  ['income','deductions','computation','esop','checklist'].forEach(v =>
     document.getElementById('taxView'+v.charAt(0).toUpperCase()+v.slice(1)).classList.toggle('d-none', v!==view));
   const fy = document.getElementById('taxFySelect').value;
   if (view==='income')      renderIncome(fy);
   if (view==='deductions')  renderDeductions(fy);
   if (view==='computation') renderComputation(fy);
+  if (view==='esop')        renderEsop();
   if (view==='checklist')   renderChecklist(fy);
 }
 
@@ -661,6 +664,201 @@ function renderChecklist(fy) {
       </div>
     </div>
   </div>`;
+}
+
+// ── ESOP Holdings ─────────────────────────────────────────────────────────────
+const ESOP_LOTS = [
+  // Remaining lots as of Apr 1 2026 (fully FIFO-verified from ESGS Data + Perquisite Tax Details)
+  {lot:'#4', label:'Oct 2023', allotment:'2023-10-30', shares:52342,  fmv:970.45,  perq:59518413},
+  {lot:'#5', label:'Aug 2024', allotment:'2024-08-07', shares:38354,  fmv:1280.08, perq:49057834},
+  {lot:'#6', label:'Oct 2024', allotment:'2024-10-30', shares:83751,  fmv:1275.05, perq:106702962},
+  {lot:'#7', label:'Jul 2025', allotment:'2025-07-08', shares:29417,  fmv:1179.40, perq:34664993},
+  {lot:'#8', label:'Nov 2025', allotment:'2025-11-18', shares:141732, fmv:1111.05, perq:157329607},
+];
+
+const ESOP_SOLD = [
+  {label:'May 16 2025', shares:64659, price:1288.93, lots:'Lot#1 (60,364@₹815) + Lot#2 (4,295@₹962)', gain:29984000},
+  {label:'Feb 17 2026', shares:27000, price:1215.00, lots:'Lot#2 rem. (1,333@₹962) + Lot#3a (4,598@₹1,035) + Lot#3b (12,017@₹1,062) + Lot#4 (9,052@₹970)', gain:5218000},
+];
+
+// LTCG: 12.5% + 15% surcharge + 4% cess = 14.95% eff  (u/s 112A, surcharge capped)
+// STCG: 20%  + 15% surcharge + 4% cess = 23.92% eff  (u/s 111A, surcharge capped)
+const LTCG_RATE = 0.125 * 1.15 * 1.04;
+const STCG_RATE = 0.20  * 1.15 * 1.04;
+
+function renderEsop() {
+  const el = document.getElementById('taxViewEsop');
+  const today = new Date();
+  const fmt = n => '₹' + (n/1e5).toFixed(2) + 'L';
+  const fmtCr = n => '₹' + (n/1e7).toFixed(2) + ' Cr';
+  const fmtN = n => n.toLocaleString('en-IN');
+
+  const lot8ltcgDate = new Date('2026-11-18');
+  const daysToLTCG8 = Math.max(0, Math.ceil((lot8ltcgDate - today) / 86400000));
+
+  // Build lot rows
+  let lotRows = ESOP_LOTS.map(l => {
+    const allotDate = new Date(l.allotment);
+    const daysHeld = Math.floor((today - allotDate) / 86400000);
+    const ltcgDate = new Date(allotDate); ltcgDate.setFullYear(ltcgDate.getFullYear()+1);
+    const isLTCG = daysHeld >= 365;
+    const daysLeft = isLTCG ? 0 : Math.ceil((ltcgDate - today) / 86400000);
+    const badge = isLTCG
+      ? `<span class="badge bg-success">LTCG ✓</span>`
+      : `<span class="badge bg-warning text-dark">STCG — ${daysLeft}d left</span>`;
+    return `<tr>
+      <td class="fw-semibold">${l.lot} ${l.label}</td>
+      <td>${l.allotment}</td>
+      <td class="text-end">${fmtN(l.shares)}</td>
+      <td class="text-end">₹${l.fmv.toFixed(2)}</td>
+      <td class="text-end">${fmt(l.shares * l.fmv)}</td>
+      <td class="text-center">${badge}</td>
+      <td class="text-end esop-gain-${l.lot.replace('#','')}">—</td>
+      <td class="text-end esop-tax-${l.lot.replace('#','')}">—</td>
+    </tr>`;
+  }).join('');
+
+  // Sold rows
+  let soldRows = ESOP_SOLD.map(s => `<tr class="table-light text-muted" style="font-size:12px;">
+    <td colspan="2">${s.label} — SOLD (FY26)</td>
+    <td class="text-end">${fmtN(s.shares)}</td>
+    <td class="text-end">@ ₹${s.price}</td>
+    <td class="text-end">${fmt(s.shares * s.price)}</td>
+    <td class="text-center"><span class="badge bg-secondary">LTCG ✓</span></td>
+    <td class="text-end text-success">${fmt(s.gain)} gain</td>
+    <td class="text-end">${fmt(Math.round(s.gain * LTCG_RATE))}</td>
+  </tr>`).join('');
+
+  const lot8 = ESOP_LOTS.find(l => l.lot === '#8');
+  const lot8SaveHtml = `<div class="alert alert-warning border-0 mt-3" style="background:#fffbeb;">
+    <div class="fw-semibold mb-1">⏳ Lot #8 (Nov 2025) — ${daysToLTCG8} days to LTCG (Nov 18, 2026)</div>
+    <p class="mb-1 small">This is your largest lot — <strong>${fmtN(lot8.shares)} shares (₹${(lot8.shares*lot8.fmv/1e7).toFixed(1)} Cr cost basis)</strong>. Selling before Nov 18 triggers STCG @23.92% instead of LTCG @14.95% — a <strong>8.97% higher tax</strong> on any gain above the FMV.</p>
+    <p class="mb-0 small text-muted">Current price ~₹1,090 is <em>below</em> FMV ₹1,111 — no tax due if sold today (small STCG loss). But if GCPL rises above ₹1,111 before Nov 18, waiting saves significant tax. Adjust the price below to model scenarios.</p>
+  </div>`;
+
+  el.innerHTML = `
+  <div class="p-3">
+    <div class="d-flex align-items-center gap-3 mb-3">
+      <h6 class="mb-0 fw-bold">GCPL ESOP Holdings — ${fmtN(ESOP_LOTS.reduce((s,l)=>s+l.shares,0))} shares remaining</h6>
+      <div class="d-flex align-items-center gap-2 ms-auto">
+        <label class="small text-muted mb-0">Current price ₹</label>
+        <input type="number" id="esopPrice" value="1090" step="10" min="500" max="3000"
+          class="form-control form-control-sm" style="width:100px;"
+          oninput="recalcEsop(this.value)">
+        <span class="small text-muted">/ share</span>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered align-middle" style="font-size:13px;">
+        <thead class="table-dark">
+          <tr>
+            <th>Lot</th><th>Allotment</th><th class="text-end">Shares</th>
+            <th class="text-end">FMV (cost)</th><th class="text-end">Cost Basis</th>
+            <th class="text-center">Status</th><th class="text-end">Gain / (Loss)</th>
+            <th class="text-end">Est. Tax</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${soldRows}
+          <tr class="table-secondary"><td colspan="8" class="fw-semibold small py-1 ps-2">Remaining Lots (as of Apr 1, 2026)</td></tr>
+          ${lotRows}
+          <tr class="table-dark fw-bold">
+            <td colspan="2">TOTAL REMAINING</td>
+            <td class="text-end">${fmtN(ESOP_LOTS.reduce((s,l)=>s+l.shares,0))}</td>
+            <td colspan="2" class="text-end" id="esopTotalCost">${fmtCr(ESOP_LOTS.reduce((s,l)=>s+l.shares*l.fmv,0))}</td>
+            <td></td>
+            <td class="text-end" id="esopTotalGain">—</td>
+            <td class="text-end" id="esopTotalTax">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    ${lot8SaveHtml}
+
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">📅 Sell Timing — When to Sell to Minimise Tax</h6>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="p-3 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+              <div class="fw-semibold text-success mb-2">✅ Can sell anytime (already LTCG)</div>
+              <div class="small">
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Lot #4 Oct-2023 (52,342 shares)</span><span class="text-muted">Crossed Jul 2024</span></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Lot #5 Aug-2024 (38,354 shares)</span><span class="text-muted">Crossed Aug 2025</span></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Lot #6 Oct-2024 (83,751 shares)</span><span class="text-muted">Crossed Oct 2025</span></div>
+                <div class="d-flex justify-content-between py-1"><span>Lot #7 Jul-2025 (29,417 shares)</span><span class="text-muted">Crossed Jul 8, 2026 ✓</span></div>
+              </div>
+              <div class="mt-2 small text-success fw-semibold">203,864 shares — tax @14.95% effective</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="p-3 rounded" style="background:#fefce8;border:1px solid #fde68a;">
+              <div class="fw-semibold text-warning-emphasis mb-2">⏳ Wait until Nov 18, 2026 (${daysToLTCG8} days)</div>
+              <div class="small">
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Lot #8 Nov-2025</span><span class="fw-semibold">141,732 shares</span></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>FMV (cost basis)</span><span>₹1,111.05/share</span></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>STCG rate (if sold now)</span><span class="text-danger">23.92%</span></div>
+                <div class="d-flex justify-content-between py-1"><span>LTCG rate (after Nov 18)</span><span class="text-success">14.95%</span></div>
+              </div>
+              <div class="mt-2 small fw-semibold" id="esopLot8Saving">Enter price above to see tax saving</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0;">
+          <div class="fw-semibold mb-2 small">💡 Additional planning notes</div>
+          <ul class="small mb-0" style="padding-left:16px;">
+            <li>Each FY gives a fresh <strong>₹1.25L LTCG exemption</strong> — spread large sales across FY boundaries (before/after Apr 1) to claim it twice.</li>
+            <li>Your regular income exceeds ₹5 Cr, so <strong>both LTCG and STCG on listed equity carry 15% surcharge</strong> (not 25%) — the differential is purely the base rate: 12.5% vs 20%.</li>
+            <li>Lot #8 is currently <strong>below FMV</strong> at ~₹1,090 vs ₹1,111 — selling now produces a STCG <em>loss</em> (₹21/share) usable to offset other STCG gains this year. If you expect GCPL to rise, waiting for LTCG is better.</li>
+            <li>Lots #5 & #6 (Aug/Oct 2024) were vested at <strong>₹1,275–₹1,280</strong> — higher than current price (~₹1,090) — so they're currently at a loss. No CGT on these if sold now.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  recalcEsop(1090);
+}
+
+function recalcEsop(price) {
+  price = parseFloat(price) || 0;
+  const fmt = n => (n >= 0 ? '' : '−') + '₹' + (Math.abs(n)/1e5).toFixed(2) + 'L';
+  const fmtCr = n => (n >= 0 ? '' : '−') + '₹' + (Math.abs(n)/1e7).toFixed(2) + ' Cr';
+  let totalGain = 0, totalTax = 0;
+
+  ESOP_LOTS.forEach(l => {
+    const allotDate = new Date(l.allotment);
+    const daysHeld = Math.floor((new Date() - allotDate) / 86400000);
+    const isLTCG = daysHeld >= 365;
+    const gain = (price - l.fmv) * l.shares;
+    const tax  = gain > 0 ? gain * (isLTCG ? LTCG_RATE : STCG_RATE) : 0;
+    totalGain += gain; totalTax += tax;
+    const gainEl = document.querySelector(`.esop-gain-${l.lot.replace('#','')}`);
+    const taxEl  = document.querySelector(`.esop-tax-${l.lot.replace('#','')}`);
+    if (gainEl) gainEl.innerHTML = `<span class="${gain>=0?'text-danger':'text-success'}">${fmt(gain)}</span>`;
+    if (taxEl)  taxEl.innerHTML  = tax > 0 ? `<span class="text-danger">${fmt(tax)}</span>` : `<span class="text-muted">Nil</span>`;
+  });
+
+  const tgEl = document.getElementById('esopTotalGain');
+  const ttEl = document.getElementById('esopTotalTax');
+  if (tgEl) tgEl.innerHTML = `<span class="${totalGain>=0?'text-danger':'text-success'}">${fmtCr(totalGain)}</span>`;
+  if (ttEl) ttEl.innerHTML = totalTax > 0 ? `<span class="text-danger">${fmtCr(totalTax)}</span>` : `<span class="text-muted">Nil</span>`;
+
+  // Lot #8 tax saving if waited for LTCG
+  const lot8 = ESOP_LOTS.find(l => l.lot === '#8');
+  const lot8gain = (price - lot8.fmv) * lot8.shares;
+  const savingEl = document.getElementById('esopLot8Saving');
+  if (savingEl && lot8gain > 0) {
+    const stcgTax = lot8gain * STCG_RATE;
+    const ltcgTax = lot8gain * LTCG_RATE;
+    const saving  = stcgTax - ltcgTax;
+    savingEl.innerHTML = `<span class="text-success">Waiting saves ₹${(saving/1e5).toFixed(1)}L in tax</span> <span class="text-muted small">(STCG ₹${(stcgTax/1e5).toFixed(1)}L → LTCG ₹${(ltcgTax/1e5).toFixed(1)}L)</span>`;
+  } else if (savingEl) {
+    savingEl.innerHTML = `<span class="text-muted">Price below FMV — STCG loss of ₹${(Math.abs(lot8gain)/1e5).toFixed(1)}L, no tax either way</span>`;
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => switchView('income'));
