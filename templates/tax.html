@@ -143,11 +143,11 @@ const TAX_DEFAULTS = {
       {source:"TDS on SGB Interest (est.)", amount:24843, verified:false, note:"Est. @10% on ₹2.48L SGB interest — not yet confirmed in AIS."},
     ],
     taxes_paid: [
-      {source:"Advance Tax — Q2 FY26 (16-Sep-2025)", amount:3630000, verified:true, note:"₹36.3L paid 16 Sep 2025. Q2 FY26 instalment (due 15 Sep). Claimable in full against FY26 liability."},
       {source:"TCS on LRS — ICICI Feb-2026 (AIS)", amount:3843360, verified:true, note:"AIS confirmed: TCS-206CQ. Remittance ₹1,92,16,801 @20% TCS. Q4 FY26. Claimable as full tax credit in ITR."},
       {source:"TCS on LRS — ICICI Mar-2026 (AIS)", amount:18536, verified:true, note:"AIS confirmed: TCS-206CQ. Remittance ₹92,681. Q4 FY26. Claimable as full tax credit."},
-      {source:"Advance Tax Jul-2024 — SBI (⚠️ FY25?)", amount:385000, verified:false, note:"SBI-4852 'Transfer Tax Office' Jul 2024. Date falls in FY25 (AY25-26), not FY26. Verify challan — may need to move to FY25 ITR."},
-      {source:"ITD Refund AY2024-25 (credit)", amount:-400, verified:true, note:"NEFT credit from ITD for AY2024-25. Informational — does not offset FY26 liability."},
+      {source:"⚠️ SA Tax ₹36.3L (16-Sep-2025) — booked FY25, NOT FY26", amount:0, verified:true, note:"AIS Part B3 confirms challan 25091600354629ICIC as FY 2024-25 Self Assessment Tax. Offsets FY25 (AY25-26) liability only — does NOT reduce FY26 balance. Verify with CA if this was intended for FY26."},
+      {source:"⚠️ Advance Tax Jul-2024 — SBI — booked FY25, NOT FY26", amount:0, verified:false, note:"SBI-4852 'Transfer Tax Office' Jul 2024. Also falls in FY25. Does not offset FY26 liability."},
+      {source:"ITD Refund AY2024-25 (₹890)", amount:-890, verified:true, note:"AIS Part B4: ECS refund ₹890 for FY 2024-25, paid 04-Oct-2025. Informational — does not offset FY26 liability."},
     ],
     slab_rate:0.30, surcharge_rate:0.25, cess_rate:0.04,
   }
