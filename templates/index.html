@@ -1522,10 +1522,24 @@ let _sortCol = null, _sortDir = 0; // 0=none,1=asc,-1=desc
 
 function parseDateVal(s) {
   if (!s) return 0;
-  // DD/MM/YYYY or DD-MM-YYYY → sortable number YYYYMMDD
-  const m = s.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
-  if (m) return parseInt(m[3] + m[2] + m[1]);
-  return new Date(s).getTime() || 0;
+  const MON = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  let m;
+  // YYYY-MM-DD (ISO) — most reliable, handles datetime strings too
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return parseInt(m[1]) * 10000 + parseInt(m[2]) * 100 + parseInt(m[3]);
+  // DD/MM/YYYY or DD-MM-YYYY (numeric, 4-digit year)
+  m = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+  if (m) return parseInt(m[3]) * 10000 + parseInt(m[2]) * 100 + parseInt(m[1]);
+  // DD-MMM-YYYY (e.g. 01-Apr-2026)
+  m = s.match(/^(\d{2})[\/\-]([A-Za-z]{3})[\/\-](\d{4})$/);
+  if (m) { const mo = MON[m[2].toLowerCase()]; if (mo) return parseInt(m[3]) * 10000 + mo * 100 + parseInt(m[1]); }
+  // DD-MMM-YY (e.g. 01-Apr-26) — 2-digit year, assume 20xx
+  m = s.match(/^(\d{2})[\/\-]([A-Za-z]{3})[\/\-](\d{2})$/);
+  if (m) { const mo = MON[m[2].toLowerCase()]; if (mo) return (2000 + parseInt(m[3])) * 10000 + mo * 100 + parseInt(m[1]); }
+  // DD/MM/YY or DD-MM-YY (numeric, 2-digit year)
+  m = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{2})$/);
+  if (m) return (2000 + parseInt(m[3])) * 10000 + parseInt(m[2]) * 100 + parseInt(m[1]);
+  return 0;
 }
 
 function fmtDate(s) {
