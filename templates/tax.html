@@ -103,16 +103,24 @@ const TAX_DEFAULTS = {
   FY26: {
     fy:"FY26", ay:"2026-27", regime:"New Regime", pan:"ARAPS6425N",
     income: [
-      {head:"Salaries",      source:"GCPL — Cash Salary",         gross:114715943, tds:null,   note:"Basic, HRA, PLVR, Supplementary, NPSER etc. per Form 16 Annexure"},
+      // ── SALARIES ─────────────────────────────────────────────────────────────
+      {head:"Salaries",      source:"GCPL — Cash Salary",         gross:114715943, tds:null,   note:"Basic, HRA, PLVR, Supplementary, NPSER etc. per Form 16 Annexure. AIS: ₹31.18 Cr total salary (all components combined)."},
       {head:"Salaries",      source:"GCPL — ESOP Perquisite",     gross:191994600, tds:null,   note:"Stock options taxed as salary u/s 17(2). Form 12BA."},
       {head:"Salaries",      source:"GCPL — Employer NPS+other",  gross:4918797,   tds:null,   note:"Employer NPS fund contribution + cars + other perquisites"},
-      {head:"Other Sources", source:"GCPL Dividends",              gross:9943405,   tds:994341, note:"4 interim dividends: May ₹53.3L, Aug ₹13L, Nov ₹13L, Jan ₹20.1L. TDS @10% est.", doc:"FY26/4_Financial_Investments/ICICI_Demat_90174124_Transactions_FY26.pdf"},
-      {head:"Other Sources", source:"SGB Interest",                gross:248430,    tds:24843,  note:"2.5% p.a. on 2,100 GOI Sovereign Gold Bonds. TDS @10% est.", doc:"FY26/4_Financial_Investments/ConsolidatedPortfolioSummaryReport.pdf"},
-      {head:"Other Sources", source:"StanChart USD Interest",      gross:5557,      tds:0,      note:"USD 58.49 × ₹95. Credit interest on USD savings a/c 6208256430.", doc:"FY26/1_Bank_Accounts/StanChart_6007_SGD_Statement_Apr26.pdf"},
-      {head:"Other Sources", source:"Bank Savings Interest",       gross:null,      tds:null,   note:"ICICI 1331 + SBI 4852 savings interest — need AIS to confirm"},
-      {head:"Capital Gains", source:"GCPL ESOP Sales",             gross:25600000,  tds:0,      note:"₹256L from tax working file. STCG/LTCG split needs broker statement.", doc:"FY26/4_Financial_Investments/GCPL_CapitalGains.xlsx"},
-      {head:"Capital Gains", source:"PPFAS / MF / ETF",            gross:0,         tds:0,      note:"No redemptions in FY26. PPFAS growth plan, no distributions."},
-      {head:"Capital Gains", source:"StanChart SG ETFs",           gross:null,      tds:0,      note:"Foreign capital gains — need SC year-end statement for Schedule FA"},
+      // ── OTHER SOURCES — AIS CONFIRMED ────────────────────────────────────────
+      {head:"Other Sources", source:"GCPL Dividends",              gross:5502150,   tds:550215, note:"AIS confirmed: ₹55.02L. ⚠️ DISCREPANCY — earlier estimate was ₹99.43L (from demat statement). AIS is authoritative; difference of ₹44.4L to investigate with GCPL/ICICI.", doc:"FY26/Sudhir AIS 2025-26.pdf", ais:true},
+      {head:"Other Sources", source:"Other Equity Dividends",      gross:587754,    tds:55570,  note:"AIS confirmed: 17 companies incl. IndiaMart ₹1.2L, HDFC Bank ₹94K, Axtel ₹94K, ICICI Bank ₹68K, Kama Holdings ₹56K, and others. TDS deducted by each company.", doc:"FY26/Sudhir AIS 2025-26.pdf", ais:true},
+      {head:"Other Sources", source:"EPF Interest (GCPL PF Trust)",gross:893435,    tds:89344,  note:"AIS confirmed: TDS-194A from GCPL Employees Provident Fund. Interest on EPF balance — taxable to extent annual employee contribution exceeds ₹2.5L.", doc:"FY26/Sudhir AIS 2025-26.pdf", ais:true},
+      {head:"Other Sources", source:"Bank Savings Interest",       gross:71856,     tds:0,      note:"AIS confirmed: ICICI 0018 ₹26,156 + ICICI 1331 ₹41,867 + SBI 4852 ₹3,703 + Axis ₹130. No TDS (below ₹10K per bank threshold).", doc:"FY26/Sudhir AIS 2025-26.pdf", ais:true},
+      {head:"Other Sources", source:"Term Deposit Interest",       gross:10229,     tds:0,      note:"AIS confirmed: HSBC ₹7,716 + ICICI TD ₹2,513. No TDS shown in AIS.", doc:"FY26/Sudhir AIS 2025-26.pdf", ais:true},
+      // ── OTHER SOURCES — ESTIMATED (NOT YET IN AIS) ───────────────────────────
+      {head:"Other Sources", source:"SGB Interest (est.)",         gross:248430,    tds:24843,  note:"Est. 2.5% p.a. on 2,100 GOI Sovereign Gold Bonds. Not confirmed in AIS — verify when AIS is complete or with RBI.", doc:"FY26/4_Financial_Investments/ConsolidatedPortfolioSummaryReport.pdf", ais:false},
+      {head:"Other Sources", source:"StanChart SGD/USD Interest",  gross:5557,      tds:0,      note:"USD 58.49 × ₹95. StanChart Singapore a/c 6007. Foreign income — not reportable by Indian banks in AIS. Declare under Schedule FA.", doc:"FY26/1_Bank_Accounts/StanChart_6007_SGD_Statement_Apr26.pdf", ais:false},
+      {head:"Capital Gains", source:"GCPL ESOP Sales — LTCG",       gross:64848185,  tds:0,      note:"ALL LTCG. 154,985 shares sold in 2 tranches: May-25 (64,659 @ ₹1,289) + Feb-26 (90,326 @ ₹1,215). Sale proceeds ₹1978.67L, cost ₹1330.19L, net gain ₹648.48L. Tax @14.95% eff. = ₹96.76L.", doc:"FY26/4_Financial_Investments/GCPL_CapitalGains.xlsx"},
+      {head:"Capital Gains", source:"Solidarity PMS",               gross:null,      tds:0,      note:"Capital gains from Solidarity Investment Managers PMS. PDF statement password-protected — need statement from Solidarity or AIS.", doc:"FY26/4_Financial_Investments/Solidaruty.pdf"},
+      {head:"Capital Gains", source:"Latent PMF",                   gross:null,      tds:0,      note:"Capital gains from Latent Investment Managers PMF. PDF statement password-protected — need statement from Latent or AIS.", doc:"FY26/4_Financial_Investments/latent.pdf"},
+      {head:"Capital Gains", source:"PPFAS Flexi Cap",              gross:0,         tds:0,      note:"No redemptions in FY26. Purchased ₹1.5Cr on Jun 5 2024, held through Mar 2026 (value ₹1.64Cr). XIRR 6.5%."},
+      {head:"Capital Gains", source:"StanChart SG / IBKR ETFs",    gross:null,      tds:0,      note:"Foreign capital gains — IBKR account U11622321 (Marcellus basket, USD 360K). Need year-end capital gains report for Schedule FA."},
       {head:"House Property",source:"C34 / C51 — Notional Rent",   gross:null,      tds:0,      note:"Deemed let-out or actual rental income — needs confirmation"},
     ],
     deductions: [
@@ -128,9 +136,17 @@ const TAX_DEFAULTS = {
       {section:"10(13A)", label:"HRA Exemption",                                amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime."},
     ],
     tds_paid: [
-      {source:"GCPL Salary TDS (Form 16)", amount:120031486, verified:true},
-      {source:"TDS on GCPL Dividends @10%", amount:994341,  verified:false, note:"Est. — confirm via AIS"},
-      {source:"TDS on SGB Interest @10%",  amount:24843,    verified:false, note:"Est. — confirm via AIS"},
+      {source:"GCPL Salary TDS (Form 16)", amount:120031486, verified:true, note:"Confirmed per Form 16 Part A."},
+      {source:"TDS on GCPL Dividends @10% (AIS)", amount:550215, verified:true, note:"AIS confirmed: 10% on ₹55.02L GCPL dividends."},
+      {source:"TDS on Other Equity Dividends (AIS)", amount:55570, verified:true, note:"AIS confirmed: TDS across 17 non-GCPL companies."},
+      {source:"TDS on EPF Interest (AIS)", amount:89344, verified:true, note:"AIS confirmed: TDS-194A from GCPL Employees PF Trust."},
+      {source:"TDS on SGB Interest (est.)", amount:24843, verified:false, note:"Est. @10% on ₹2.48L SGB interest — not yet confirmed in AIS."},
+    ],
+    taxes_paid: [
+      {source:"TCS on LRS — ICICI Feb-2026 (AIS)", amount:3843360, verified:true, note:"AIS confirmed: TCS-206CQ. Remittance ₹1,92,16,801 @20% TCS. Q4 FY26. Claimable as full tax credit in ITR."},
+      {source:"TCS on LRS — ICICI Mar-2026 (AIS)", amount:18536, verified:true, note:"AIS confirmed: TCS-206CQ. Remittance ₹92,681. Q4 FY26. Claimable as full tax credit."},
+      {source:"Advance Tax Jul-2024 — SBI (⚠️ FY25?)", amount:385000, verified:false, note:"SBI-4852 'Transfer Tax Office' Jul 2024. Date falls in FY25 (AY25-26), not FY26. Verify challan — may need to move to FY25 ITR."},
+      {source:"ITD Refund AY2024-25 (credit)", amount:-400, verified:true, note:"NEFT credit from ITD for AY2024-25. Informational — does not offset FY26 liability."},
     ],
     slab_rate:0.30, surcharge_rate:0.25, cess_rate:0.04,
   }
@@ -289,8 +305,14 @@ function renderIncome(fy) {
     </tr>`;
     items.forEach(item => {
       const docLink = item.doc ? `<a href="/data/${item.doc}" target="_blank" style="color:#1e3a5f;text-decoration:none;"><i class="bi bi-file-earmark-text"></i></a>` : '';
-      rows += `<tr>
-        <td class="ps-3" style="font-size:12px;">${item.source}</td>
+      const aisTag = item.ais === true
+        ? `<span style="font-size:9px;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:3px;padding:1px 5px;margin-left:5px;font-weight:600;">AIS ✓</span>`
+        : item.ais === false
+          ? `<span style="font-size:9px;background:#fef9c3;color:#92400e;border:1px solid #fde047;border-radius:3px;padding:1px 5px;margin-left:5px;font-weight:600;">Est.</span>`
+          : '';
+      const rowBg = item.note && item.note.includes('DISCREPANCY') ? 'background:#fff7ed;' : '';
+      rows += `<tr style="${rowBg}">
+        <td class="ps-3" style="font-size:12px;">${item.source}${aisTag}</td>
         <td style="font-size:11px;color:#6b7280;max-width:220px;">${item.note||''}</td>
         <td class="text-center" style="font-size:11px;">${docLink}</td>
         <td class="text-end pe-2" style="font-size:12px;">${inr(item.gross)}</td>
@@ -375,7 +397,13 @@ function renderIncome(fy) {
     </table>
     </div>
   </div>
-  <div class="mt-2 text-muted" style="font-size:11px;"><i class="bi bi-info-circle me-1"></i>Est. tax uses flat 39% effective rate (30% + 25% surcharge + 4% cess). Actual liability depends on deductions, capital gains classification, and house property computation.</div>`;
+  <div class="mt-2 d-flex gap-3 align-items-center flex-wrap" style="font-size:11px;color:#6b7280;">
+    <span><i class="bi bi-info-circle me-1"></i>Est. tax uses 39% flat rate on regular income; LTCG at 14.95%. Actual liability depends on capital gains split and house property computation.</span>
+    <span style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-shrink:0;">
+      <span style="background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:3px;padding:1px 6px;font-size:9px;font-weight:600;">AIS ✓</span><span>Confirmed by Income Tax AIS</span>
+      <span style="background:#fef9c3;color:#92400e;border:1px solid #fde047;border-radius:3px;padding:1px 6px;font-size:9px;font-weight:600;">Est.</span><span>Estimated — not yet in AIS</span>
+    </span>
+  </div>`;
 }
 
 // ── DEDUCTIONS ────────────────────────────────────────────────────────────────
@@ -454,16 +482,16 @@ function renderComputation(fy) {
 
   const salaryGross  = d.income.filter(i=>i.head==='Salaries').reduce((s,i)=>s+(i.gross||0),0);
   const otherGross   = d.income.filter(i=>i.head==='Other Sources'&&i.gross).reduce((s,i)=>s+(i.gross||0),0);
-  const cgGross      = d.income.filter(i=>i.head==='Capital Gains'&&i.gross).reduce((s,i)=>s+(i.gross||0),0);
+  // GCPL ESOP LTCG is identified; other CG entries (Solidarity, Latent, StanChart) are pending
+  const ltcgGross    = d.income.filter(i=>i.head==='Capital Gains'&&i.source.includes('LTCG')&&i.gross).reduce((s,i)=>s+(i.gross||0),0);
+  const stcgGross    = d.income.filter(i=>i.head==='Capital Gains'&&!i.source.includes('LTCG')&&i.gross).reduce((s,i)=>s+(i.gross||0),0);
+  const cgGross      = ltcgGross + stcgGross;
   const salaryDedn   = allowedDedns.filter(x=>x.section==='16(ia)'||x.section==='80CCD(2)').reduce((s,x)=>s+(x.amount||0),0);
   const otherDedns   = allowedDedns.filter(x=>x.section!=='16(ia)'&&x.section!=='80CCD(2)'&&x.amount).reduce((s,x)=>s+(x.amount||0),0);
   const netSalary    = salaryGross - salaryDedn;
-  // Capital gains taxed separately at special rates; regular income taxed at slab
   const regularIncome= netSalary + otherGross - otherDedns;
   const totalTaxable = regularIncome + cgGross;
 
-  // Slab tax on regular income (new regime slabs, income clearly >₹15L so 30% on most)
-  // For simplicity at this income level: effectively 30% on everything above ₹15L
   function slabTax(income) {
     if (income <= 300000)  return 0;
     if (income <= 700000)  return (income-300000)*0.05;
@@ -473,51 +501,88 @@ function renderComputation(fy) {
     return 140000+(income-1500000)*0.30;
   }
   const baseTaxIncome = slabTax(regularIncome);
-  // Capital gains: assume all STCG for now (20%) — conservative
-  const cgTax        = cgGross * 0.20;
-  const totalBase    = baseTaxIncome + cgTax;
-  const surcharge    = totalBase * 0.25;  // >₹5Cr income
-  const cess         = (totalBase + surcharge) * 0.04;
-  const totalTax     = totalBase + surcharge + cess;
+  const slabSurcharge = baseTaxIncome * 0.25;  // >₹5Cr regular income
+  const slabCess      = (baseTaxIncome + slabSurcharge) * 0.04;
+  const slabTotal     = baseTaxIncome + slabSurcharge + slabCess;
+
+  // LTCG u/s 112A: 12.5% on gains above ₹1.25L exemption; surcharge CAPPED at 15% for listed equity LTCG
+  const ltcgExemption = 125000;
+  const ltcgTaxable   = Math.max(0, ltcgGross - ltcgExemption);
+  const ltcgBase      = ltcgTaxable * 0.125;
+  const ltcgSurcharge = ltcgBase * 0.15;   // 15% cap on LTCG (Sec 112A), NOT 25%
+  const ltcgCess      = (ltcgBase + ltcgSurcharge) * 0.04;
+  const ltcgTotal     = ltcgBase + ltcgSurcharge + ltcgCess;
+
+  // STCG u/s 111A: 20% flat, 25% surcharge (if any)
+  const stcgBase      = stcgGross * 0.20;
+  const stcgSurcharge = stcgBase * 0.25;
+  const stcgCess      = (stcgBase + stcgSurcharge) * 0.04;
+  const stcgTotal     = stcgBase + stcgSurcharge + stcgCess;
+
+  const totalTax     = slabTotal + ltcgTotal + stcgTotal;
   const tdsTotal     = d.tds_paid.reduce((s,t)=>s+t.amount,0);
-  const balance      = totalTax - tdsTotal;
+  const taxesPaid    = (d.taxes_paid||[]).reduce((s,t)=>s+t.amount,0);
+  const balance      = totalTax - tdsTotal - taxesPaid;
 
   el.innerHTML = `
-  <div style="max-width:620px;">
+  <div style="max-width:660px;">
   <div class="alert alert-info py-2 px-3 mb-3" style="font-size:12px;">
-    <i class="bi bi-info-circle me-1"></i><strong>New Regime.</strong> Only Standard Deduction + Employer NPS apply. Capital gains taxed at special rates (assumed STCG @20% — update when STCG/LTCG split is confirmed).
+    <i class="bi bi-info-circle me-1"></i><strong>New Regime.</strong> GCPL ESOP gains confirmed ALL LTCG (taxed @12.5% with 15% surcharge cap u/s 112A). Solidarity/Latent PMS gains pending — will increase liability when added.
   </div>
   <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
     <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">Tax Computation — FY 2025–26 (New Regime)</div>
     <table class="table table-sm mb-0" style="font-size:12.5px;">
     <tbody>
-      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Salary Income</td></tr>
-      <tr><td class="ps-4">Salaries (gross)</td><td class="text-end pe-3">${inr(salaryGross)}</td></tr>
-      <tr><td class="ps-4 text-muted">Less: Standard Deduction</td><td class="text-end pe-3 text-success">(${inr(75000)})</td></tr>
-      <tr><td class="ps-4 text-muted">Less: Employer NPS 80CCD(2)</td><td class="text-end pe-3 text-success">(${inr(2561004)})</td></tr>
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">A. Salary Income</td></tr>
+      <tr><td class="ps-4">Salaries — gross (cash + perquisite + NPS)</td><td class="text-end pe-3">${inr(salaryGross)}</td></tr>
+      <tr><td class="ps-4 text-muted">Less: Standard Deduction u/s 16(ia)</td><td class="text-end pe-3 text-success">(${inr(75000)})</td></tr>
+      <tr><td class="ps-4 text-muted">Less: Employer NPS u/s 80CCD(2)</td><td class="text-end pe-3 text-success">(${inr(2561004)})</td></tr>
       <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Net Salary</td><td class="text-end pe-3 fw-semibold">${inr(netSalary)}</td></tr>
-      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Other Income (taxed at slab)</td></tr>
-      <tr><td class="ps-4">Dividends + Interest</td><td class="text-end pe-3">${inr(otherGross)}</td></tr>
-      <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Regular Taxable Income</td><td class="text-end pe-3 fw-semibold">${inr(regularIncome)}</td></tr>
-      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Capital Gains (special rates)</td></tr>
-      <tr><td class="ps-4">ESOP Sales (est. — STCG assumed @20%)</td><td class="text-end pe-3">${inr(cgGross)}</td></tr>
-      <tr style="background:#1e3a5f;color:#fff;"><td class="ps-3 fw-bold">Total Taxable (regular + CG)</td><td class="text-end pe-3 fw-bold">${inr(totalTaxable)}</td></tr>
+
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">B. Other Income (taxed at slab)</td></tr>
+      <tr><td class="ps-4">Dividends + Interest (known)</td><td class="text-end pe-3">${inr(otherGross)}</td></tr>
+      <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Regular Taxable Income (A+B)</td><td class="text-end pe-3 fw-semibold">${inr(regularIncome)}</td></tr>
+
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">C. Long-Term Capital Gains (u/s 112A)</td></tr>
+      <tr><td class="ps-4">GCPL ESOP LTCG — gross gain</td><td class="text-end pe-3">${inr(ltcgGross)}</td></tr>
+      <tr><td class="ps-4 text-muted">Less: Annual exemption</td><td class="text-end pe-3 text-success">(${inr(ltcgExemption)})</td></tr>
+      <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Taxable LTCG</td><td class="text-end pe-3 fw-semibold">${inr(ltcgTaxable)}</td></tr>
+      ${stcgGross>0?`
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">D. Short-Term Capital Gains (u/s 111A)</td></tr>
+      <tr><td class="ps-4">STCG (pending — Solidarity/Latent/other)</td><td class="text-end pe-3">${inr(stcgGross)}</td></tr>`:''}
+
+      <tr style="background:#1e3a5f;color:#fff;"><td class="ps-3 fw-bold">Total Taxable Income</td><td class="text-end pe-3 fw-bold">${inr(totalTaxable)}</td></tr>
+
       <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Tax Calculation</td></tr>
-      <tr><td class="ps-4 text-muted">Slab tax on regular income</td><td class="text-end pe-3">${inr(baseTaxIncome)}</td></tr>
-      <tr><td class="ps-4 text-muted">CG tax (STCG @20%)</td><td class="text-end pe-3">${inr(cgTax)}</td></tr>
-      <tr><td class="ps-4 text-muted">Surcharge @25% (total income &gt;₹5Cr)</td><td class="text-end pe-3">${inr(surcharge)}</td></tr>
-      <tr><td class="ps-4 text-muted">Health &amp; Education Cess @4%</td><td class="text-end pe-3">${inr(cess)}</td></tr>
+      <tr><td class="ps-4 text-muted">Slab tax on regular income (30% bracket)</td><td class="text-end pe-3">${inr(baseTaxIncome)}</td></tr>
+      <tr><td class="ps-4 text-muted">Surcharge @25% on slab tax (income &gt;₹5Cr)</td><td class="text-end pe-3">${inr(slabSurcharge)}</td></tr>
+      <tr><td class="ps-4 text-muted">Cess @4% on slab + surcharge</td><td class="text-end pe-3">${inr(slabCess)}</td></tr>
+      <tr style="background:#f1f5f9;"><td class="ps-4 fw-semibold">Slab tax total</td><td class="text-end pe-3 fw-semibold">${inr(slabTotal)}</td></tr>
+      <tr><td class="ps-4 text-muted">LTCG tax @12.5% on ₹${(ltcgTaxable/100000).toFixed(2)}L</td><td class="text-end pe-3">${inr(ltcgBase)}</td></tr>
+      <tr><td class="ps-4 text-muted">Surcharge @15% on LTCG tax (capped u/s 112A)</td><td class="text-end pe-3">${inr(ltcgSurcharge)}</td></tr>
+      <tr><td class="ps-4 text-muted">Cess @4% on LTCG tax + surcharge</td><td class="text-end pe-3">${inr(ltcgCess)}</td></tr>
+      <tr style="background:#f1f5f9;"><td class="ps-4 fw-semibold">LTCG tax total (eff. ~14.95%)</td><td class="text-end pe-3 fw-semibold">${inr(ltcgTotal)}</td></tr>
+      ${stcgGross>0?`<tr style="background:#f1f5f9;"><td class="ps-4 fw-semibold">STCG tax total</td><td class="text-end pe-3 fw-semibold">${inr(stcgTotal)}</td></tr>`:''}
       <tr style="background:#374151;color:#fff;"><td class="ps-3 fw-semibold">Gross Tax Payable</td><td class="text-end pe-3 fw-semibold">${inr(totalTax)}</td></tr>
-      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">TDS Already Paid</td></tr>
+
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">TDS Deducted at Source</td></tr>
       ${d.tds_paid.map(t=>`
-      <tr><td class="ps-4 text-muted">${t.source}</td><td class="text-end pe-3 text-success">(${inr(t.amount)})</td></tr>`).join('')}
-      <tr style="background:${balance>0?'#fef2f2':'#f0faf4'};"><td class="ps-3 fw-bold">${balance>0?'Balance Tax Payable':'Estimated Refund'}</td>
-        <td class="text-end pe-3 fw-bold" style="color:${balance>0?'#991b1b':'#166534'};">${inr(Math.abs(balance))}</td></tr>
+      <tr><td class="ps-4 text-muted">${t.source}${t.note?'<br><span style="font-size:10px;color:#9ca3af;">'+t.note+'</span>':''}</td><td class="text-end pe-3 text-success">(${inr(t.amount)})</td></tr>`).join('')}
+
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Taxes Paid (Advance Tax / Challans / TCS)</td></tr>
+      ${(d.taxes_paid||[]).map(t=>`
+      <tr><td class="ps-4 text-muted">${t.source}<br><span style="font-size:10px;color:#9ca3af;">${t.note||''}</span></td>
+          <td class="text-end pe-3 ${t.amount<0?'text-danger':'text-success'}">${t.amount<0?inr(Math.abs(t.amount))+'<span class="text-muted ms-1">(credit)</span>':'('+inr(t.amount)+')'}</td></tr>`).join('')}
+
+      <tr style="background:${balance>0?'#fef2f2':'#f0faf4'};border-top:2px solid ${balance>0?'#fca5a5':'#86efac'};">
+        <td class="ps-3 fw-bold">${balance>0?'Balance Tax Payable':'Estimated Refund'}</td>
+        <td class="text-end pe-3 fw-bold" style="color:${balance>0?'#991b1b':'#166534'};">${inr(Math.abs(balance))}</td>
+      </tr>
     </tbody>
     </table>
   </div>
   <div class="alert alert-warning mt-3 py-2 px-3" style="font-size:11.5px;">
-    <i class="bi bi-exclamation-triangle me-1"></i>Key unknowns: STCG vs LTCG split on ESOP sales (LTCG @12.5% vs STCG @20%); StanChart foreign income (Schedule FA); bank savings interest (pending AIS). Surcharge applies as total income exceeds ₹5Cr.
+    <i class="bi bi-exclamation-triangle me-1"></i><strong>Pending:</strong> Solidarity PMS + Latent PMF capital gains (PDF password unknown — request from managers); StanChart/IBKR foreign gains (Schedule FA obligation); bank savings interest. Liability will increase once these are added.
   </div>
   </div>`;
 }
@@ -531,7 +596,11 @@ function renderChecklist(fy) {
     {name:"Form 16 — Part A & B",               status:"done",    file:"FY26/Sudhir's Form16-2025-26.pdf"},
     {name:"Form 12BA (Perquisites)",             status:"done",    file:"FY26/Sudhir's Form16-2025-26.pdf"},
     {name:"ICICI Demat Transactions FY26",       status:"done",    file:"FY26/4_Financial_Investments/ICICI_Demat_90174124_Transactions_FY26.pdf"},
-    {name:"GCPL Capital Gains Statement",        status:"done",    file:"FY26/4_Financial_Investments/GCPL_CapitalGains.xlsx"},
+    {name:"GCPL Capital Gains Statement (LTCG ₹648.48L)",status:"done",file:"FY26/4_Financial_Investments/GCPL_CapitalGains.xlsx"},
+    {name:"Solidarity PMS Capital Gains Statement", status:"missing", file:null, note:"PDF password-protected — request from manager"},
+    {name:"Latent PMF Capital Gains Statement",     status:"missing", file:null, note:"PDF password-protected — request from manager"},
+    {name:"Advance Tax Challan (SBI Jul-24 ₹3.85L)",status:"done",  file:null, note:"In SBI-4852 ledger entry"},
+    {name:"TCS Certificates (ICICI foreign remit.)",status:"done",   file:null, note:"₹51.5K Jun-24 + ₹81.6K Nov-24 in ledger"},
     {name:"Home Loan Stmt — C51 Original",       status:"done",    file:"FY26/2_Home_Loans/Statement of Account_TBMUM00006542596 (1).pdf"},
     {name:"Home Loan Stmt — C34 TopUp",          status:"partial", file:"FY26/2_Home_Loans/Statement of Account_TBMUM00007500382 (1).pdf", note:"Jan–Mar only"},
     {name:"Home Loan Stmt — C51 TopUp",          status:"partial", file:"FY26/2_Home_Loans/Statement of Account_TBMUM00007499508 (1).pdf", note:"Jan–Mar only"},
@@ -545,13 +614,14 @@ function renderChecklist(fy) {
   ];
 
   const alerts = [
-    {level:"danger",  text:"Schedule FA — StanChart Singapore (A/c 62-1-833928-2) MUST be declared as a foreign asset. Non-disclosure attracts Black Money Act penalties regardless of tax amount."},
-    {level:"warning", text:"80C not claimed via GCPL — LIC premiums ₹3.44L p.a., cap ₹1.5L. File in ITR to claim ₹58,500 tax saving."},
-    {level:"warning", text:"Home loan interest for C34 and C51 TopUp loans only available for Jan–Mar 2026. Request full-year interest certificates from ICICI."},
-    {level:"warning", text:"GCPL dividends ₹99.43L will attract additional tax of ~₹38.8L (at 39%) less TDS ~₹9.94L = ~₹28.9L payable."},
-    {level:"info",    text:"Cross-check AIS with your income entries — flag any discrepancies before filing."},
-    {level:"info",    text:"ESOP capital gains ₹256L — confirm STCG vs LTCG split with GCPL/ICICI. LTCG >₹1L taxed at 12.5%, STCG at 20%."},
-    {level:"info",    text:"Consider deemed let-out treatment for C51 — full interest deductible, net house property loss up to ₹2L can offset salary income."},
+    {level:"danger",  text:"Schedule FA mandatory — IBKR account U11622321 (Marcellus basket, USD ~360K) and StanChart Singapore A/c 62-1-833928-2 (~₹470L equivalent) MUST be declared as foreign assets. Non-disclosure attracts Black Money Act penalties regardless of tax amount."},
+    {level:"danger",  text:"Solidarity PMS + Latent PMF capital gains unquantified — PDFs password-protected. Request capital gains statements from managers directly, or pull from AIS once ITD receives the data."},
+    {level:"danger",  text:"GCPL dividend discrepancy: AIS shows ₹55.02L but earlier demat estimate was ₹99.43L — a ₹44.4L gap. Income has been revised to AIS figure. Investigate with GCPL payroll or ICICI demat before filing."},
+    {level:"warning", text:"₹38.43L TCS (Feb-2026 LRS remittance) + ₹18.5K (Mar-2026) are major tax credits confirmed in AIS. Ensure these appear in Schedule IT when filing — they significantly reduce your balance payable."},
+    {level:"warning", text:"Advance tax ₹3.85L (SBI Jul-2024) — date falls in FY25, not FY26. Confirm challan BSR code and verify which AY it was booked under. If FY25, it does NOT reduce FY26 liability."},
+    {level:"warning", text:"EPF interest ₹8.93L (TDS ₹89,344) is taxable — confirmed in AIS. Your annual EPF contribution almost certainly exceeds the ₹2.5L threshold at this salary level, so the full interest amount is taxable at slab rate."},
+    {level:"info",    text:"GCPL ESOP LTCG: ₹648.48L confirmed all long-term, tax ₹96.76L (@14.95% effective with 15% surcharge cap u/s 112A). Sale proceeds ₹1978.67L across two tranches in May-25 and Feb-26."},
+    {level:"info",    text:"SGB interest ₹2.48L and StanChart/IBKR foreign income are estimated — not yet in AIS. Declare foreign income under Schedule FA; SGB interest will appear in AIS once RBI reports it."},
   ];
 
   const done    = docs.filter(d=>d.status==='done').length;
