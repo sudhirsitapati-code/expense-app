@@ -141,6 +141,7 @@ def logout():
 # ── HTML SCREENS ─────────────────────────────────────────────────────────────
 
 @app.route("/")
+@app.route("/home")
 @login_required
 def home():
     return render_template("home.html", user=session["user"])
