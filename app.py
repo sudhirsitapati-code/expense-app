@@ -3394,9 +3394,9 @@ def api_transfer_recon():
     from src.master_ledger import _parse_date as _ml_pd
     from datetime import date as _date2
 
-    ledger = load_ledger()
+    full_ledger = load_ledger()
 
-    # Fiscal year filter
+    # Fiscal year filter — applies to which transfers we *show*, not the counterpart search pool
     _fy_tr = request.args.get("fy", "FY27")
     _FY_TR = {"FY24": ("2023-04-01","2024-03-31"), "FY25": ("2024-04-01","2025-03-31"), "FY26": ("2025-04-01","2026-03-31"), "FY27": ("2026-04-01","2027-03-31")}
     if _fy_tr in _FY_TR:
@@ -3405,7 +3405,9 @@ def api_transfer_recon():
         def _in_fy_tr(t):
             d = _ml_pd(t.get("date",""))
             return d and _lo <= d.date() <= _hi
-        ledger = [t for t in ledger if _in_fy_tr(t)]
+        ledger = [t for t in full_ledger if _in_fy_tr(t)]
+    else:
+        ledger = full_ledger
 
     def _row(t):
         return {
@@ -3428,9 +3430,10 @@ def api_transfer_recon():
     t_debits  = [t for t in transfers if float(t.get("debit")  or 0) > 0]
     t_credits = [t for t in transfers if float(t.get("credit") or 0) > 0]
 
-    # Full-ledger pools for counterpart search
-    all_debits_pool  = [t for t in ledger if float(t.get("debit")  or 0) > 0]
-    all_credits_pool = [t for t in ledger if float(t.get("credit") or 0) > 0]
+    # Counterpart pools span the FULL ledger (not FY-filtered) so cross-FY
+    # transfers (e.g. Mar debit / Apr credit) are matched correctly.
+    all_debits_pool  = [t for t in full_ledger if float(t.get("debit")  or 0) > 0]
+    all_credits_pool = [t for t in full_ledger if float(t.get("credit") or 0) > 0]
 
     matched_d = set()
     matched_c = set()
