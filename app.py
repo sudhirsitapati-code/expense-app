@@ -3443,7 +3443,7 @@ def api_transfer_recon():
         d_date = _ml_pd(d.get("date", ""))
         if not d_date:
             continue
-        best_c, best_days = None, 999
+        best_c, best_score = None, (999, 999)
         for c in all_credits_pool:
             if c["txn_id"] in matched_c:
                 continue
@@ -3458,8 +3458,11 @@ def api_transfer_recon():
             days = abs((d_date - c_date).days)
             if days > 14:
                 continue
-            if days < best_days:
-                best_c, best_days = c, days
+            # Prefer seq-adjacent entries as tiebreaker (same-batch imports)
+            seq_gap = abs((d.get("seq") or 0) - (c.get("seq") or 0))
+            score = (days, min(seq_gap, 999))
+            if score < best_score:
+                best_c, best_score = c, score
         if best_c:
             matched_d.add(d["txn_id"])
             matched_c.add(best_c["txn_id"])
@@ -3484,7 +3487,7 @@ def api_transfer_recon():
         c_date = _ml_pd(c.get("date", ""))
         if not c_date:
             continue
-        best_d, best_days = None, 999
+        best_d, best_score = None, (999, 999)
         for d in all_debits_pool:
             if d["txn_id"] in matched_d:
                 continue
@@ -3499,8 +3502,10 @@ def api_transfer_recon():
             days = abs((c_date - d_date).days)
             if days > 14:
                 continue
-            if days < best_days:
-                best_d, best_days = d, days
+            seq_gap = abs((c.get("seq") or 0) - (d.get("seq") or 0))
+            score = (days, min(seq_gap, 999))
+            if score < best_score:
+                best_d, best_score = d, score
         if best_d:
             matched_c.add(c["txn_id"])
             matched_d.add(best_d["txn_id"])
