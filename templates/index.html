@@ -1000,7 +1000,6 @@ function switchSubmit(name, el) {
   document.querySelectorAll('#tab-submit .sub-tabs .nav-link').forEach(l => l.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('submit-form').classList.toggle('d-none', name !== 'form');
-  document.getElementById('submit-photos').classList.toggle('d-none', name !== 'photos');
   document.getElementById('submit-bills').classList.toggle('d-none', name !== 'bills');
   document.getElementById('submit-mine').classList.toggle('d-none', name !== 'mine');
   if (name === 'photos') loadRecentExpensesForPhotos();
