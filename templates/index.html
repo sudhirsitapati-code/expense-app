@@ -323,7 +323,11 @@
       <input type="date" class="form-control form-control-sm" id="ledgerDateTo" placeholder="To" title="To date" onchange="filterLedger()" style="width:130px;">
     </div>
     <div class="col-sm-2">
-      <input class="form-control form-control-sm" id="ledgerAmount" placeholder="Exact amount…" oninput="filterLedger()">
+      <input class="form-control form-control-sm" id="ledgerAmount" placeholder="Exact amount…" oninput="applyLedgerClientFilters()">
+    </div>
+    <div class="col-sm-2">
+      <input class="form-control form-control-sm" id="ledgerPaidTo" placeholder="Paid to…" list="paidToList" oninput="applyLedgerClientFilters()">
+      <datalist id="paidToList"></datalist>
     </div>
     <div class="col-sm-2 d-flex gap-2 align-items-center">
       <button class="btn btn-sm btn-primary" onclick="syncLedger()"><i class="bi bi-cloud-download me-1"></i>Sync Gmail</button>
@@ -1497,17 +1501,16 @@ async function loadLedger() {
   window._ledgerSerials = {};
   d.transactions.forEach(t => { if (t.seq) window._ledgerSerials[t.txn_id] = t.seq; });
 
-  // Store full list for client-side sort; apply any active sort
-  // Apply exact amount filter client-side
-  const amtStr = document.getElementById('ledgerAmount')?.value.trim().replace(/,/g, '');
-  const amtFilter = amtStr ? parseFloat(amtStr) : null;
-  const filtered = amtFilter
-    ? d.transactions.filter(t => parseFloat(t.debit||0) === amtFilter || parseFloat(t.credit||0) === amtFilter)
-    : d.transactions;
+  // Populate paid-to datalist with unique non-empty values
+  const paidToSet = new Set(d.transactions.map(t => t.paid_to).filter(Boolean));
+  const dl = document.getElementById('paidToList');
+  if (dl) {
+    dl.innerHTML = [...paidToSet].sort().map(v => `<option value="${v.replace(/"/g,'&quot;')}">`).join('');
+  }
 
-  window._ledgerAll = filtered;
-  const sorted = sortedLedger(filtered);
-  renderLedger(sorted);
+  // Store full list for client-side sort; apply any active sort
+  window._ledgerAll = d.transactions;
+  applyLedgerClientFilters();
   renderNotSure(d.transactions.filter(t => t.uncertain));
 }
 
@@ -1591,6 +1594,18 @@ function cycleSort(col) {
 }
 
 function filterLedger() { _sortCol = null; _sortDir = 0; loadLedger(); }
+
+function applyLedgerClientFilters() {
+  if (!window._ledgerAll) return;
+  const amtStr   = document.getElementById('ledgerAmount')?.value.trim().replace(/,/g, '');
+  const amtFilter = amtStr ? parseFloat(amtStr) : null;
+  const ptRaw    = document.getElementById('ledgerPaidTo')?.value.trim().toLowerCase();
+  let rows = window._ledgerAll;
+  if (amtFilter) rows = rows.filter(t => parseFloat(t.debit||0) === amtFilter || parseFloat(t.credit||0) === amtFilter);
+  if (ptRaw)    rows = rows.filter(t => (t.paid_to||'').toLowerCase().includes(ptRaw) || (t.raw_description||'').toLowerCase().includes(ptRaw));
+  renderLedger(sortedLedger(rows));
+  renderNotSure(rows.filter(t => t.uncertain));
+}
 
 async function deleteLedgerEntry(txnId, label) {
   if (!confirm(`Delete entry: ${label}?\n\nThis cannot be undone.`)) return;

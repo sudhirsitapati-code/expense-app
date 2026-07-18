@@ -2947,7 +2947,7 @@ Be specific, not generic. No obvious tips."""
 @app.route("/api/insights-chat", methods=["POST"])
 @login_required
 def api_insights_chat():
-    """Free-form chat about expense data using Azure OpenAI."""
+    """Free-form chat with full access to all app data."""
     try:
         from openai import AzureOpenAI
         client = AzureOpenAI(
@@ -2959,146 +2959,189 @@ def api_insights_chat():
     except Exception as e:
         return jsonify({"reply": f"AI not configured: {e}"}), 500
 
-    data = request.get_json()
+    data     = request.get_json()
     question = data.get("question","").strip()
-    history  = data.get("history", [])  # [{role, content}, ...]
+    history  = data.get("history", [])
     if not question:
         return jsonify({"reply": ""}), 400
 
-    # Build data context
     ledger = load_ledger()
     from collections import defaultdict
-
-    # account × heading × YYYY-MM → spend
-    by_heading: dict                          = defaultdict(float)
-    by_month_heading: dict                    = defaultdict(lambda: defaultdict(float))
-    vendors: dict                             = defaultdict(float)
-    by_account: dict                          = defaultdict(float)
-    by_account_heading: dict                  = defaultdict(lambda: defaultdict(float))
-    by_account_month: dict                    = defaultdict(lambda: defaultdict(float))
-    by_account_heading_month: dict            = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
-    # FY buckets: "FY2627" etc
-    by_fy: dict                               = defaultdict(float)
-    by_account_fy: dict                       = defaultdict(lambda: defaultdict(float))
-    by_account_fy_heading: dict               = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
 
     _MON = {"jan":"01","feb":"02","mar":"03","apr":"04","may":"05","jun":"06",
             "jul":"07","aug":"08","sep":"09","oct":"10","nov":"11","dec":"12"}
 
-    def _to_ym(raw: str) -> str:
-        """Normalise any date string to YYYY-MM, return '' on failure."""
-        if not raw:
-            return ""
+    def _to_ym(raw):
+        if not raw: return ""
         try:
-            if raw[2:3] == "/" and raw[5:6] == "/":   # DD/MM/YYYY
-                parts = raw.split("/")
-                return f"{parts[2][:4]}-{parts[1].zfill(2)}"
-            if raw[2:3] == "-" and not raw[3:4].isdigit():  # DD-Mon-YY or DD-Mon-YYYY
-                parts = raw.split("-")
-                mon = _MON.get(parts[1][:3].lower(), "")
-                yr  = parts[2][:4] if len(parts[2]) == 4 else "20" + parts[2][:2]
+            if raw[2:3] == "/" and raw[5:6] == "/":
+                p = raw.split("/"); return f"{p[2][:4]}-{p[1].zfill(2)}"
+            if raw[2:3] == "-" and not raw[3:4].isdigit():
+                p = raw.split("-"); mon = _MON.get(p[1][:3].lower(),"")
+                yr = p[2][:4] if len(p[2])==4 else "20"+p[2][:2]
                 return f"{yr}-{mon}" if mon else ""
-            if raw[4:5] == "-":                        # YYYY-MM-DD
-                return raw[:7]
-        except Exception:
-            pass
+            if raw[4:5] == "-": return raw[:7]
+        except Exception: pass
         return ""
 
-    def _fy(mo: str) -> str:
-        """YYYY-MM → 'FY2526' style label."""
-        if not mo or len(mo) < 7:
-            return "unknown"
-        try:
-            y, m = int(mo[:4]), int(mo[5:7])
-        except ValueError:
-            return "unknown"
-        if m >= 4:
-            return f"FY{str(y)[2:]}{str(y+1)[2:]}"
-        return f"FY{str(y-1)[2:]}{str(y)[2:]}"
+    def _fy(mo):
+        if not mo or len(mo)<7: return "unknown"
+        try: y,m = int(mo[:4]),int(mo[5:7])
+        except ValueError: return "unknown"
+        return f"FY{str(y)[2:]}{str(y+1)[2:]}" if m>=4 else f"FY{str(y-1)[2:]}{str(y)[2:]}"
+
+    today      = datetime.now()
+    current_fy = _fy(today.strftime("%Y-%m"))
+
+    # ── 1. Aggregate summaries (all-time) ────────────────────────────────────
+    by_heading        = defaultdict(float)
+    by_month_heading  = defaultdict(lambda: defaultdict(float))
+    vendors_debit     = defaultdict(float)
+    by_account        = defaultdict(float)
+    by_account_hdg    = defaultdict(lambda: defaultdict(float))
+    by_account_mo     = defaultdict(lambda: defaultdict(float))
+    by_account_fy_hdg = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+    by_account_fy     = defaultdict(lambda: defaultdict(float))
+    income_by_mo      = defaultdict(float)
+    income_by_hdg     = defaultdict(float)
 
     for t in ledger:
-        raw_date = t.get("date") or t.get("timestamp","")
+        raw_date = t.get("date") or ""
         mo   = _to_ym(raw_date)
         acct = t.get("account","unknown")
         fy   = _fy(mo)
-        hdg  = (t.get("heading") or "").strip().title()  # normalise case variants
+        hdg  = (t.get("heading") or "").strip().title()
+        dr   = float(t.get("debit")  or 0)
+        cr   = float(t.get("credit") or 0)
+        vendor = (t.get("paid_to") or "").strip()
 
-        if t.get("debit"):
-            amt = float(t["debit"])
-            by_account[acct] += amt
-            by_fy[fy]         += amt
-            by_account_fy[acct][fy] += amt
-            if mo:
-                by_account_month[acct][mo] += amt
+        if dr:
+            by_account[acct] += dr
+            by_account_fy[acct][fy] += dr
+            if mo: by_account_mo[acct][mo] += dr
             if hdg:
-                by_heading[hdg] += amt
-                by_account_heading[acct][hdg] += amt
-                by_account_fy_heading[acct][fy][hdg] += amt
-                if mo:
-                    by_month_heading[mo][hdg]                   += amt
-                    by_account_heading_month[acct][hdg][mo]     += amt
-        if t.get("debit") and t.get("paid_to"):
-            vendors[t["paid_to"]] += float(t["debit"])
+                by_heading[hdg] += dr
+                by_account_hdg[acct][hdg] += dr
+                by_account_fy_hdg[acct][fy][hdg] += dr
+                if mo: by_month_heading[mo][hdg] += dr
+            if vendor: vendors_debit[vendor] += dr
+        if cr and hdg in ("Salary","Income","Interest","Dividend"):
+            income_by_mo[mo] += cr
+            income_by_hdg[hdg] += cr
 
-    # Recent 12 months (wider window for FY questions)
-    all_months = sorted(by_month_heading.keys())
-    recent_months = all_months[-12:]
-    monthly_data = {m: {h: round(v) for h, v in by_month_heading[m].items()} for m in recent_months}
-    top_vendors = dict(sorted(vendors.items(), key=lambda x: -x[1])[:20])
+    recent_months = sorted(by_month_heading.keys())[-18:]
+    monthly_data  = {m: {h: round(v) for h,v in by_month_heading[m].items()} for m in recent_months}
 
-    # Per-account rich context
-    accounts_context = {}
-    for acct, total in sorted(by_account.items(), key=lambda x: -x[1]):
-        top_cats = {h: round(v) for h, v in sorted(by_account_heading[acct].items(), key=lambda x: -x[1])[:12]}
-        # monthly totals — last 12 months
-        recent_mo = {m: round(by_account_month[acct][m]) for m in sorted(by_account_month[acct])[-12:]}
-        # per-FY totals for this account
-        fy_totals = {fy: round(v) for fy, v in sorted(by_account_fy[acct].items())}
-        # per-FY per-heading for this account (top 10 headings per FY)
-        fy_heading = {}
-        for fy, hdg_map in by_account_fy_heading[acct].items():
-            fy_heading[fy] = {h: round(v) for h, v in sorted(hdg_map.items(), key=lambda x: -x[1])[:10]}
-        accounts_context[acct] = {
-            "all_time_total": round(total),
-            "by_heading_alltime": top_cats,
-            "monthly_last_12": recent_mo,
-            "by_fy": fy_totals,
-            "by_fy_and_heading": fy_heading,
+    accounts_ctx = {}
+    for acct, total in sorted(by_account.items(), key=lambda x:-x[1]):
+        top_hdg = {h:round(v) for h,v in sorted(by_account_hdg[acct].items(),key=lambda x:-x[1])[:15]}
+        rec_mo  = {m:round(by_account_mo[acct][m]) for m in sorted(by_account_mo[acct])[-12:]}
+        fy_tot  = {fy:round(v) for fy,v in sorted(by_account_fy[acct].items())}
+        fy_hdg  = {fy:{h:round(v) for h,v in sorted(hm.items(),key=lambda x:-x[1])[:10]}
+                   for fy,hm in by_account_fy_hdg[acct].items()}
+        accounts_ctx[acct] = {"total":round(total),"by_heading":top_hdg,
+                               "monthly_12":rec_mo,"by_fy":fy_tot,"by_fy_heading":fy_hdg}
+
+    # ── 2. Full transaction list — compact rows ───────────────────────────────
+    # Include ALL transactions: date, seq, account, debit, credit, heading, paid_to, description, type
+    def _compact(t):
+        return {
+            "d":  t.get("date",""),
+            "ac": t.get("account",""),
+            "dr": round(float(t.get("debit")  or 0)),
+            "cr": round(float(t.get("credit") or 0)),
+            "h":  (t.get("heading") or ""),
+            "pt": (t.get("paid_to") or ""),
+            "ds": (t.get("raw_description") or t.get("description") or "")[:80],
+            "ty": (t.get("type") or ""),
+            "sq": t.get("seq"),
         }
 
-    # Approval log summary
+    # Detect if question is vendor/payee specific — include matching txns in full
+    q_lower = question.lower()
+    vendor_txns = []
+    for t in ledger:
+        pt  = (t.get("paid_to") or "").lower()
+        dsc = (t.get("raw_description") or "").lower()
+        if any(word in pt or word in dsc for word in q_lower.split() if len(word) > 3):
+            vendor_txns.append(_compact(t))
+
+    # All transactions compact (last 2 FYs to keep context manageable)
+    fy_cutoff = {"FY2526","FY2627"}
+    all_txns = [_compact(t) for t in ledger
+                if _fy(_to_ym(t.get("date",""))) in fy_cutoff]
+
+    # ── 3. Tax data (FY26 actuals) ───────────────────────────────────────────
+    tax_summary = {
+        "FY26_income": {
+            "cash_salary_gross": 114715943,
+            "esop_perquisite":   191994600,
+            "employer_nps_other": 4918797,
+            "gcpl_dividends":    5502150,
+            "other_dividends":    587754,
+            "epf_interest":       893435,
+            "bank_interest":       71856,
+            "sgb_interest_est":   248430,
+            "stanchart_interest":   5557,
+        },
+        "FY26_capital_gains": {
+            "gcpl_esop_ltcg":  35201000,
+            "solidarity_pms":  "pending",
+            "latent_pmf":      "pending",
+            "ppfas_flexi_cap": 0,
+        },
+        "FY26_tds_tcs": {
+            "salary_tds":      120031486,
+            "dividend_tds":      605785,
+            "epf_tds":           89344,
+            "tcs_lrs":          3861896,
+        },
+        "form16_total_salary": 311628000,
+    }
+
+    # ── 4. Approval log ───────────────────────────────────────────────────────
     log = db.load("approval_log")
-    pending_count = sum(1 for e in log if not e.get("status") == "cancelled" and
-                        not any(a.get("action") in ("APPROVED","AUTO_APPROVE")
-                                for a in e.get("approved_actions",[])))
+    pending_count = sum(1 for e in log
+        if not any(a.get("action") in ("APPROVED","AUTO_APPROVE")
+                   for a in e.get("approved_actions",[])))
 
-    today = datetime.now()
-    current_fy = _fy(today.strftime("%Y-%m"))
+    # ── 5. Build system prompt ────────────────────────────────────────────────
+    system_prompt = f"""You are a personal finance assistant for Sudhir Sitapati, an Indian executive (Mumbai).
+You have COMPLETE access to all financial data. Answer specifically and numerically.
 
-    system_prompt = f"""You are a personal finance assistant for Sudhir, an Indian executive household (Mumbai).
-You have full access to their transaction ledger. Answer questions concisely and specifically.
+Today: {today.strftime("%d %b %Y")}. Current FY: {current_fy} (April–March).
+FY label: FY2627 = Apr 2026–Mar 2027, FY2526 = Apr 2025–Mar 2026.
 
-Today: {today.strftime("%d %b %Y")}. Current financial year: {current_fy} (April–March).
-FY label format: FY2627 = April 2026 – March 2027.
+=== SECTION A: AGGREGATED SUMMARIES (all-time) ===
+All-time spend by heading: {json.dumps({h:round(v) for h,v in sorted(by_heading.items(),key=lambda x:-x[1])[:25]})}
+Monthly spend by heading (last 18 months): {json.dumps(monthly_data)}
+All vendors by total spend: {json.dumps({k:round(v) for k,v in sorted(vendors_debit.items(),key=lambda x:-x[1])})}
+Per-account breakdown: {json.dumps(accounts_ctx)}
+Income credits by heading (all-time): {json.dumps({h:round(v) for h,v in income_by_hdg.items()})}
+Pending expense approvals: {pending_count}
 
-Data available:
-1. All-time spend by heading (all accounts combined): {json.dumps({h: round(v) for h, v in sorted(by_heading.items(), key=lambda x: -x[1])[:20]})}
-2. Monthly spend by heading — last 12 months (all accounts): {json.dumps(monthly_data)}
-3. Top 20 vendors by all-time spend: {json.dumps({k: round(v) for k, v in top_vendors.items()})}
-4. Per-account breakdown (all-time total, top headings, monthly last 12m, FY totals, FY×heading): {json.dumps(accounts_context)}
-5. Pending expense approvals: {pending_count}
+=== SECTION B: TRANSACTION-LEVEL DATA (FY26 + FY27) ===
+Format: d=date, ac=account, dr=debit(₹), cr=credit(₹), h=heading, pt=paid_to, ds=description, ty=type, sq=seq#
+{json.dumps(all_txns)}
 
-All amounts in ₹. Use Indian number format (lakhs/crores) for large numbers.
-Keep answers short and direct. Use bullet points. If data is insufficient, say exactly what's missing."""
+=== SECTION C: TAX DATA (FY26 actuals) ===
+{json.dumps(tax_summary)}
+
+Rules:
+- All amounts in ₹. Use lakhs/crores for large numbers.
+- For vendor queries use both pt (paid_to) and ds (description) fields.
+- For date filtering: d field is DD/MM/YYYY or DD-MMM-YY format.
+- Be specific and numerical. Use bullet points. If data is missing, say exactly what.
+- Do NOT make up numbers. Only use data provided above."""
 
     messages = [{"role":"system","content":system_prompt}]
-    for h in history[-10:]:  # keep last 10 turns for context
+    for h in history[-8:]:
         messages.append({"role": h["role"], "content": h["content"]})
     messages.append({"role":"user","content":question})
 
     try:
         resp = client.chat.completions.create(
-            model=deployment, max_completion_tokens=600,
+            model=deployment, max_completion_tokens=800,
             messages=messages
         )
         reply = resp.choices[0].message.content.strip()
@@ -3426,7 +3469,9 @@ def api_transfer_recon():
     # ── Section 1: match transfer debits ↔ credits ───────────────────────────
     # At least one side must be typed "transfer"; counterpart can be any type.
     # Tolerances: amount ±max(₹1000, 1%), date ±14 days.
-    transfers = [t for t in ledger if (t.get("type") or "").lower() == "transfer"]
+    # NOTE: use full_ledger (not FY-filtered ledger) so cross-FY transfers are
+    # found; FY filter is applied only to unmatched output at the end.
+    transfers = [t for t in full_ledger if (t.get("type") or "").lower() == "transfer"]
     t_debits  = [t for t in transfers if float(t.get("debit")  or 0) > 0]
     t_credits = [t for t in transfers if float(t.get("credit") or 0) > 0]
 
@@ -3438,6 +3483,51 @@ def api_transfer_recon():
     matched_d = set()
     matched_c = set()
     pairs = []
+
+    def _try_pair(d, c):
+        """Attempt to pair a debit and credit; return True if paired."""
+        d_amt  = float(d.get("debit", 0))
+        d_date = _ml_pd(d.get("date", ""))
+        c_amt  = float(c.get("credit", 0))
+        c_date = _ml_pd(c.get("date", ""))
+        if not d_date or not c_date:
+            return False
+        if abs(d_amt - c_amt) > max(1000, d_amt * 0.01):
+            return False
+        days = abs((d_date - c_date).days)
+        if days > 14:
+            return False
+        matched_d.add(d["txn_id"])
+        matched_c.add(c["txn_id"])
+        pairs.append({
+            "debit_seq":    d.get("seq"),
+            "credit_seq":   c.get("seq"),
+            "debit_date":   d.get("date"),
+            "credit_date":  c.get("date"),
+            "days_gap":     days,
+            "amount":       d_amt,
+            "from_account": d.get("account"),
+            "to_account":   c.get("account"),
+            "from_desc":    (d.get("raw_description") or d.get("transaction_details") or "").strip(),
+            "to_desc":      (c.get("raw_description") or c.get("transaction_details") or "").strip(),
+        })
+        return True
+
+    # Pre-pass: lock in seq-adjacent pairs (|seq gap| ≤ 3) first so the
+    # greedy loop can't steal them. Covers sequential bank-import entries.
+    credit_by_seq = {c.get("seq"): c for c in all_credits_pool if c.get("seq")}
+    debit_by_seq  = {d.get("seq"): d for d in all_debits_pool  if d.get("seq")}
+    for d in sorted(t_debits, key=lambda x: x.get("seq") or 0):
+        if d["txn_id"] in matched_d:
+            continue
+        d_seq = d.get("seq") or 0
+        for delta in range(1, 4):
+            for neighbor_seq in (d_seq + delta, d_seq - delta):
+                c = credit_by_seq.get(neighbor_seq)
+                if c and c["txn_id"] not in matched_c and _try_pair(d, c):
+                    break
+            if d["txn_id"] in matched_d:
+                break
 
     for d in sorted(t_debits, key=lambda x: x.get("date", "")):
         if d["txn_id"] in matched_d:
@@ -3467,20 +3557,20 @@ def api_transfer_recon():
             if score < best_score:
                 best_c, best_score = c, score
         if best_c:
-            matched_d.add(d["txn_id"])
-            matched_c.add(best_c["txn_id"])
-            pairs.append({
-                "debit_seq":    d.get("seq"),
-                "credit_seq":   best_c.get("seq"),
-                "debit_date":   d.get("date"),
-                "credit_date":  best_c.get("date"),
-                "days_gap":     best_score[0],
-                "amount":       d_amt,
-                "from_account": d.get("account"),
-                "to_account":   best_c.get("account"),
-                "from_desc":    (d.get("raw_description") or d.get("transaction_details") or "").strip(),
-                "to_desc":      (best_c.get("raw_description") or best_c.get("transaction_details") or "").strip(),
-            })
+            _try_pair(d, best_c)
+
+    # Pre-pass for credit-typed transfers: lock in seq-adjacent debit counterparts
+    for c in sorted(t_credits, key=lambda x: x.get("seq") or 0):
+        if c["txn_id"] in matched_c:
+            continue
+        c_seq = c.get("seq") or 0
+        for delta in range(1, 4):
+            for neighbor_seq in (c_seq + delta, c_seq - delta):
+                d = debit_by_seq.get(neighbor_seq)
+                if d and d["txn_id"] not in matched_d and _try_pair(d, c):
+                    break
+            if c["txn_id"] in matched_c:
+                break
 
     # Also try credit-typed transfers whose counterpart debit may be any type
     for c in sorted(t_credits, key=lambda x: x.get("date", "")):
@@ -3510,31 +3600,22 @@ def api_transfer_recon():
             if score < best_score:
                 best_d, best_score = d, score
         if best_d:
-            matched_c.add(c["txn_id"])
-            matched_d.add(best_d["txn_id"])
-            pairs.append({
-                "debit_seq":    best_d.get("seq"),
-                "credit_seq":   c.get("seq"),
-                "debit_date":   best_d.get("date"),
-                "credit_date":  c.get("date"),
-                "days_gap":     best_score[0],
-                "amount":       c_amt,
-                "from_account": best_d.get("account"),
-                "to_account":   c.get("account"),
-                "from_desc":    (best_d.get("raw_description") or best_d.get("transaction_details") or "").strip(),
-                "to_desc":      (c.get("raw_description") or c.get("transaction_details") or "").strip(),
-            })
+            _try_pair(best_d, c)
 
-    transfer_debits  = [_row(t) for t in t_debits  if t["txn_id"] not in matched_d]
-    transfer_credits = [_row(t) for t in t_credits if t["txn_id"] not in matched_c]
+    def _in_fy_show(t):
+        d = _ml_pd(t.get("date", ""))
+        return d and _lo <= d.date() <= _hi if _fy_tr in _FY_TR else True
+
+    transfer_debits  = [_row(t) for t in t_debits  if t["txn_id"] not in matched_d and _in_fy_show(t)]
+    transfer_credits = [_row(t) for t in t_credits if t["txn_id"] not in matched_c and _in_fy_show(t)]
 
     # ── Section 2: suspected transfers ────────────────────────────────────────
     # Only flag a non-transfer entry if it has the same amount as an UNMATCHED
     # transfer debit or credit, on any account, within 7 days — i.e. it looks
     # like the missing counterpart of an unreconciled transfer.
     unmatched_transfers = (
-        [t for t in t_debits  if t["txn_id"] not in matched_d] +
-        [t for t in t_credits if t["txn_id"] not in matched_c]
+        [t for t in t_debits  if t["txn_id"] not in matched_d and _in_fy_show(t)] +
+        [t for t in t_credits if t["txn_id"] not in matched_c and _in_fy_show(t)]
     )
 
     suspected = []
@@ -4057,13 +4138,23 @@ def _parse_acc26_sudhir(file_bytes):
     def _parse_date_acc26(v):
         if isinstance(v, _dt):
             return v.strftime("%d/%m/%Y")
+        from datetime import date as _date_type
+        if isinstance(v, _date_type):
+            return v.strftime("%d/%m/%Y")
         if isinstance(v, str):
             v = v.strip()
-            for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%d-%m-%y", "%Y-%m-%d"):
+            for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%d-%m-%y", "%Y-%m-%d",
+                        "%d.%m.%Y", "%d.%m.%y",
+                        "%d-%b-%Y", "%d-%b-%y"):   # DD-MMM-YYYY / DD-MMM-YY
                 try:
                     return _dt.strptime(v, fmt).strftime("%d/%m/%Y")
                 except ValueError:
                     pass
+            # Handle single-digit day like "2.03.2026"
+            import re as _re
+            m = _re.match(r'^(\d{1,2})\.(\d{2})\.(\d{4})$', v)
+            if m:
+                return f"{int(m.group(1)):02d}/{m.group(2)}/{m.group(3)}"
         return None
 
     def _norm_heading_acc26(h):
