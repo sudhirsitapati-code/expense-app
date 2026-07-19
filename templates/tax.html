@@ -482,25 +482,78 @@ function renderDeductions(fy) {
 }
 
 // ── TAX COMPUTATION ───────────────────────────────────────────────────────────
+let _compToggled = {};
+function toggleCompSection(id) {
+  _compToggled[id] = !_compToggled[id];
+  document.querySelectorAll('[data-csec="'+id+'"]').forEach(r => r.style.display = _compToggled[id] ? '' : 'none');
+  const btn = document.getElementById('ctoggle_'+id);
+  if (btn) btn.textContent = _compToggled[id] ? '−' : '+';
+}
+
 function renderComputation(fy) {
   const d = getD(fy); if (!d) return;
   const el = document.getElementById('taxViewComputation');
   const isNew = d.regime === 'New Regime';
 
-  // Under new regime only 16(ia) and 80CCD(2) are allowed
   const allowedDedns = d.deductions.filter(x => isNew ? x.new_regime : (x.confirmed && x.amount));
 
-  const salaryGross  = d.income.filter(i=>i.head==='Salaries').reduce((s,i)=>s+(i.gross||0),0);
-  const otherGross   = d.income.filter(i=>i.head==='Other Sources'&&i.gross).reduce((s,i)=>s+(i.gross||0),0);
-  // GCPL ESOP LTCG is identified; other CG entries (Solidarity, Latent, StanChart) are pending
-  const ltcgGross    = d.income.filter(i=>i.head==='Capital Gains'&&i.source.includes('LTCG')&&i.gross).reduce((s,i)=>s+(i.gross||0),0);
-  const stcgGross    = d.income.filter(i=>i.head==='Capital Gains'&&!i.source.includes('LTCG')&&i.gross).reduce((s,i)=>s+(i.gross||0),0);
+  const salaryItems  = d.income.filter(i=>i.head==='Salaries');
+  const otherItems   = d.income.filter(i=>i.head==='Other Sources'&&i.gross!=null&&i.gross!==0);
+  const ltcgItems    = d.income.filter(i=>i.head==='Capital Gains'&&i.source.includes('LTCG')&&i.gross>0);
+  const stcgItems    = d.income.filter(i=>i.head==='Capital Gains'&&!i.source.includes('LTCG')&&i.gross!=null);
+
+  const salaryGross  = salaryItems.reduce((s,i)=>s+(i.gross||0),0);
+  const otherGross   = otherItems.reduce((s,i)=>s+(i.gross||0),0);
+  const ltcgGross    = ltcgItems.reduce((s,i)=>s+(i.gross||0),0);
+  const stcgGross    = stcgItems.reduce((s,i)=>s+(i.gross||0),0);
   const cgGross      = ltcgGross + stcgGross;
   const salaryDedn   = allowedDedns.filter(x=>x.section==='16(ia)'||x.section==='80CCD(2)').reduce((s,x)=>s+(x.amount||0),0);
-  const otherDedns   = allowedDedns.filter(x=>x.section!=='16(ia)'&&x.section!=='80CCD(2)'&&x.amount).reduce((s,x)=>s+(x.amount||0),0);
   const netSalary    = salaryGross - salaryDedn;
-  const regularIncome= netSalary + otherGross - otherDedns;
+  const regularIncome= netSalary + otherGross;
   const totalTaxable = regularIncome + cgGross;
+
+  // toggle button
+  const tbtn = id => `<button id="ctoggle_${id}" onclick="toggleCompSection('${id}')"
+    style="background:#e2e8f0;border:none;border-radius:3px;width:17px;height:17px;font-size:11px;
+    line-height:1;cursor:pointer;flex-shrink:0;font-weight:700;color:#475569;padding:0;
+    display:inline-flex;align-items:center;justify-content:center;margin-right:6px;">+</button>`;
+
+  // hidden sub-rows
+  const subRows = (id, items, fn) => items.map(item =>
+    `<tr data-csec="${id}" style="display:none;background:#f8fafc;">${fn(item)}</tr>`).join('');
+
+  const salSub = subRows('salary', salaryItems, i =>
+    `<td class="ps-5" style="font-size:11.5px;color:#374151;">${i.source}</td>
+     <td class="text-end pe-3" style="font-size:11.5px;">${inr(i.gross)}</td>`);
+
+  const othSub = subRows('other', otherItems, i =>
+    `<td class="ps-5" style="font-size:11.5px;color:#374151;">${i.source}
+       ${i.ais===false?'<span style="font-size:9px;background:#fef9c3;color:#92400e;border:1px solid #fde047;border-radius:3px;padding:0 4px;margin-left:4px;">Est.</span>':''}
+     </td>
+     <td class="text-end pe-3" style="font-size:11.5px;">${inr(i.gross)}</td>`);
+
+  const ltcgSub = subRows('ltcg', ltcgItems, i =>
+    `<td class="ps-5" style="font-size:11.5px;color:#374151;">${i.source.replace(/ — LTCG.*$/,'')}</td>
+     <td class="text-end pe-3" style="font-size:11.5px;">${inr(i.gross)}</td>`);
+
+  const stcgSub = subRows('stcg', stcgItems, i => {
+    const loss = i.gross < 0;
+    return `<td class="ps-5" style="font-size:11.5px;color:${loss?'#166534':'#374151'};">${i.source.replace(/ — STCG.*/,'')}</td>
+     <td class="text-end pe-3" style="font-size:11.5px;color:${loss?'#166534':''};">${loss?'('+inr(Math.abs(i.gross))+') loss':inr(i.gross)}</td>`;
+  });
+
+  const dednItems = allowedDedns.filter(x=>x.section==='16(ia)'||x.section==='80CCD(2)');
+  const dednSub = subRows('saldedn', dednItems, x =>
+    `<td class="ps-5" style="font-size:11.5px;color:#374151;">u/s ${x.section} — ${x.label}</td>
+     <td class="text-end pe-3 text-success" style="font-size:11.5px;">(${inr(x.amount)})</td>`);
+
+  const tdsSub = subRows('tds', d.tds_paid, t =>
+    `<td class="ps-5" style="font-size:11.5px;color:#374151;">${t.source}</td>
+     <td class="text-end pe-3 text-success" style="font-size:11.5px;">(${inr(t.amount)})</td>`);
+
+  const taxPaidSub = subRows('taxpaid', d.taxes_paid||[], t =>
+    `<td class="ps-5" style="font-size:11.5px;color:#374151;">${t.source}</td>
+     <td class="text-end pe-3 ${t.amount<0?'text-danger':'text-success'}" style="font-size:11.5px;">${t.amount<0?inr(Math.abs(t.amount))+' credit':'('+inr(t.amount)+')'}</td>`);
 
   function slabTax(income) {
     if (income <= 300000)  return 0;
@@ -535,31 +588,53 @@ function renderComputation(fy) {
   const balance      = totalTax - tdsTotal - taxesPaid;
 
   el.innerHTML = `
-  <div style="max-width:660px;">
+  <div style="max-width:680px;">
   <div class="alert alert-info py-2 px-3 mb-3" style="font-size:12px;">
     <i class="bi bi-info-circle me-1"></i><strong>New Regime.</strong> GCPL ESOP LTCG ₹352L + Solidarity LTCG ₹58.4L + Latent LTCG ₹3.4L all confirmed. StanChart/IBKR foreign gains estimated (₹84/USD). Latent debt STCG ₹3.1L taxed at slab rate, not 20% — computation below is approximate for that portion.
   </div>
   <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
-    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">Tax Computation — FY 2025–26 (New Regime)</div>
+    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">Tax Computation — FY 2025–26 (New Regime)
+      <span style="font-size:10px;font-weight:400;opacity:.7;margin-left:8px;">click + to expand any line</span>
+    </div>
     <table class="table table-sm mb-0" style="font-size:12.5px;">
     <tbody>
       <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">A. Salary Income</td></tr>
-      <tr><td class="ps-4">Salaries — gross (cash + perquisite + NPS)</td><td class="text-end pe-3">${inr(salaryGross)}</td></tr>
-      <tr><td class="ps-4 text-muted">Less: Standard Deduction u/s 16(ia)</td><td class="text-end pe-3 text-success">(${inr(75000)})</td></tr>
-      <tr><td class="ps-4 text-muted">Less: Employer NPS u/s 80CCD(2)</td><td class="text-end pe-3 text-success">(${inr(2561004)})</td></tr>
+      <tr>
+        <td class="ps-3">${tbtn('salary')}Salaries — gross (cash + perquisite + NPS)</td>
+        <td class="text-end pe-3">${inr(salaryGross)}</td>
+      </tr>
+      ${salSub}
+      <tr>
+        <td class="ps-3">${tbtn('saldedn')}Less: Allowed deductions (Std. Deduction + Employer NPS)</td>
+        <td class="text-end pe-3 text-success">(${inr(salaryDedn)})</td>
+      </tr>
+      ${dednSub}
       <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Net Salary</td><td class="text-end pe-3 fw-semibold">${inr(netSalary)}</td></tr>
 
       <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">B. Other Income (taxed at slab)</td></tr>
-      <tr><td class="ps-4">Dividends + Interest (known)</td><td class="text-end pe-3">${inr(otherGross)}</td></tr>
+      <tr>
+        <td class="ps-3">${tbtn('other')}Dividends, interest &amp; foreign income (${otherItems.length} items)</td>
+        <td class="text-end pe-3">${inr(otherGross)}</td>
+      </tr>
+      ${othSub}
       <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Regular Taxable Income (A+B)</td><td class="text-end pe-3 fw-semibold">${inr(regularIncome)}</td></tr>
 
       <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">C. Long-Term Capital Gains (u/s 112A)</td></tr>
-      <tr><td class="ps-4">GCPL ESOP LTCG — gross gain</td><td class="text-end pe-3">${inr(ltcgGross)}</td></tr>
-      <tr><td class="ps-4 text-muted">Less: Annual exemption</td><td class="text-end pe-3 text-success">(${inr(ltcgExemption)})</td></tr>
+      <tr>
+        <td class="ps-3">${tbtn('ltcg')}LTCG — gross gain (${ltcgItems.length} portfolios)</td>
+        <td class="text-end pe-3">${inr(ltcgGross)}</td>
+      </tr>
+      ${ltcgSub}
+      <tr><td class="ps-4 text-muted">Less: Annual exemption u/s 112A</td><td class="text-end pe-3 text-success">(${inr(ltcgExemption)})</td></tr>
       <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Taxable LTCG</td><td class="text-end pe-3 fw-semibold">${inr(ltcgTaxable)}</td></tr>
-      ${stcgGross>0?`
-      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">D. Short-Term Capital Gains (u/s 111A)</td></tr>
-      <tr><td class="ps-4">STCG (pending — Solidarity/Latent/other)</td><td class="text-end pe-3">${inr(stcgGross)}</td></tr>`:''}
+
+      ${stcgItems.length?`
+      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">D. Short-Term Capital Gains</td></tr>
+      <tr>
+        <td class="ps-3">${tbtn('stcg')}STCG — net position (${stcgItems.length} items)</td>
+        <td class="text-end pe-3">${inr(stcgGross)}</td>
+      </tr>
+      ${stcgSub}`:''}
 
       <tr style="background:#1e3a5f;color:#fff;"><td class="ps-3 fw-bold">Total Taxable Income</td><td class="text-end pe-3 fw-bold">${inr(totalTaxable)}</td></tr>
 
@@ -572,17 +647,20 @@ function renderComputation(fy) {
       <tr><td class="ps-4 text-muted">Surcharge @15% on LTCG tax (capped u/s 112A)</td><td class="text-end pe-3">${inr(ltcgSurcharge)}</td></tr>
       <tr><td class="ps-4 text-muted">Cess @4% on LTCG tax + surcharge</td><td class="text-end pe-3">${inr(ltcgCess)}</td></tr>
       <tr style="background:#f1f5f9;"><td class="ps-4 fw-semibold">LTCG tax total (eff. ~14.95%)</td><td class="text-end pe-3 fw-semibold">${inr(ltcgTotal)}</td></tr>
-      ${stcgGross>0?`<tr style="background:#f1f5f9;"><td class="ps-4 fw-semibold">STCG tax total</td><td class="text-end pe-3 fw-semibold">${inr(stcgTotal)}</td></tr>`:''}
+      ${stcgGross>0?`<tr style="background:#f1f5f9;"><td class="ps-4 fw-semibold">STCG tax total (approx.)</td><td class="text-end pe-3 fw-semibold">${inr(stcgTotal)}</td></tr>`:''}
       <tr style="background:#374151;color:#fff;"><td class="ps-3 fw-semibold">Gross Tax Payable</td><td class="text-end pe-3 fw-semibold">${inr(totalTax)}</td></tr>
 
-      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">TDS Deducted at Source</td></tr>
-      ${d.tds_paid.map(t=>`
-      <tr><td class="ps-4 text-muted">${t.source}${t.note?'<br><span style="font-size:10px;color:#9ca3af;">'+t.note+'</span>':''}</td><td class="text-end pe-3 text-success">(${inr(t.amount)})</td></tr>`).join('')}
+      <tr class="table-light">
+        <td colspan="2" class="ps-3 py-2">${tbtn('tds')}<strong>TDS Deducted at Source</strong>
+          <span class="ms-2 text-success">(${inr(tdsTotal)})</span></td>
+      </tr>
+      ${tdsSub}
 
-      <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">Taxes Paid (Advance Tax / Challans / TCS)</td></tr>
-      ${(d.taxes_paid||[]).map(t=>`
-      <tr><td class="ps-4 text-muted">${t.source}<br><span style="font-size:10px;color:#9ca3af;">${t.note||''}</span></td>
-          <td class="text-end pe-3 ${t.amount<0?'text-danger':'text-success'}">${t.amount<0?inr(Math.abs(t.amount))+'<span class="text-muted ms-1">(credit)</span>':'('+inr(t.amount)+')'}</td></tr>`).join('')}
+      <tr class="table-light">
+        <td colspan="2" class="ps-3 py-2">${tbtn('taxpaid')}<strong>Taxes Paid (Advance Tax / TCS / Challans)</strong>
+          <span class="ms-2 text-success">(${inr(taxesPaid)})</span></td>
+      </tr>
+      ${taxPaidSub}
 
       <tr style="background:${balance>0?'#fef2f2':'#f0faf4'};border-top:2px solid ${balance>0?'#fca5a5':'#86efac'};">
         <td class="ps-3 fw-bold">${balance>0?'Balance Tax Payable':'Estimated Refund'}</td>
