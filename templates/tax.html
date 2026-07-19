@@ -117,12 +117,18 @@ const TAX_DEFAULTS = {
       {head:"Other Sources", source:"Term Deposit Interest",       gross:10229,     tds:0,      note:"AIS confirmed: HSBC ₹7,716 + ICICI TD ₹2,513. No TDS shown in AIS.", doc:"FY26/Sudhir AIS 2025-26.pdf", ais:true},
       // ── OTHER SOURCES — ESTIMATED (NOT YET IN AIS) ───────────────────────────
       {head:"Other Sources", source:"SGB Interest (est.)",         gross:248430,    tds:24843,  note:"Est. 2.5% p.a. on 2,100 GOI Sovereign Gold Bonds. Not confirmed in AIS — verify when AIS is complete or with RBI.", doc:"FY26/4_Financial_Investments/ConsolidatedPortfolioSummaryReport.pdf", ais:false},
-      {head:"Other Sources", source:"StanChart SGD/USD Interest",  gross:5557,      tds:0,      note:"USD 58.49 × ₹95. StanChart Singapore a/c 6007. Foreign income — not reportable by Indian banks in AIS. Declare under Schedule FA.", doc:"FY26/1_Bank_Accounts/StanChart_6007_SGD_Statement_Apr26.pdf", ais:false},
+      {head:"Other Sources", source:"StanChart SGD/USD Interest",  gross:7829,      tds:0,      note:"Est. USD 93.21 × ₹84. StanChart Singapore a/c 6007 interest. Foreign income — not reportable by Indian banks in AIS. Declare under Schedule FA.", doc:"FY26/tax/Standard Chartered SG Full Year statement.pdf", ais:false},
+      {head:"Other Sources", source:"IBKR — Foreign Dividends (USD 2,714)",        gross:227957,    tds:0,      note:"Est. USD 2,713.77 × ₹84 = ₹2.28L. Dividends received on IBKR account U11622321 (Marcellus basket). Withholding tax USD 3.42 paid. Declare under Schedule FA / FSI.", ais:false, doc:"FY26/tax/ibkr_marcellu_annual_gain_loss_report-fy2025-26.pdf"},
+      {head:"Other Sources", source:"StanChart SG — Foreign Dividends (USD 462)",  gross:38827,     tds:0,      note:"Est. USD 462.23 × ₹84 = ₹38,827 (GDX dividend). Foreign income — Schedule FA / FSI mandatory.", ais:false, doc:"FY26/tax/Standard Chartered SG Full Year statement.pdf"},
       {head:"Capital Gains", source:"GCPL ESOP Sales — LTCG",       gross:35201000,  tds:0,      note:"Source: ESGS Data Movement + Perquisite Tax Details. FIFO across 9 lots. May-16-2025: 64,659 shares @ ₹1,289 — Lot#1 Nov-2022 (60,364 @ FMV ₹815.45, gain ₹285.81L) + Lot#2 Apr-2023 (4,295 @ FMV ₹962.38, gain ₹14.03L) = ₹299.84L. Feb-17-2026: 27,000 shares @ ₹1,215 — Lot#2 rem. (1,333 @ ₹962, gain ₹3.37L) + Lot#3a Aug-2023 (4,598 @ ₹1,035, gain ₹8.29L) + Lot#3b Aug-2023 (12,017 @ ₹1,062, gain ₹18.39L) + Lot#4 Oct-2023 (9,052 @ ₹970, gain ₹22.14L) = ₹52.18L. TOTAL LTCG ₹352.01L (~₹3.52 Cr). Tax @14.95% eff. = ₹52.4L. NB: ESOP perquisite (₹19.19 Cr) separately taxed as salary — already captured above.", doc:"FY26/4_Financial_Investments/Sudhir Sitapati_ESGS Data.xlsx"},
-      {head:"Capital Gains", source:"Solidarity PMS",               gross:null,      tds:0,      note:"Capital gains from Solidarity Investment Managers PMS. PDF statement password-protected — need statement from Solidarity or AIS.", doc:"FY26/4_Financial_Investments/Solidaruty.pdf"},
-      {head:"Capital Gains", source:"Latent PMF",                   gross:null,      tds:0,      note:"Capital gains from Latent Investment Managers PMF. PDF statement password-protected — need statement from Latent or AIS.", doc:"FY26/4_Financial_Investments/latent.pdf"},
+      {head:"Capital Gains", source:"Solidarity PMS — LTCG (listed equity, STT paid)", gross:5835100, tds:0, note:"Confirmed from Solidarity capital gains statement FY26. LTCG ₹58,35,099.79 on listed equity (STT paid, held >1 yr). Tax @14.95% eff. = ₹8.72L. Statement doc available.", doc:"FY26/tax/solidarity CAPITAL GAINS STATEMENT_MR SUDHIR SITAPATI.pdf"},
+      {head:"Capital Gains", source:"Solidarity PMS — STCG (net loss, listed equity)", gross:-458460, tds:0, note:"Net STCG position: listed equity STCG loss -₹4,61,282 + non-equity STCG +₹2,822 = net -₹4,58,460. This loss can offset other STCG gains in FY26.", doc:"FY26/tax/solidarity CAPITAL GAINS STATEMENT_MR SUDHIR SITAPATI.pdf"},
+      {head:"Capital Gains", source:"Latent PMF — LTCG (listed equity, STT paid)", gross:336574, tds:0, note:"Confirmed from Latent PMS statement FY26. LTCG ₹3,36,573.97 on listed equity. Tax @14.95% eff. = ₹50,317.", doc:"FY26/tax/Latent Capital Gains Statement FY 25-26 Sudhir Sitapati.pdf"},
+      {head:"Capital Gains", source:"Latent PMF — STCG (listed equity 111A @20%)", gross:148120, tds:0, note:"STCG ₹1,48,119.51 on listed equity (STT paid). Taxed @20% u/s 111A.", doc:"FY26/tax/Latent Capital Gains Statement FY 25-26 Sudhir Sitapati.pdf"},
+      {head:"Capital Gains", source:"Latent PMF — STCG (debt MF / Gold ETF, slab rate)", gross:307747, tds:0, note:"STCG ₹3,07,747.27 (debt MF ₹2,97,812 + gold ETF ₹9,935). Taxed at slab rate, NOT @20% u/s 111A — no STT paid. Slab tax ~₹1.20L.", doc:"FY26/tax/Latent Capital Gains Statement FY 25-26 Sudhir Sitapati.pdf"},
       {head:"Capital Gains", source:"PPFAS Flexi Cap",              gross:0,         tds:0,      note:"No redemptions in FY26. Purchased ₹1.5Cr on Jun 5 2024, held through Mar 2026 (value ₹1.64Cr). XIRR 6.5%."},
-      {head:"Capital Gains", source:"StanChart SG / IBKR ETFs",    gross:null,      tds:0,      note:"Foreign capital gains — IBKR account U11622321 (Marcellus basket, USD 360K). Need year-end capital gains report for Schedule FA."},
+      {head:"Capital Gains", source:"StanChart SG — Foreign STCG (Silver ETF SLV)", gross:3711624, tds:0, note:"Est. USD 44,186.43 realised gains on SLV silver ETF × ₹84 = ₹37.1L. Foreign capital gains — Schedule FA obligation. DTAA Singapore-India may apply; declare in Schedule FSI.", ais:false, doc:"FY26/tax/Standard Chartered SG Full Year statement.pdf"},
+      {head:"Capital Gains", source:"IBKR Marcellus — Foreign CG (Schedule FA)", gross:179256, tds:0, note:"Est. USD 2,133.92 realised gains (STCG USD 1,266, LTCG USD 868) × ₹84 = ₹1.79L. Foreign gains from IBKR account U11622321. Schedule FA + FSI mandatory.", ais:false, doc:"FY26/tax/ibkr_marcellu_annual_gain_loss_report-fy2025-26.pdf"},
       {head:"House Property",source:"C34 / C51 — Notional Rent",   gross:null,      tds:0,      note:"Deemed let-out or actual rental income — needs confirmation"},
     ],
     deductions: [
@@ -131,9 +137,9 @@ const TAX_DEFAULTS = {
       {section:"80C",      label:"LIC Premiums (capped)",                       amount:150000,   source:"ITR",     confirmed:true,  new_regime:false, note:"Not claimable under new regime. Actual premium ₹3.44L p.a."},
       {section:"80CCD(1B)",label:"Personal NPS Contribution",                   amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime."},
       {section:"80D",      label:"Health Insurance Premium",                    amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime."},
-      {section:"24(b)",    label:"Home Loan Interest — C34 TopUp (XX00382)",    amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime. Jan–Mar 2026 data only (₹21.9L for 3 months)."},
-      {section:"24(b)",    label:"Home Loan Interest — C51 TopUp (XX99508)",    amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime. Jan–Mar 2026 data only (₹28.2L for 3 months)."},
-      {section:"24(b)",    label:"Home Loan Interest — C51 Original (XX42596)", amount:44144670, source:"Stmt",    confirmed:true,  new_regime:false, note:"Not claimable under new regime. ₹44.1L confirmed from statement."},
+      {section:"24(b)",    label:"Home Loan Interest — C34 TopUp (XX00382)",    amount:1569252,  source:"IT Cert", confirmed:true,  new_regime:false, note:"Not claimable under new regime. Full FY26 ₹15,69,252 per IT Certificate TBMUM00007500382."},
+      {section:"24(b)",    label:"Home Loan Interest — C51 TopUp (XX99508)",    amount:2017798,  source:"IT Cert", confirmed:true,  new_regime:false, note:"Not claimable under new regime. Full FY26 ₹20,17,798 per IT Certificate TBMUM00007499508."},
+      {section:"24(b)",    label:"Home Loan Interest — C51 Original (XX42596)", amount:1509968,  source:"IT Cert", confirmed:true,  new_regime:false, note:"Not claimable under new regime. Full FY26 ₹15,09,968 per IT Certificate TBMUM00006542596 (net of HomeSaver 9175 offset). Combined all 3 loans: ₹50,97,018."},
       {section:"24(b)",    label:"Home Loan Interest — HL5 MaxGain 9175",       amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime."},
       {section:"10(13A)", label:"HRA Exemption",                                amount:null,     source:"ITR",     confirmed:false, new_regime:false, note:"Not claimable under new regime."},
     ],
@@ -531,7 +537,7 @@ function renderComputation(fy) {
   el.innerHTML = `
   <div style="max-width:660px;">
   <div class="alert alert-info py-2 px-3 mb-3" style="font-size:12px;">
-    <i class="bi bi-info-circle me-1"></i><strong>New Regime.</strong> GCPL ESOP gains confirmed ALL LTCG (taxed @12.5% with 15% surcharge cap u/s 112A). Solidarity/Latent PMS gains pending — will increase liability when added.
+    <i class="bi bi-info-circle me-1"></i><strong>New Regime.</strong> GCPL ESOP LTCG ₹352L + Solidarity LTCG ₹58.4L + Latent LTCG ₹3.4L all confirmed. StanChart/IBKR foreign gains estimated (₹84/USD). Latent debt STCG ₹3.1L taxed at slab rate, not 20% — computation below is approximate for that portion.
   </div>
   <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
     <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">Tax Computation — FY 2025–26 (New Regime)</div>
@@ -586,7 +592,7 @@ function renderComputation(fy) {
     </table>
   </div>
   <div class="alert alert-warning mt-3 py-2 px-3" style="font-size:11.5px;">
-    <i class="bi bi-exclamation-triangle me-1"></i><strong>Pending:</strong> Solidarity PMS + Latent PMF capital gains (PDF password unknown — request from managers); StanChart/IBKR foreign gains (Schedule FA obligation); bank savings interest. Liability will increase once these are added.
+    <i class="bi bi-exclamation-triangle me-1"></i><strong>Note:</strong> Latent debt MF STCG ₹3.08L is taxable at slab rate (not @20% u/s 111A) — computation above overstates tax for that portion. StanChart/IBKR foreign gains ₹38.9L are estimated @₹84/USD and shown as STCG — actual treatment depends on DTAA and Schedule FSI filing. Verify with CA before filing.
   </div>
   </div>`;
 }
@@ -600,15 +606,15 @@ function renderChecklist(fy) {
     {name:"Form 16 — Part A & B",               status:"done",    file:"FY26/Sudhir's Form16-2025-26.pdf"},
     {name:"Form 12BA (Perquisites)",             status:"done",    file:"FY26/Sudhir's Form16-2025-26.pdf"},
     {name:"ICICI Demat Transactions FY26",       status:"done",    file:"FY26/4_Financial_Investments/ICICI_Demat_90174124_Transactions_FY26.pdf"},
-    {name:"GCPL Capital Gains Statement (LTCG ₹648.48L)",status:"done",file:"FY26/4_Financial_Investments/GCPL_CapitalGains.xlsx"},
-    {name:"Solidarity PMS Capital Gains Statement", status:"missing", file:null, note:"PDF password-protected — request from manager"},
-    {name:"Latent PMF Capital Gains Statement",     status:"missing", file:null, note:"PDF password-protected — request from manager"},
+    {name:"GCPL Capital Gains Statement (LTCG ₹352.01L)",status:"done",file:"FY26/4_Financial_Investments/GCPL_CapitalGains.xlsx"},
+    {name:"Solidarity PMS Capital Gains Statement (LTCG ₹58.35L)", status:"done", file:"FY26/tax/solidarity CAPITAL GAINS STATEMENT_MR SUDHIR SITAPATI.pdf"},
+    {name:"Latent PMF Capital Gains Statement (LTCG ₹3.37L)",      status:"done", file:"FY26/tax/Latent Capital Gains Statement FY 25-26 Sudhir Sitapati.pdf"},
     {name:"Advance Tax Challan (SBI Jul-24 ₹3.85L)",status:"done",  file:null, note:"In SBI-4852 ledger entry"},
     {name:"TCS Certificates (ICICI foreign remit.)",status:"done",   file:null, note:"₹51.5K Jun-24 + ₹81.6K Nov-24 in ledger"},
-    {name:"Home Loan Stmt — C51 Original",       status:"done",    file:"FY26/2_Home_Loans/Statement of Account_TBMUM00006542596 (1).pdf"},
-    {name:"Home Loan Stmt — C34 TopUp",          status:"partial", file:"FY26/2_Home_Loans/Statement of Account_TBMUM00007500382 (1).pdf", note:"Jan–Mar only"},
-    {name:"Home Loan Stmt — C51 TopUp",          status:"partial", file:"FY26/2_Home_Loans/Statement of Account_TBMUM00007499508 (1).pdf", note:"Jan–Mar only"},
-    {name:"Home Loan Interest Cert — HL5 9175",  status:"missing", file:null},
+    {name:"Home Loan IT Cert — C51 Original (₹15.1L FY26)",  status:"done", file:"FY26/tax/IT Certificate_TBMUM00006542596.pdf"},
+    {name:"Home Loan IT Cert — C34 TopUp (₹15.7L FY26)",    status:"done", file:"FY26/tax/IT Certificate_TBMUM00007500382.pdf"},
+    {name:"Home Loan IT Cert — C51 TopUp (₹20.2L FY26)",    status:"done", file:"FY26/tax/IT Certificate_TBMUM00007499508.pdf"},
+    {name:"Home Loan Interest Cert — HL5 MaxGain 9175", status:"done", file:null, note:"9175 is the HomeSaver OD linked to XX42596 — interest already net of HomeSaver offset in IT certificate above"},
     {name:"StanChart SG Year-End Statement",     status:"partial", file:"FY26/1_Bank_Accounts/StanChart_6007_SGD_Statement_Apr26.pdf", note:"Need full FY income summary"},
     {name:"LIC Premium Receipts",                status:"done",    file:"data/2026 Policy Register.pdf"},
     {name:"AIS / TIS (IT Portal)",               status:"done",    file:"FY26/AIS"},
@@ -619,12 +625,12 @@ function renderChecklist(fy) {
 
   const alerts = [
     {level:"danger",  text:"Schedule FA mandatory — IBKR account U11622321 (Marcellus basket, USD ~360K) and StanChart Singapore A/c 62-1-833928-2 (~₹470L equivalent) MUST be declared as foreign assets. Non-disclosure attracts Black Money Act penalties regardless of tax amount."},
-    {level:"danger",  text:"Solidarity PMS + Latent PMF capital gains unquantified — PDFs password-protected. Request capital gains statements from managers directly, or pull from AIS once ITD receives the data."},
+    {level:"info",    text:"Solidarity PMS confirmed: LTCG ₹58.35L + STCG net loss -₹4.58L (offsets other STCG). Latent PMF confirmed: LTCG ₹3.37L, STCG ₹1.48L (111A) + ₹3.08L (debt, slab). Statements are in data/FY26/tax/."},
     {level:"danger",  text:"GCPL dividend discrepancy: AIS shows ₹55.02L but earlier demat estimate was ₹99.43L — a ₹44.4L gap. Income has been revised to AIS figure. Investigate with GCPL payroll or ICICI demat before filing."},
     {level:"warning", text:"₹38.43L TCS (Feb-2026 LRS remittance) + ₹18.5K (Mar-2026) are major tax credits confirmed in AIS. Ensure these appear in Schedule IT when filing — they significantly reduce your balance payable."},
     {level:"warning", text:"Advance tax ₹3.85L (SBI Jul-2024) — date falls in FY25, not FY26. Confirm challan BSR code and verify which AY it was booked under. If FY25, it does NOT reduce FY26 liability."},
     {level:"warning", text:"EPF interest ₹8.93L (TDS ₹89,344) is taxable — confirmed in AIS. Your annual EPF contribution almost certainly exceeds the ₹2.5L threshold at this salary level, so the full interest amount is taxable at slab rate."},
-    {level:"info",    text:"GCPL ESOP LTCG: ₹648.48L confirmed all long-term, tax ₹96.76L (@14.95% effective with 15% surcharge cap u/s 112A). Sale proceeds ₹1978.67L across two tranches in May-25 and Feb-26."},
+    {level:"info",    text:"GCPL ESOP LTCG: ₹352.01L confirmed all long-term (FIFO across 4 lots), tax ~₹52.6L (@14.95% effective with 15% surcharge cap u/s 112A). Sales: 64,659 shares @₹1,289 (May-25) + 27,000 shares @₹1,215 (Feb-26)."},
     {level:"info",    text:"SGB interest ₹2.48L and StanChart/IBKR foreign income are estimated — not yet in AIS. Declare foreign income under Schedule FA; SGB interest will appear in AIS once RBI reports it."},
   ];
 
