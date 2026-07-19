@@ -957,9 +957,26 @@ const ESOP_LOTS = [
   {lot:'#8', label:'Nov 2025', allotment:'2025-11-18', shares:141732, fmv:1111.05, perq:157329607},
 ];
 
+// Per-lot sold history (FIFO, fully verified)
 const ESOP_SOLD = [
-  {label:'May 16 2025', shares:64659, price:1288.93, lots:'Lot#1 (60,364@₹815) + Lot#2 (4,295@₹962)', gain:29984000},
-  {label:'Feb 17 2026', shares:27000, price:1215.00, lots:'Lot#2 rem. (1,333@₹962) + Lot#3a (4,598@₹1,035) + Lot#3b (12,017@₹1,062) + Lot#4 (9,052@₹970)', gain:5218000},
+  {lot:'#1', label:'Nov 2022', allotment:'2022-11-08', shares_allotted:60364, fmv:815.45,
+   tranches:[{date:'May-16-2025', shares:60364, price:1288.93, gain:28581000}],
+   shares_remaining:0, status:'FULLY SOLD'},
+  {lot:'#2', label:'Apr 2023', allotment:'2023-04-17', shares_allotted:5628, fmv:962.38,
+   tranches:[
+     {date:'May-16-2025', shares:4295, price:1288.93, gain:1403000},
+     {date:'Feb-17-2026', shares:1333, price:1215.00, gain:337000},
+   ],
+   shares_remaining:0, status:'FULLY SOLD'},
+  {lot:'#3a', label:'Aug 2023', allotment:'2023-08-08', shares_allotted:4598, fmv:1035.0,
+   tranches:[{date:'Feb-17-2026', shares:4598, price:1215.00, gain:829000}],
+   shares_remaining:0, status:'FULLY SOLD'},
+  {lot:'#3b', label:'Aug 2023', allotment:'2023-08-23', shares_allotted:12017, fmv:1062.0,
+   tranches:[{date:'Feb-17-2026', shares:12017, price:1215.00, gain:1839000}],
+   shares_remaining:0, status:'FULLY SOLD'},
+  {lot:'#4', label:'Oct 2023', allotment:'2023-10-30', shares_allotted:61394, fmv:970.45,
+   tranches:[{date:'Feb-17-2026', shares:9052, price:1215.00, gain:2214000}],
+   shares_remaining:52342, status:'PARTIAL — 52,342 remain'},
 ];
 
 // LTCG: 12.5% + 15% surcharge + 4% cess = 14.95% eff  (u/s 112A, surcharge capped)
@@ -999,16 +1016,58 @@ function renderEsop() {
     </tr>`;
   }).join('');
 
-  // Sold rows
-  let soldRows = ESOP_SOLD.map(s => `<tr class="table-light text-muted" style="font-size:12px;">
-    <td colspan="2">${s.label} — SOLD (FY26)</td>
-    <td class="text-end">${fmtN(s.shares)}</td>
-    <td class="text-end">@ ₹${s.price}</td>
-    <td class="text-end">${fmt(s.shares * s.price)}</td>
-    <td class="text-center"><span class="badge bg-secondary">LTCG ✓</span></td>
-    <td class="text-end text-success">${fmt(s.gain)} gain</td>
-    <td class="text-end">${fmt(Math.round(s.gain * LTCG_RATE))}</td>
-  </tr>`).join('');
+  // Sold rows — one row per lot, with tranche sub-rows if sold in multiple tranches
+  let soldRows = ESOP_SOLD.map(s => {
+    const totalSold = s.tranches.reduce((a,t)=>a+t.shares,0);
+    const totalGain = s.tranches.reduce((a,t)=>a+t.gain,0);
+    const isPartial = s.shares_remaining > 0;
+    const statusBadge = isPartial
+      ? `<span class="badge bg-warning text-dark">Partial</span>`
+      : `<span class="badge bg-secondary">Sold</span>`;
+    // Main lot row
+    let rows = `<tr style="font-size:12px;background:#f9fafb;">
+      <td class="fw-semibold">${s.lot} ${s.label}</td>
+      <td class="text-muted">${s.allotment}</td>
+      <td class="text-end">${fmtN(totalSold)} <span class="text-muted">/ ${fmtN(s.shares_allotted)}</span></td>
+      <td class="text-end text-muted">₹${s.fmv.toFixed(2)}</td>
+      <td class="text-end text-muted">${fmt(s.shares_allotted * s.fmv)}</td>
+      <td class="text-center">${statusBadge}</td>
+      <td class="text-end text-success fw-semibold">${fmt(totalGain)}</td>
+      <td class="text-end">${fmt(Math.round(totalGain * LTCG_RATE))}</td>
+    </tr>`;
+    // Tranche sub-rows (show if >1 tranche or always for detail)
+    if (s.tranches.length > 1) {
+      rows += s.tranches.map(t => `<tr style="font-size:11px;background:#f3f4f6;color:#6b7280;">
+        <td class="ps-4 text-muted" colspan="2">↳ Sold ${t.date}</td>
+        <td class="text-end">${fmtN(t.shares)}</td>
+        <td class="text-end">@ ₹${t.price.toFixed(2)}</td>
+        <td class="text-end">${fmt(t.shares * t.price)}</td>
+        <td class="text-center"><span style="font-size:10px;color:#6b7280;">LTCG</span></td>
+        <td class="text-end" style="color:#16a34a;">${fmt(t.gain)}</td>
+        <td class="text-end">${fmt(Math.round(t.gain * LTCG_RATE))}</td>
+      </tr>`).join('');
+    } else {
+      // Single tranche — show sale date inline as sub-row
+      const t = s.tranches[0];
+      rows += `<tr style="font-size:11px;background:#f3f4f6;color:#6b7280;">
+        <td class="ps-4 text-muted" colspan="2">↳ Sold ${t.date}</td>
+        <td class="text-end">${fmtN(t.shares)}</td>
+        <td class="text-end">@ ₹${t.price.toFixed(2)}</td>
+        <td class="text-end">${fmt(t.shares * t.price)}</td>
+        <td class="text-center"><span style="font-size:10px;color:#6b7280;">LTCG</span></td>
+        <td class="text-end" style="color:#16a34a;">${fmt(t.gain)}</td>
+        <td class="text-end">${fmt(Math.round(t.gain * LTCG_RATE))}</td>
+      </tr>`;
+      if (isPartial) {
+        rows += `<tr style="font-size:11px;background:#f3f4f6;color:#6b7280;">
+          <td class="ps-4" colspan="2">↳ Remaining</td>
+          <td class="text-end fw-semibold" style="color:#374151;">${fmtN(s.shares_remaining)}</td>
+          <td colspan="5" class="text-muted">→ see Lot #4 below</td>
+        </tr>`;
+      }
+    }
+    return rows;
+  }).join('');
 
   const lot8 = ESOP_LOTS.find(l => l.lot === '#8');
   const lot8SaveHtml = `<div class="alert alert-warning border-0 mt-3" style="background:#fffbeb;">
@@ -1042,6 +1101,7 @@ function renderEsop() {
           </tr>
         </thead>
         <tbody>
+          <tr class="table-secondary"><td colspan="8" class="fw-semibold small py-1 ps-2">Sold Lots — Total LTCG ₹352.03L @ 14.95% = ₹52.63L tax</td></tr>
           ${soldRows}
           <tr class="table-secondary"><td colspan="8" class="fw-semibold small py-1 ps-2">Remaining Lots (as of Apr 1, 2026)</td></tr>
           ${lotRows}
