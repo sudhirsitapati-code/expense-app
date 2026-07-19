@@ -99,6 +99,7 @@ body { background:#f8f9fa; font-size:14px; }
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script>
 // ── DEFAULT TAX DATA ──────────────────────────────────────────────────────────
 const TAX_DEFAULTS = {
@@ -160,6 +161,194 @@ const TAX_DEFAULTS = {
     slab_rate:0.30, surcharge_rate:0.25, cess_rate:0.04,
   }
 };
+
+// ── Excel Export ──────────────────────────────────────────────────────────────
+function exportSheet(rows, filename, sheetName) {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  // auto column widths
+  const colW = rows[0].map((_, ci) => ({
+    wch: Math.min(60, Math.max(12, ...rows.map(r => String(r[ci]??'').length)))
+  }));
+  ws['!cols'] = colW;
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, filename);
+}
+
+function exportIncomeExcel() {
+  const fy = document.getElementById('taxFySelect').value;
+  const d = getD(fy);
+  const fmt = n => n == null ? '' : n;
+  const rows = [['Head', 'Source', 'Gross Amount (₹)', 'TDS (₹)', 'AIS Confirmed', 'Notes']];
+  d.income.forEach(i => rows.push([
+    i.head, i.source, fmt(i.gross), fmt(i.tds),
+    i.ais === true ? 'AIS ✓' : i.ais === false ? 'Est.' : '',
+    i.note || ''
+  ]));
+  rows.push([]);
+  rows.push(['TDS AT SOURCE', '', '', '', '', '']);
+  rows.push(['Source', 'Amount (₹)', 'Verified', 'Notes']);
+  d.tds_paid.forEach(t => rows.push([t.source, t.amount, t.verified ? 'Yes' : 'No', t.note || '']));
+  rows.push([]);
+  rows.push(['TAXES PAID / TCS / CHALLANS', '', '', '', '', '']);
+  rows.push(['Source', 'Amount (₹)', 'Verified', 'Notes']);
+  (d.taxes_paid || []).forEach(t => rows.push([t.source, t.amount, t.verified ? 'Yes' : 'No', t.note || '']));
+  exportSheet(rows, `Tax_Income_${fy}.xlsx`, 'Income Summary');
+}
+
+function exportDeductionsExcel() {
+  const fy = document.getElementById('taxFySelect').value;
+  const d = getD(fy);
+  const rows = [['Section', 'Deduction', 'Amount (₹)', 'New Regime?', 'Confirmed', 'Source', 'Notes']];
+  d.deductions.forEach(x => rows.push([
+    x.section, x.label, x.amount ?? 'Pending',
+    x.new_regime ? 'Yes' : 'No',
+    x.confirmed ? 'Yes' : 'No',
+    x.source || '', x.note || ''
+  ]));
+  exportSheet(rows, `Tax_Deductions_${fy}.xlsx`, 'Deductions');
+}
+
+function exportComputationExcel() {
+  const fy = document.getElementById('taxFySelect').value;
+  const d = getD(fy);
+  const isNew = d.regime === 'New Regime';
+  const allowedDedns = d.deductions.filter(x => isNew ? x.new_regime : (x.confirmed && x.amount));
+  const salaryItems = d.income.filter(i => i.head === 'Salaries');
+  const otherItems  = d.income.filter(i => i.head === 'Other Sources' && i.gross != null && i.gross !== 0);
+  const ltcgItems   = d.income.filter(i => i.head === 'Capital Gains' && i.source.includes('LTCG') && i.gross > 0);
+  const stcgItems   = d.income.filter(i => i.head === 'Capital Gains' && !i.source.includes('LTCG') && i.gross != null);
+  const salaryGross = salaryItems.reduce((s, i) => s + (i.gross || 0), 0);
+  const otherGross  = otherItems.reduce((s, i) => s + (i.gross || 0), 0);
+  const ltcgGross   = ltcgItems.reduce((s, i) => s + (i.gross || 0), 0);
+  const stcgGross   = stcgItems.reduce((s, i) => s + (i.gross || 0), 0);
+  const salaryDedn  = allowedDedns.filter(x => x.section === '16(ia)' || x.section === '80CCD(2)').reduce((s, x) => s + (x.amount || 0), 0);
+  const netSalary   = salaryGross - salaryDedn;
+  const regularInc  = netSalary + otherGross;
+  const ltcgTaxable = Math.max(0, ltcgGross - 125000);
+  const ltcgTax     = ltcgTaxable * 0.125 * 1.15 * 1.04;
+  const stcgTax     = Math.max(0, stcgGross) * 0.20 * 1.25 * 1.04;
+  function slabTax(inc) {
+    if (inc <= 300000) return 0;
+    if (inc <= 700000) return (inc - 300000) * 0.05;
+    if (inc <= 1000000) return 20000 + (inc - 700000) * 0.10;
+    if (inc <= 1200000) return 50000 + (inc - 1000000) * 0.15;
+    if (inc <= 1500000) return 80000 + (inc - 1200000) * 0.20;
+    return 140000 + (inc - 1500000) * 0.30;
+  }
+  const slabBase = slabTax(regularInc);
+  const slabTaxTotal = slabBase * 1.25 * 1.04;
+  const totalTax = slabTaxTotal + ltcgTax + stcgTax;
+  const tdsTotal = d.tds_paid.reduce((s, t) => s + t.amount, 0);
+  const taxesPaid = (d.taxes_paid || []).reduce((s, t) => s + t.amount, 0);
+  const balance = totalTax - tdsTotal - taxesPaid;
+
+  const rows = [['Line Item', 'Amount (₹)', 'Notes']];
+  rows.push(['A. SALARY INCOME', '', '']);
+  salaryItems.forEach(i => rows.push(['  ' + i.source, i.gross ?? '', '']));
+  rows.push(['  Gross Salary', salaryGross, '']);
+  allowedDedns.filter(x => x.section === '16(ia)' || x.section === '80CCD(2)').forEach(x =>
+    rows.push(['  Less: u/s ' + x.section + ' — ' + x.label, -x.amount, '']));
+  rows.push(['  Net Salary', netSalary, '']);
+  rows.push([]);
+  rows.push(['B. OTHER INCOME (SLAB RATE)', '', '']);
+  otherItems.forEach(i => rows.push(['  ' + i.source, i.gross ?? '', i.ais === false ? 'Estimated' : '']));
+  rows.push(['  Total Other Income', otherGross, '']);
+  rows.push(['Regular Taxable Income (A+B)', regularInc, '']);
+  rows.push([]);
+  rows.push(['C. LONG-TERM CAPITAL GAINS (u/s 112A)', '', '']);
+  ltcgItems.forEach(i => rows.push(['  ' + i.source.replace(/ — LTCG.*$/, ''), i.gross ?? '', '']));
+  rows.push(['  Gross LTCG', ltcgGross, '']);
+  rows.push(['  Less: Annual exemption', -125000, '']);
+  rows.push(['  Taxable LTCG', ltcgTaxable, '']);
+  rows.push([]);
+  if (stcgItems.length) {
+    rows.push(['D. SHORT-TERM CAPITAL GAINS', '', '']);
+    stcgItems.forEach(i => rows.push(['  ' + i.source.replace(/ — STCG.*/, ''), i.gross ?? '', i.gross < 0 ? 'Loss' : '']));
+    rows.push(['  Net STCG', stcgGross, '']);
+    rows.push([]);
+  }
+  rows.push(['TOTAL TAXABLE INCOME', regularInc + ltcgGross - 125000 + stcgGross, '']);
+  rows.push([]);
+  rows.push(['TAX CALCULATION', '', '']);
+  rows.push(['  Slab tax on regular income', Math.round(slabBase), '30% bracket']);
+  rows.push(['  Surcharge @25%', Math.round(slabBase * 0.25), '']);
+  rows.push(['  Cess @4%', Math.round(slabBase * 1.25 * 0.04), '']);
+  rows.push(['  Slab tax total', Math.round(slabTaxTotal), '']);
+  rows.push(['  LTCG tax @12.5% on ₹' + (ltcgTaxable / 100000).toFixed(2) + 'L', Math.round(ltcgTax), '14.95% eff.']);
+  rows.push(['  STCG tax (approx.)', Math.round(stcgTax), '20% + surcharge + cess']);
+  rows.push(['GROSS TAX PAYABLE', Math.round(totalTax), '']);
+  rows.push([]);
+  rows.push(['TDS / TAXES PAID', '', '']);
+  d.tds_paid.forEach(t => rows.push(['  ' + t.source, -t.amount, '']));
+  (d.taxes_paid || []).forEach(t => rows.push(['  ' + t.source, -t.amount, t.note || '']));
+  rows.push([balance > 0 ? 'BALANCE TAX PAYABLE' : 'ESTIMATED REFUND', Math.abs(Math.round(balance)), '']);
+  exportSheet(rows, `Tax_Computation_${fy}.xlsx`, 'Tax Computation');
+}
+
+function exportEsopExcel() {
+  const price = parseFloat(document.getElementById('esopPrice')?.value) || 0;
+  const today = new Date();
+  const rows = [['Lot', 'Allotment Date', 'Shares', 'FMV / Cost (₹)', 'Cost Basis (₹)', 'Status', 'Current Price (₹)', 'Gain / Loss (₹)', 'Est. Tax (₹)']];
+  ESOP_SOLD.forEach(s => rows.push([
+    s.label + ' (SOLD)', '', s.shares, '', Math.round(s.shares * s.price),
+    'LTCG ✓', s.price, s.gain, Math.round(s.gain * LTCG_RATE)
+  ]));
+  ESOP_LOTS.forEach(l => {
+    const daysHeld = Math.floor((today - new Date(l.allotment)) / 86400000);
+    const isLTCG = daysHeld >= 365;
+    const gain = (price - l.fmv) * l.shares;
+    const tax = gain > 0 ? Math.round(gain * (isLTCG ? LTCG_RATE : STCG_RATE)) : 0;
+    rows.push([
+      l.lot + ' ' + l.label, l.allotment, l.shares, l.fmv,
+      Math.round(l.shares * l.fmv),
+      isLTCG ? 'LTCG' : 'STCG',
+      price, Math.round(gain), tax
+    ]);
+  });
+  rows.push([]);
+  rows.push(['Total remaining shares', '', ESOP_LOTS.reduce((s, l) => s + l.shares, 0)]);
+  rows.push(['Current price used', '', price]);
+  exportSheet(rows, 'GCPL_ESOP_Holdings.xlsx', 'ESOP Holdings');
+}
+
+function exportChecklistExcel() {
+  const fy = document.getElementById('taxFySelect').value;
+  const d = getD(fy);
+  // re-build same docs array from renderChecklist
+  const docs = [
+    {name:"Form 16 — Part A & B", status:"done"},
+    {name:"Form 12BA (Perquisites)", status:"done"},
+    {name:"ICICI Demat Transactions FY26", status:"done"},
+    {name:"GCPL Capital Gains Statement (LTCG ₹352.01L)", status:"done"},
+    {name:"Solidarity PMS Capital Gains Statement (LTCG ₹58.35L)", status:"done"},
+    {name:"Latent PMF Capital Gains Statement (LTCG ₹3.37L)", status:"done"},
+    {name:"Home Loan IT Cert — C51 Original (₹15.1L FY26)", status:"done"},
+    {name:"Home Loan IT Cert — C34 TopUp (₹15.7L FY26)", status:"done"},
+    {name:"Home Loan IT Cert — C51 TopUp (₹20.2L FY26)", status:"done"},
+    {name:"StanChart SG Year-End Statement", status:"partial", note:"Need full FY income summary"},
+    {name:"LIC Premium Receipts", status:"done"},
+    {name:"AIS / TIS (IT Portal)", status:"done"},
+    {name:"Health Insurance Certificate", status:"missing"},
+    {name:"NPS Statement (personal contribution)", status:"missing"},
+    {name:"Rent Receipts (if HRA claim)", status:"missing"},
+  ];
+  const rows = [['Document', 'Status', 'Notes']];
+  docs.forEach(doc => rows.push([doc.name, doc.status.toUpperCase(), doc.note || '']));
+  rows.push([]);
+  rows.push(['ACTION ITEMS / ALERTS', '', '']);
+  rows.push(['Level', 'Alert']);
+  const alerts = [
+    {level:'CRITICAL', text:'Schedule FA mandatory — IBKR account U11622321 and StanChart Singapore must be declared as foreign assets.'},
+    {level:'CRITICAL', text:'GCPL dividend discrepancy: AIS ₹55.02L vs earlier estimate ₹99.43L — investigate before filing.'},
+    {level:'WARNING',  text:'₹38.43L TCS (Feb-2026 LRS) + ₹18.5K (Mar-2026) — ensure in Schedule IT when filing.'},
+    {level:'WARNING',  text:'EPF interest ₹8.93L taxable (AIS confirmed). TDS ₹89,344 deducted.'},
+    {level:'INFO',     text:'Solidarity confirmed: LTCG ₹58.35L + STCG net loss -₹4.58L.'},
+    {level:'INFO',     text:'GCPL ESOP LTCG ₹352.01L. Sales May-25 and Feb-26. Tax ~₹52.6L @14.95%.'},
+  ];
+  alerts.forEach(a => rows.push([a.level, a.text]));
+  exportSheet(rows, `Tax_Checklist_${fy}.xlsx`, 'Documents & Alerts');
+}
 
 // ── State — income stored in localStorage, rest from defaults ─────────────────
 function loadIncome(fy) {
@@ -381,6 +570,7 @@ function renderIncome(fy) {
       <div class="d-flex gap-2">
         <button id="ledgerImportBtn" class="btn btn-sm" style="font-size:11px;background:#2d4a7a;color:#fff;" onclick="importFromLedger()"><i class="bi bi-database-up me-1"></i>Import from Ledger</button>
         <button class="btn btn-sm btn-light" style="font-size:11px;" onclick="openAddIncome()"><i class="bi bi-plus-lg me-1"></i>Add Entry</button>
+        <button class="btn btn-sm" style="font-size:11px;background:#1d6f42;color:#fff;" onclick="exportIncomeExcel()"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
       </div>
     </div>
     <div style="overflow-x:auto;">
@@ -464,7 +654,10 @@ function renderDeductions(fy) {
     </div>
   </div>
   <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
-    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">Deductions — New Regime</div>
+    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center;">
+      <span>Deductions — New Regime</span>
+      <button class="btn btn-sm" style="font-size:11px;background:#1d6f42;color:#fff;" onclick="exportDeductionsExcel()"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+    </div>
     <table class="table table-sm table-hover mb-0" style="font-size:12.5px;">
       <thead class="table-light"><tr>
         <th class="ps-3">Section</th><th>Deduction</th><th>Note</th><th class="text-end pe-2">Amount</th><th class="text-center">Status</th>
@@ -593,8 +786,9 @@ function renderComputation(fy) {
     <i class="bi bi-info-circle me-1"></i><strong>New Regime.</strong> GCPL ESOP LTCG ₹352L + Solidarity LTCG ₹58.4L + Latent LTCG ₹3.4L all confirmed. StanChart/IBKR foreign gains estimated (₹84/USD). Latent debt STCG ₹3.1L taxed at slab rate, not 20% — computation below is approximate for that portion.
   </div>
   <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
-    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;">Tax Computation — FY 2025–26 (New Regime)
-      <span style="font-size:10px;font-weight:400;opacity:.7;margin-left:8px;">click + to expand any line</span>
+    <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center;">
+      <span>Tax Computation — FY 2025–26 (New Regime) <span style="font-size:10px;font-weight:400;opacity:.7;margin-left:8px;">click + to expand any line</span></span>
+      <button class="btn btn-sm" style="font-size:11px;background:#1d6f42;color:#fff;" onclick="exportComputationExcel()"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
     </div>
     <table class="table table-sm mb-0" style="font-size:12.5px;">
     <tbody>
@@ -721,7 +915,10 @@ function renderChecklist(fy) {
       <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
         <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center;">
           <span><i class="bi bi-folder2-open me-2"></i>Document Checklist</span>
-          <span style="font-size:11px;">${done} done · ${partial} partial · ${docs.length-done-partial} missing</span>
+          <div class="d-flex align-items-center gap-2">
+            <span style="font-size:11px;">${done} done · ${partial} partial · ${docs.length-done-partial} missing</span>
+            <button class="btn btn-sm" style="font-size:11px;background:#1d6f42;color:#fff;" onclick="exportChecklistExcel()"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+          </div>
         </div>
         <div style="padding:4px 0;">
           ${docs.map(doc => {
@@ -824,6 +1021,7 @@ function renderEsop() {
   <div class="p-3">
     <div class="d-flex align-items-center gap-3 mb-3">
       <h6 class="mb-0 fw-bold">GCPL ESOP Holdings — ${fmtN(ESOP_LOTS.reduce((s,l)=>s+l.shares,0))} shares remaining</h6>
+      <button class="btn btn-sm ms-auto" style="font-size:11px;background:#1d6f42;color:#fff;" onclick="exportEsopExcel()"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
       <div class="d-flex align-items-center gap-2 ms-auto">
         <label class="small text-muted mb-0">Current price ₹</label>
         <input type="number" id="esopPrice" value="1090" step="10" min="500" max="3000"
