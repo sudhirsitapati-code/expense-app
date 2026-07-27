@@ -1563,6 +1563,7 @@ def api_decide():
         if resp_upper == "Y":
             send_approval_result(entry["submitter"], entry["vendor"], entry["amount"], approved=True, request_id=request_id)
             sync_approved_to_history()
+            _sync_approvals_to_ledger()
         elif resp_upper == "N":
             send_approval_result(entry["submitter"], entry["vendor"], entry["amount"], approved=False, request_id=request_id)
         elif resp_upper == "Q" and query_text:
@@ -4796,6 +4797,7 @@ def _handle_sudhir_response(body: str):
     if command == "Y":
         send_approval_result(submitter, vendor, amount, approved=True, request_id=request_id)
         sync_approved_to_history()
+        _sync_approvals_to_ledger()
         return build_twiml_reply(f"✅ Approved. {submitter.title()} notified.\nRef: {request_id}")
     elif command == "N":
         send_approval_result(submitter, vendor, amount, approved=False, request_id=request_id)
@@ -4806,6 +4808,7 @@ def _handle_sudhir_response(body: str):
             send_approval_result(submitter, vendor, amount, approved=True,
                                  request_id=request_id, approved_amount=lower_amount)
             sync_approved_to_history()
+            _sync_approvals_to_ledger()
             return build_twiml_reply(f"✅ Approved at Rs {lower_amount:,.0f}.\nRef: {request_id}")
         except ValueError:
             return build_twiml_reply("Invalid amount. Use: L 5000")

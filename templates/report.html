@@ -94,6 +94,7 @@
 const INR = n => '₹' + Number(n||0).toLocaleString('en-IN');
 const L   = n => '₹' + (Number(n||0)/100000).toFixed(2) + 'L';
 const cap = s => (s||'').replace(/\b\w/g, c=>c.toUpperCase());
+const fmtDate = s => { if (!s) return '—'; let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[3]}-${m[2]}-${m[1]}`; m = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`; return s.slice(0,10); };
 
 // Populate month selector (last 12 months)
 function populateMonths() {
@@ -196,7 +197,7 @@ async function loadReport() {
                   : cf===false ? '<span class="confirm-no">❌</span>'
                   : '<span class="confirm-null">—</span>';
       html += `<tr>
-        <td class="ps-3 text-muted">${(e.timestamp||'').slice(0,10)}</td>
+        <td class="ps-3 text-muted">${fmtDate(e.timestamp||'')}</td>
         <td>${e.vendor||'—'}</td>
         <td><small>${e.description||'—'}</small></td>
         <td><small class="text-muted">${e.payment_method||'—'}</small></td>

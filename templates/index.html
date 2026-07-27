@@ -1362,7 +1362,7 @@ async function loadApprovals(selectedMonth) {
   const mb = document.getElementById('monthBody');
   mb.innerHTML = d.this_month.length
     ? d.this_month.map(e => `<tr>
-        <td>${(e.timestamp||'').slice(0,10)}</td>
+        <td>${fmtDate((e.timestamp||'').slice(0,10))}</td>
         <td>${e.submitter}</td><td>${e.vendor}</td><td>${e.category}</td>
         <td class="text-end">₹${Number(e.approved_amount||e.amount).toLocaleString('en-IN')}</td>
         <td><span class="badge ${e.action==='AUTO_APPROVE'?'bg-primary':e.action==='APPROVED'?'bg-success':'bg-warning text-dark'}">${e.action}</span></td>
@@ -1390,7 +1390,7 @@ async function loadApprovals(selectedMonth) {
   const tb = document.getElementById('trackerBody');
   tb.innerHTML = d.tracker.length
     ? d.tracker.map(e => `<tr>
-        <td>${(e.timestamp||'').slice(0,10)}</td><td>${e.vendor}</td>
+        <td>${fmtDate((e.timestamp||'').slice(0,10))}</td><td>${e.vendor}</td>
         <td class="text-end">₹${Number(e.approved_amount||e.amount).toLocaleString('en-IN')}</td>
         <td>${e.payment_method||'—'}</td>
         <td class="tracker-unpaid">⏳ Pending</td>
@@ -1552,17 +1552,17 @@ function fmtDate(s) {
   if (!s) return '—';
   // YYYY-MM-DD
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[3]}-${m[2]}-${m[1].slice(2)}`;
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
   // DD/MM/YYYY or DD-MM-YYYY
   m = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
-  if (m) return `${m[1]}-${m[2]}-${m[3].slice(2)}`;
-  // DD/MM/YY or DD-MM-YY
-  m = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{2})$/);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  // DD-MMM-YY (e.g. 01-Apr-26)
+  // DD/MM/YY or DD-MM-YY → expand to full year (assume 20xx)
+  m = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{2})$/);
+  if (m) return `${m[1]}-${m[2]}-20${m[3]}`;
+  // DD-MMM-YY (e.g. 01-Apr-26) → expand to full year
   const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
   m = s.match(/^(\d{2})-([A-Za-z]{3})-(\d{2,4})$/);
-  if (m) { const mo = months[m[2].toLowerCase()]; if (mo) return `${m[1]}-${mo}-${String(m[3]).slice(-2)}`; }
+  if (m) { const mo = months[m[2].toLowerCase()]; if (mo) return `${m[1]}-${mo}-${m[3].length===2?'20'+m[3]:m[3]}`; }
   return s;
 }
 

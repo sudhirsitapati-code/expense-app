@@ -208,7 +208,14 @@
 <script>
 const INR = n => '₹' + Number(n||0).toLocaleString('en-IN');
 const L   = n => '₹' + (Number(n||0)/100000).toFixed(2) + 'L';
-const fmtDate = ts => ts ? ts.slice(0,10) : '—';
+const fmtDate = ts => {
+  if (!ts) return '—';
+  let m = ts.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  m = ts.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return ts.slice(0,10);
+};
 const cap = s => (s||'').replace(/\b\w/g, c=>c.toUpperCase());
 
 // ─── SECTION A: PENDING APPROVALS ─────────────────────────────────────────────
