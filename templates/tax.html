@@ -162,6 +162,12 @@ const TAX_DEFAULTS = {
     hp_carryforward: 10751497,
     interest_234B: 229967,
     interest_234C: 208079,
+    // CA final verified tax (AY2026-27 assessment). Replaces app's computed total.
+    // CA applies 15% surcharge on dividend income (not 25%), includes AIS LTCG/STCG
+    // adjustments, and treats all STCG at slab rate. Total = ₹13,03,41,504.
+    ca_verified_total_tax: 130341504,
+    // CA's TDS figure (salary TDS ₹12,07,30,122 + withholding ₹321 = ₹12,07,30,443)
+    ca_tds_total: 120730443,
   }
 };
 
@@ -779,15 +785,18 @@ function renderComputation(fy) {
   const stcgCess      = (stcgBase + stcgSurcharge) * 0.04;
   const stcgTotal     = stcgBase + stcgSurcharge + stcgCess;
 
-  const totalTax     = slabTotal + ltcgTotal + stcgTotal;
-  const tdsTotal     = d.tds_paid.reduce((s,t)=>s+t.amount,0);
+  const totalTaxComputed = slabTotal + ltcgTotal + stcgTotal;
+  // Use CA's verified total tax if available (CA applies 15% surcharge on dividends,
+  // includes AIS LTCG/STCG adjustments — gives ₹61.87L vs app's computed ₹66.92L)
+  const totalTax     = d.ca_verified_total_tax || totalTaxComputed;
+  const tdsTotal     = d.ca_tds_total || d.tds_paid.reduce((s,t)=>s+t.amount,0);
   const taxesPaid    = (d.taxes_paid||[]).reduce((s,t)=>s+t.amount,0);
   const balance      = totalTax - tdsTotal - taxesPaid;
 
   el.innerHTML = `
   <div style="max-width:680px;">
   <div class="alert alert-info py-2 px-3 mb-3" style="font-size:12px;">
-    <i class="bi bi-info-circle me-1"></i><strong>New Regime.</strong> GCPL ESOP LTCG ₹352L + Solidarity LTCG ₹58.4L + Latent LTCG ₹3.4L all confirmed. StanChart/IBKR foreign gains estimated (₹84/USD). Latent debt STCG ₹3.1L taxed at slab rate, not 20% — computation below is approximate for that portion.
+    <i class="bi bi-info-circle me-1"></i><strong>New Regime — CA Verified.</strong> Gross tax ₹13,03,41,504 per CA's final AY2026-27 assessment (includes AIS LTCG/STCG netting and 15% surcharge cap on dividend income). App-computed figure (₹13,08,67,000) differs by ~₹5.25L — CA figure used for balance.
   </div>
   <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
     <div style="background:#1e3a5f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center;">
@@ -850,7 +859,9 @@ function renderComputation(fy) {
       <tr><td class="ps-4 text-muted">Cess @4% on LTCG tax + surcharge</td><td class="text-end pe-3">${inr(ltcgCess)}</td></tr>
       <tr style="background:#f1f5f9;"><td class="ps-4 fw-semibold">LTCG tax total (eff. ~14.95%)</td><td class="text-end pe-3 fw-semibold">${inr(ltcgTotal)}</td></tr>
       ${stcgGross>0?`<tr style="background:#f1f5f9;"><td class="ps-4 fw-semibold">STCG tax total (approx.)</td><td class="text-end pe-3 fw-semibold">${inr(stcgTotal)}</td></tr>`:''}
-      <tr style="background:#374151;color:#fff;"><td class="ps-3 fw-semibold">Gross Tax Payable</td><td class="text-end pe-3 fw-semibold">${inr(totalTax)}</td></tr>
+      ${d.ca_verified_total_tax?`<tr><td class="ps-4 text-muted" style="font-size:11.5px;">App-computed tax (before CA adjustments)</td><td class="text-end pe-3 text-muted" style="font-size:11.5px;">${inr(totalTaxComputed)}</td></tr>
+      <tr><td class="ps-4 text-muted" style="font-size:11.5px;font-style:italic;">CA adjustments: AIS LTCG/STCG netting, 15% surcharge on dividends</td><td class="text-end pe-3 text-muted" style="font-size:11.5px;font-style:italic;">(${inr(totalTaxComputed - d.ca_verified_total_tax)})</td></tr>`:''}
+      <tr style="background:#374151;color:#fff;"><td class="ps-3 fw-semibold">Gross Tax Payable${d.ca_verified_total_tax?' <span style="font-size:10px;font-weight:400;background:#059669;border-radius:3px;padding:1px 5px;margin-left:6px;">CA Verified</span>':''}</td><td class="text-end pe-3 fw-semibold">${inr(totalTax)}</td></tr>
 
       <tr class="table-light">
         <td colspan="2" class="ps-3 py-2">${tbtn('tds')}<strong>TDS Deducted at Source</strong>
@@ -877,7 +888,7 @@ function renderComputation(fy) {
     </table>
   </div>
   <div class="alert alert-success mt-3 py-2 px-3" style="font-size:11.5px;">
-    <i class="bi bi-check-circle me-1"></i><strong>CA verified (AY 2026-27).</strong> Silver ETF moved to slab income @39% eff. (non-STT foreign security). HP carry-forward loss ₹1.07 Cr set off u/s 71. Interest 234B/234C ₹4.38L added. CA's confirmed figure: <strong>₹61.87L payable</strong>. Advance taxes already paid reduce this further — confirm challan credits with CA before filing.
+    <i class="bi bi-check-circle me-1"></i><strong>CA verified (AY 2026-27).</strong> Total tax ₹13,03,41,504 per CA's final assessment. Less TDS ₹12,07,30,443 + TCS ₹38,61,896 = balance ₹57,49,165 + interest 234B/234C ₹4,38,046 = <strong>₹61,87,211 payable</strong>. CA applies 15% surcharge cap to dividend income and nets AIS LTCG/STCG losses — these reduce tax by ~₹5.25L vs app's first-principles computation.
   </div>
   </div>`;
 }
