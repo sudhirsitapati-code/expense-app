@@ -119,7 +119,7 @@ const TAX_DEFAULTS = {
       // ── OTHER SOURCES — ESTIMATED (NOT YET IN AIS) ───────────────────────────
       {head:"Other Sources", source:"SGB Interest (est.)",         gross:248430,    tds:24843,  note:"Est. 2.5% p.a. on 2,100 GOI Sovereign Gold Bonds. Not confirmed in AIS — verify when AIS is complete or with RBI.", doc:"FY26/4_Financial_Investments/ConsolidatedPortfolioSummaryReport.pdf", ais:false},
       {head:"Other Sources", source:"StanChart SGD/USD Interest",  gross:7829,      tds:0,      note:"Est. USD 93.21 × ₹84. StanChart Singapore a/c 6007 interest. Foreign income — not reportable by Indian banks in AIS. Declare under Schedule FA.", doc:"FY26/tax/Standard Chartered SG Full Year statement.pdf", ais:false},
-      {head:"Other Sources", source:"IBKR — Foreign Dividends (USD 2,714)",        gross:227957,    tds:0,      note:"Est. USD 2,713.77 × ₹84 = ₹2.28L. Dividends received on IBKR account U11622321 (Marcellus basket). Withholding tax USD 3.42 paid. Declare under Schedule FA / FSI.", ais:false, doc:"FY26/tax/ibkr_marcellu_annual_gain_loss_report-fy2025-26.pdf"},
+      {head:"Other Sources", source:"IBKR — Foreign Dividends (USD 2,714)",        gross:0,         tds:0,      note:"SUPERSEDED — replaced by CA-confirmed IBKR entry below (₹2,45,737 @ ₹94.65/USD). Set to zero to avoid double-count.", ais:false, doc:"FY26/tax/ibkr_marcellu_annual_gain_loss_report-fy2025-26.pdf"},
       {head:"Other Sources", source:"StanChart SG — Foreign Dividends (USD 462)",  gross:38827,     tds:0,      note:"Est. USD 462.23 × ₹84 = ₹38,827 (GDX dividend). Foreign income — Schedule FA / FSI mandatory.", ais:false, doc:"FY26/tax/Standard Chartered SG Full Year statement.pdf"},
       {head:"Capital Gains", source:"GCPL ESOP Sales — LTCG",       gross:35201000,  tds:0,      note:"Source: ESGS Data Movement + Perquisite Tax Details. FIFO across 9 lots. May-16-2025: 64,659 shares @ ₹1,289 — Lot#1 Nov-2022 (60,364 @ FMV ₹815.45, gain ₹285.81L) + Lot#2 Apr-2023 (4,295 @ FMV ₹962.38, gain ₹14.03L) = ₹299.84L. Feb-17-2026: 27,000 shares @ ₹1,215 — Lot#2 rem. (1,333 @ ₹962, gain ₹3.37L) + Lot#3a Aug-2023 (4,598 @ ₹1,035, gain ₹8.29L) + Lot#3b Aug-2023 (12,017 @ ₹1,062, gain ₹18.39L) + Lot#4 Oct-2023 (9,052 @ ₹970, gain ₹22.14L) = ₹52.18L. TOTAL LTCG ₹352.01L (~₹3.52 Cr). Tax @14.95% eff. = ₹52.4L. NB: ESOP perquisite (₹19.19 Cr) separately taxed as salary — already captured above.", doc:"FY26/4_Financial_Investments/Sudhir Sitapati_ESGS Data.xlsx"},
       {head:"Capital Gains", source:"Solidarity PMS — LTCG (listed equity, STT paid)", gross:5835100, tds:0, note:"Confirmed from Solidarity capital gains statement FY26. LTCG ₹58,35,099.79 on listed equity (STT paid, held >1 yr). Tax @14.95% eff. = ₹8.72L. Statement doc available.", doc:"FY26/tax/solidarity CAPITAL GAINS STATEMENT_MR SUDHIR SITAPATI.pdf"},
@@ -705,7 +705,7 @@ function renderComputation(fy) {
   const cgGross      = ltcgGross + stcgGross;
   const salaryDedn   = allowedDedns.filter(x=>x.section==='16(ia)'||x.section==='80CCD(2)').reduce((s,x)=>s+(x.amount||0),0);
   const hpLoss       = d.hp_carryforward || 0;
-  const netSalary    = salaryGross - salaryDedn - hpLoss;
+  const netSalary    = salaryGross - salaryDedn;
   const regularIncome= netSalary + otherGross;
   const totalTaxable = regularIncome + cgGross;
 
@@ -808,8 +808,8 @@ function renderComputation(fy) {
       </tr>
       ${dednSub}
       ${hpLoss?`<tr>
-        <td class="ps-3 text-muted" style="font-size:12px;">Less: B/F House Property losses (AY18-19 + AY19-20 + AY20-21) set off u/s 71</td>
-        <td class="text-end pe-3 text-success" style="font-size:12px;">(${inr(hpLoss)})</td>
+        <td class="ps-3 text-muted" style="font-size:11.5px;font-style:italic;">ℹ B/F House Property losses AY18-19+19-20+20-21: ₹${(hpLoss/100000).toFixed(2)}L — <em>cannot set off against salary u/s 71B; only offsets future HP income. Carry-forward continues.</em></td>
+        <td class="text-end pe-3 text-muted" style="font-size:11.5px;">—</td>
       </tr>`:''}
       <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Net Salary</td><td class="text-end pe-3 fw-semibold">${inr(netSalary)}</td></tr>
 
