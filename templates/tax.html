@@ -128,8 +128,8 @@ const TAX_DEFAULTS = {
       {head:"Capital Gains", source:"Latent PMF — STCG (listed equity 111A @20%)", gross:148120, tds:0, note:"STCG ₹1,48,119.51 on listed equity (STT paid). Taxed @20% u/s 111A.", doc:"FY26/tax/Latent Capital Gains Statement FY 25-26 Sudhir Sitapati.pdf"},
       {head:"Capital Gains", source:"Latent PMF — STCG (debt MF / Gold ETF, slab rate)", gross:307747, tds:0, note:"STCG ₹3,07,747.27 (debt MF ₹2,97,812 + gold ETF ₹9,935). Taxed at slab rate, NOT @20% u/s 111A — no STT paid. Slab tax ~₹1.20L.", doc:"FY26/tax/Latent Capital Gains Statement FY 25-26 Sudhir Sitapati.pdf"},
       {head:"Capital Gains", source:"PPFAS Flexi Cap",              gross:0,         tds:0,      note:"No redemptions in FY26. Purchased ₹1.5Cr on Jun 5 2024, held through Mar 2026 (value ₹1.64Cr). XIRR 6.5%."},
-      {head:"Capital Gains", source:"StanChart SG — Foreign STCG (Silver ETF SLV)", gross:3711624, tds:0, note:"Est. USD 44,186.43 realised gains on SLV silver ETF × ₹84 = ₹37.1L. Foreign capital gains — Schedule FA obligation. DTAA Singapore-India may apply; declare in Schedule FSI.", ais:false, doc:"FY26/tax/Standard Chartered SG Full Year statement.pdf"},
-      {head:"Capital Gains", source:"IBKR Marcellus — Foreign CG (Schedule FA)", gross:179256, tds:0, note:"Est. USD 2,133.92 realised gains (STCG USD 1,266, LTCG USD 868) × ₹84 = ₹1.79L. Foreign gains from IBKR account U11622321. Schedule FA + FSI mandatory.", ais:false, doc:"FY26/tax/ibkr_marcellu_annual_gain_loss_report-fy2025-26.pdf"},
+      {head:"Other Sources", source:"StanChart SG — Silver ETF SLV (slab rate, non-STT)", gross:4179613, tds:0, note:"CA confirmed: INR 67,33,993 sale − INR 25,54,380 cost = ₹41,79,613 gain. iShares SLV is a foreign security — no STT paid — taxed at SLAB RATE (30%+surcharge+cess), NOT @20% u/s 111A. Moved from STCG to slab income per CA computation. Schedule FA + FSI mandatory.", ais:false, doc:"FY26/tax/Standard Chartered SG Full Year statement.pdf"},
+      {head:"Other Sources", source:"IBKR — Foreign income (div USD 462 + gain USD 2,134)", gross:245737, tds:0, note:"CA confirmed @₹94.65/USD: dividend USD 462.23 = ₹43,752 + profit USD 2,133.92 = ₹2,01,985 = ₹2,45,737. Taxed at slab rate. Schedule FA + FSI mandatory. (Previously estimated at ₹84/USD = ₹2.28L)", ais:false, doc:"FY26/tax/ibkr_marcellu_annual_gain_loss_report-fy2025-26.pdf"},
       {head:"House Property",source:"C34 / C51 — Self-Occupied",    gross:0,         tds:0,      note:"Both flats self-occupied. Nil income under House Property head. No notional rent applicable (two self-occupied properties allowed under new regime)."},
     ],
     deductions: [
@@ -159,6 +159,9 @@ const TAX_DEFAULTS = {
       {source:"ITD Refund AY2024-25 (₹890)", amount:-890, verified:true, note:"AIS Part B4: ECS refund ₹890 for FY 2024-25, paid 04-Oct-2025. Informational — does not offset FY26 liability."},
     ],
     slab_rate:0.30, surcharge_rate:0.25, cess_rate:0.04,
+    hp_carryforward: 10751497,
+    interest_234B: 229967,
+    interest_234C: 208079,
   }
 };
 
@@ -701,7 +704,8 @@ function renderComputation(fy) {
   const stcgGross    = stcgItems.reduce((s,i)=>s+(i.gross||0),0);
   const cgGross      = ltcgGross + stcgGross;
   const salaryDedn   = allowedDedns.filter(x=>x.section==='16(ia)'||x.section==='80CCD(2)').reduce((s,x)=>s+(x.amount||0),0);
-  const netSalary    = salaryGross - salaryDedn;
+  const hpLoss       = d.hp_carryforward || 0;
+  const netSalary    = salaryGross - salaryDedn - hpLoss;
   const regularIncome= netSalary + otherGross;
   const totalTaxable = regularIncome + cgGross;
 
@@ -803,6 +807,10 @@ function renderComputation(fy) {
         <td class="text-end pe-3 text-success">(${inr(salaryDedn)})</td>
       </tr>
       ${dednSub}
+      ${hpLoss?`<tr>
+        <td class="ps-3 text-muted" style="font-size:12px;">Less: B/F House Property losses (AY18-19 + AY19-20 + AY20-21) set off u/s 71</td>
+        <td class="text-end pe-3 text-success" style="font-size:12px;">(${inr(hpLoss)})</td>
+      </tr>`:''}
       <tr style="background:#e8f0fe;"><td class="ps-4 fw-semibold">Net Salary</td><td class="text-end pe-3 fw-semibold">${inr(netSalary)}</td></tr>
 
       <tr class="table-light"><td colspan="2" class="ps-3 fw-semibold py-2">B. Other Income (taxed at slab)</td></tr>
@@ -856,15 +864,20 @@ function renderComputation(fy) {
       </tr>
       ${taxPaidSub}
 
-      <tr style="background:${balance>0?'#fef2f2':'#f0faf4'};border-top:2px solid ${balance>0?'#fca5a5':'#86efac'};">
-        <td class="ps-3 fw-bold">${balance>0?'Balance Tax Payable':'Estimated Refund'}</td>
-        <td class="text-end pe-3 fw-bold" style="color:${balance>0?'#991b1b':'#166534'};">${inr(Math.abs(balance))}</td>
+      ${(d.interest_234B||d.interest_234C)?`
+      <tr class="table-light"><td colspan="2" class="ps-3 py-2"><strong>Interest on Advance Tax Shortfall</strong></td></tr>
+      ${d.interest_234B?`<tr><td class="ps-4 text-muted" style="font-size:12px;">Interest u/s 234B (shortfall in advance tax)</td><td class="text-end pe-3" style="font-size:12px;">${inr(d.interest_234B)}</td></tr>`:''}
+      ${d.interest_234C?`<tr><td class="ps-4 text-muted" style="font-size:12px;">Interest u/s 234C (deferment of advance tax)</td><td class="text-end pe-3" style="font-size:12px;">${inr(d.interest_234C)}</td></tr>`:''}
+      `:''}
+      <tr style="background:${(balance+(d.interest_234B||0)+(d.interest_234C||0))>0?'#fef2f2':'#f0faf4'};border-top:2px solid ${(balance+(d.interest_234B||0)+(d.interest_234C||0))>0?'#fca5a5':'#86efac'};">
+        <td class="ps-3 fw-bold">${(balance+(d.interest_234B||0)+(d.interest_234C||0))>0?'Total Tax Payable (incl. interest)':'Estimated Refund'}</td>
+        <td class="text-end pe-3 fw-bold" style="color:${(balance+(d.interest_234B||0)+(d.interest_234C||0))>0?'#991b1b':'#166534'};">${inr(Math.abs(balance+(d.interest_234B||0)+(d.interest_234C||0)))}</td>
       </tr>
     </tbody>
     </table>
   </div>
-  <div class="alert alert-warning mt-3 py-2 px-3" style="font-size:11.5px;">
-    <i class="bi bi-exclamation-triangle me-1"></i><strong>Note:</strong> Latent debt MF STCG ₹3.08L is taxable at slab rate (not @20% u/s 111A) — computation above overstates tax for that portion. StanChart/IBKR foreign gains ₹38.9L are estimated @₹84/USD and shown as STCG — actual treatment depends on DTAA and Schedule FSI filing. Verify with CA before filing.
+  <div class="alert alert-success mt-3 py-2 px-3" style="font-size:11.5px;">
+    <i class="bi bi-check-circle me-1"></i><strong>CA verified (AY 2026-27).</strong> Silver ETF moved to slab income @39% eff. (non-STT foreign security). HP carry-forward loss ₹1.07 Cr set off u/s 71. Interest 234B/234C ₹4.38L added. CA's confirmed figure: <strong>₹61.87L payable</strong>. Advance taxes already paid reduce this further — confirm challan credits with CA before filing.
   </div>
   </div>`;
 }
