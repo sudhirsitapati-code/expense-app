@@ -2372,6 +2372,64 @@ def api_ledger_update(txn_id):
     return jsonify({"status": "ok"}) if ok else (jsonify({"error": "not found"}), 404)
 
 
+@app.route("/api/admin/bulk-add-transactions", methods=["POST"])
+@login_required
+def api_bulk_add_transactions():
+    """
+    Bulk-add manually-sourced transactions to master ledger.
+    Body: {"transactions": [{date, account, paid_to, debit, credit, heading, type, description, source}]}
+    Skips duplicates by txn_id. Returns count added.
+    """
+    import hashlib
+    data = request.get_json() or {}
+    incoming = data.get("transactions", [])
+    if not incoming:
+        return jsonify({"error": "no transactions provided"}), 400
+
+    ledger = db.load("master_ledger") or []
+    existing_ids = {t.get("txn_id") for t in ledger}
+    max_seq = max((t.get("seq") or 0 for t in ledger), default=0)
+    added = 0
+
+    for t in incoming:
+        raw = f"{t.get('date')}|{t.get('paid_to')}|{t.get('debit',0):.2f}|{t.get('account','')}"
+        txn_id = "manual_" + hashlib.sha1(raw.encode()).hexdigest()[:10]
+        if txn_id in existing_ids:
+            continue
+        max_seq += 1
+        debit  = float(t.get("debit") or 0)
+        credit = float(t.get("credit") or 0)
+        entry = {
+            "txn_id":            txn_id,
+            "seq":               max_seq,
+            "date":              t.get("date", ""),
+            "account":           t.get("account", ""),
+            "bank":              t.get("bank", ""),
+            "type":              t.get("type", "expense"),
+            "heading":           t.get("heading", "Misc"),
+            "paid_to":           t.get("paid_to", ""),
+            "debit":             debit,
+            "credit":            credit,
+            "amount":            debit or credit,
+            "transaction_details": t.get("description", ""),
+            "raw_description":   t.get("description", ""),
+            "remarks":           t.get("remarks", ""),
+            "source":            t.get("source", "manual_import"),
+            "confidence":        "manual",
+            "uncertain":         False,
+            "uncertain_fields":  [],
+        }
+        ledger.append(entry)
+        existing_ids.add(txn_id)
+        added += 1
+
+    if added:
+        ledger.sort(key=lambda x: x.get("date", ""), reverse=True)
+        db.save("master_ledger", ledger)
+
+    return jsonify({"added": added, "skipped": len(incoming) - added})
+
+
 @app.route("/api/admin/set-sbi-password", methods=["GET"])
 @login_required
 def api_set_sbi_password():
