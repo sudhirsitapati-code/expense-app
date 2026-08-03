@@ -21,7 +21,7 @@ from src.icici_classifier import classify_transactions
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
-ICICI_LABEL = os.getenv("ICICI_GMAIL_LABEL", "ICICI-Expenses")
+ICICI_LABEL = os.getenv("ICICI_GMAIL_LABEL", "Finance-Docs/ICICI-Expenses")
 # Try both cases — summary statements use SUDH3108, e-statements use sudh3108
 _PDF_PASSWORD_PRIMARY = os.getenv("ICICI_PDF_PASSWORD", "SUDH3108")
 _PDF_PASSWORDS = [_PDF_PASSWORD_PRIMARY, _PDF_PASSWORD_PRIMARY.lower(), _PDF_PASSWORD_PRIMARY.upper()]
@@ -603,7 +603,9 @@ def fetch_and_parse_statements(force_reprocess: bool = False) -> dict:
     statements_processed = 0
 
     # Search by ICICI sender OR the ICICI label (catches forwarded emails from personal Gmail)
-    label_query = f"label:{ICICI_LABEL.lower().replace(' ', '-')}"
+    # Gmail label query: nested labels like "Finance-Docs/ICICI-Expenses" need
+    # slashes replaced with "/" and spaces with "-" in label: queries.
+    label_query = f"label:{ICICI_LABEL.lower().replace(' ', '-').replace('/', '-')}"
     messages_result = service.users().messages().list(
         userId="me",
         q=f"(from:customernotification@icici.bank.in OR from:alert@icici.bank.in "
