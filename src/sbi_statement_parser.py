@@ -18,7 +18,7 @@ from googleapiclient.discovery import build
 from src.gmail_utils import get_credentials
 from src import db as _db
 
-SBI_LABEL = os.getenv("SBI_GMAIL_LABEL", "SBI-Expenses")
+SBI_LABEL = os.getenv("SBI_GMAIL_LABEL", "Finance-Docs/SBI-Expenses")
 _SBI_PDF_PASSWORD = os.getenv("SBI_PDF_PASSWORD", "")
 
 
@@ -550,7 +550,7 @@ def fetch_and_parse_sbi_statements(force_reprocess: bool = False) -> dict:
     new_count = 0
     statements_processed = 0
 
-    label_query = f"label:{SBI_LABEL.lower().replace(' ', '-')}"
+    label_query = f"label:{SBI_LABEL.lower().replace(' ', '-').replace('/', '-')}"
     messages_result = service.users().messages().list(
         userId="me",
         q=f"(from:alerts@sbi.co.in OR from:sbialerts@sbi.co.in OR from:noreply@onlinesbi.com "
