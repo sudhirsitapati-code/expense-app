@@ -2754,6 +2754,69 @@ def api_merge_approval_to_sbi():
     return jsonify(result)
 
 
+@app.route("/api/admin/sbi-reconcile-report", methods=["GET"])
+@login_required
+def api_sbi_reconcile_report():
+    """
+    For a given month (default July 2026), list:
+    1. SBI-4852prov entries with no matching SBI statement entry
+    2. SBI statement entries with no matching prov entry
+    Query param: month=07/2026 (default), account=4852
+    """
+    from src.master_ledger import _parse_date as _pd
+    month_str = request.args.get("month", "07/2026")
+    try:
+        m, y = int(month_str[:2]), int(month_str[3:])
+    except Exception:
+        return jsonify({"error": "Use ?month=MM/YYYY"}), 400
+
+    ledger = load_ledger()
+
+    prov_entries = [
+        t for t in ledger
+        if "4852prov" in (t.get("account") or "").lower()
+        and float(t.get("debit") or 0) > 0
+        and (lambda d: d and d.month == m and d.year == y)(_pd(t.get("date", "")))
+    ]
+    stmt_entries = [
+        t for t in ledger
+        if "4852" in (t.get("account") or "")
+        and "prov" not in (t.get("account") or "").lower()
+        and t.get("source") != "approval_log"
+        and float(t.get("debit") or 0) > 0
+        and (lambda d: d and d.month == m and d.year == y)(_pd(t.get("date", "")))
+    ]
+
+    # Find prov entries already merged (have merged_from_approval on a stmt entry)
+    merged_prov_ids = {t.get("merged_from_approval") for t in stmt_entries if t.get("merged_from_approval")}
+    merged_stmt_ids = {t.get("txn_id") for t in stmt_entries if t.get("merged_from_approval")}
+
+    unmatched_prov = [
+        {"date": t["date"], "paid_to": t.get("paid_to") or t.get("vendor") or "?",
+         "amount": float(t.get("debit") or 0), "txn_id": t.get("txn_id"),
+         "description": t.get("transaction_details") or t.get("description") or ""}
+        for t in prov_entries if t.get("txn_id") not in merged_prov_ids
+    ]
+    unmatched_stmt = [
+        {"date": t["date"], "paid_to": t.get("paid_to") or "?",
+         "amount": float(t.get("debit") or 0), "txn_id": t.get("txn_id"),
+         "description": t.get("transaction_details") or t.get("description") or ""}
+        for t in stmt_entries if t.get("txn_id") not in merged_stmt_ids
+    ]
+
+    unmatched_prov.sort(key=lambda x: x["date"])
+    unmatched_stmt.sort(key=lambda x: x["date"])
+
+    return jsonify({
+        "month": month_str,
+        "prov_total": len(prov_entries),
+        "stmt_total": len(stmt_entries),
+        "unmatched_prov": unmatched_prov,       # prov with no SBI statement match
+        "unmatched_stmt": unmatched_stmt,         # SBI statement debit with no prov
+        "matched_count": len(merged_prov_ids),
+    })
+
+
 @app.route("/api/admin/bulk-holiday-7009", methods=["GET"])
 @login_required
 def api_bulk_holiday_7009():
