@@ -2347,16 +2347,57 @@ def api_debug_mis_actuals():
 @app.route("/api/ledger/<txn_id>", methods=["DELETE"])
 @login_required
 def api_ledger_delete(txn_id):
-    """Delete an SBI entry from the master ledger."""
+    """Delete any uncertain entry from the master ledger."""
     ledger = db.load("master_ledger") or []
     entry = next((t for t in ledger if t.get("txn_id") == txn_id), None)
     if not entry:
         return jsonify({"error": "not found"}), 404
-    if not (entry.get("account") or "").upper().startswith("SBI"):
-        return jsonify({"error": "only SBI entries can be deleted"}), 403
     ledger = [t for t in ledger if t.get("txn_id") != txn_id]
     db.save("master_ledger", ledger)
     return jsonify({"ok": True})
+
+
+@app.route("/api/ledger/merge", methods=["POST"])
+@login_required
+def api_ledger_merge():
+    """
+    Merge two uncertain entries into one. The 'keep' entry absorbs the
+    description/vendor from the 'drop' entry, is marked certain, and
+    the 'drop' entry is deleted.
+    Body: { keep_id: str, drop_id: str }
+    """
+    data    = request.get_json() or {}
+    keep_id = data.get("keep_id")
+    drop_id = data.get("drop_id")
+    if not keep_id or not drop_id or keep_id == drop_id:
+        return jsonify({"error": "provide keep_id and drop_id (must differ)"}), 400
+
+    ledger = db.load("master_ledger") or []
+    keep = next((t for t in ledger if t.get("txn_id") == keep_id), None)
+    drop = next((t for t in ledger if t.get("txn_id") == drop_id), None)
+    if not keep:
+        return jsonify({"error": f"keep entry {keep_id} not found"}), 404
+    if not drop:
+        return jsonify({"error": f"drop entry {drop_id} not found"}), 404
+
+    # Absorb useful fields from the dropped entry into the kept one
+    if not keep.get("paid_to") and drop.get("paid_to"):
+        keep["paid_to"] = drop["paid_to"]
+    if not keep.get("heading") and drop.get("heading"):
+        keep["heading"] = drop["heading"]
+    if not keep.get("type") and drop.get("type"):
+        keep["type"] = drop["type"]
+    merged_note = f"Merged with {drop.get('date','')} {drop.get('paid_to','?')} ₹{drop.get('debit') or drop.get('credit','?')}"
+    keep["remarks"] = ((keep.get("remarks") or "") + " | " + merged_note).strip(" |")
+    keep["uncertain"]       = False
+    keep["uncertain_fields"] = []
+    keep["confidence"]      = "merged"
+    keep["merged_drop_id"]  = drop_id
+
+    # Remove the dropped entry
+    ledger = [t for t in ledger if t.get("txn_id") != drop_id]
+    db.save("master_ledger", ledger)
+    return jsonify({"ok": True, "kept": keep_id, "dropped": drop_id})
 
 
 @app.route("/api/master-ledger/<txn_id>", methods=["PATCH"])

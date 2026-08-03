@@ -1717,9 +1717,50 @@ function renderNotSure(txns) {
       <td><select class="inline-sel" id="nst-${t.txn_id}" onclick="event.stopPropagation()" onchange="refreshHeadings('${t.txn_id}',this.value)">${typeOpts}</select></td>
       <td><select class="inline-sel" id="nsh-${t.txn_id}" onclick="event.stopPropagation()">${headOpts}</select></td>
       <td><input class="inline-inp" placeholder="Notes…" id="nsr-${t.txn_id}" value="${t.remarks||''}" onclick="event.stopPropagation()"></td>
-      <td><button class="btn btn-sm btn-primary py-0" onclick="event.stopPropagation();saveNotSure('${t.txn_id}')">💾</button></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm btn-primary py-0 me-1" onclick="event.stopPropagation();saveNotSure('${t.txn_id}')" title="Save">💾</button>
+        <button class="btn btn-sm btn-danger py-0 me-1" onclick="event.stopPropagation();deleteNotSure('${t.txn_id}')" title="Delete">🗑</button>
+        <input class="inline-inp" id="nsm-${t.txn_id}" placeholder="Merge #…" style="width:70px;display:inline-block" onclick="event.stopPropagation()" title="Enter seq number of entry to merge with">
+        <button class="btn btn-sm btn-warning py-0" onclick="event.stopPropagation();mergeNotSure('${t.txn_id}')" title="Merge with entry">🔗</button>
+      </td>
     </tr>`;
   }).join('');
+}
+
+async function deleteNotSure(txnId) {
+  if (!confirm('Delete this entry permanently?')) return;
+  const r = await fetch('/api/ledger/' + txnId, { method: 'DELETE' });
+  if (!r.ok) { alert('Delete failed: ' + (await r.json()).error); return; }
+  document.getElementById('ns-' + txnId)?.remove();
+  const cnt = document.getElementById('notSureBadge');
+  if (cnt) cnt.textContent = Math.max(0, parseInt(cnt.textContent || '0') - 1);
+}
+
+async function mergeNotSure(keepId) {
+  const targetSeq = document.getElementById('nsm-' + keepId)?.value?.trim();
+  if (!targetSeq) { alert('Enter the entry number to merge with.'); return; }
+  // Find the txn_id for the entered seq number
+  const allRows = [...document.querySelectorAll('#notSureBody tr[id^="ns-"]')];
+  let dropId = null;
+  for (const row of allRows) {
+    const seqCell = row.cells[0];
+    if (seqCell && seqCell.textContent.trim() === targetSeq) {
+      dropId = row.id.replace('ns-', '');
+      break;
+    }
+  }
+  if (!dropId) { alert('Entry #' + targetSeq + ' not found in the Not Sure list.'); return; }
+  if (!confirm(`Merge #${targetSeq} into this entry? The other entry will be deleted.`)) return;
+  const r = await fetch('/api/ledger/merge', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keep_id: keepId, drop_id: dropId })
+  });
+  const res = await r.json();
+  if (!r.ok) { alert('Merge failed: ' + res.error); return; }
+  document.getElementById('ns-' + keepId)?.remove();
+  document.getElementById('ns-' + dropId)?.remove();
+  const cnt = document.getElementById('notSureBadge');
+  if (cnt) cnt.textContent = Math.max(0, parseInt(cnt.textContent || '0') - 2);
 }
 
 async function saveNotSure(txnId) {
