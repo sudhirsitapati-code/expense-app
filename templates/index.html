@@ -1629,8 +1629,27 @@ async function deleteLedgerEntry(txnId, label) {
     window._ledgerAll = (window._ledgerAll||[]).filter(t => t.txn_id !== txnId);
     renderLedger(sortedLedger(window._ledgerAll));
   } else {
-    alert('Delete failed');
+    alert('Delete failed: ' + ((await r.json()).error || ''));
   }
+}
+
+async function mergeLedgerEntry(keepId, keepLabel) {
+  const targetSeq = prompt(`Merge "${keepLabel}" into another entry.\n\nEnter the # (seq number) of the entry to drop/absorb:`);
+  if (!targetSeq) return;
+  const dropEntry = (window._ledgerAll || []).find(t => String(t.seq) === String(targetSeq.trim()));
+  if (!dropEntry) { alert('Entry #' + targetSeq + ' not found.'); return; }
+  if (!confirm(`Merge:\n  KEEP: #${(window._ledgerAll||[]).find(t=>t.txn_id===keepId)?.seq} ${keepLabel}\n  DROP: #${dropEntry.seq} ${dropEntry.paid_to||dropEntry.raw_description||''} ₹${dropEntry.debit||dropEntry.credit||0}\n\nThe dropped entry will be deleted.`)) return;
+  const r = await fetch('/api/ledger/merge', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({keep_id: keepId, drop_id: dropEntry.txn_id})
+  });
+  const res = await r.json();
+  if (!r.ok) { alert('Merge failed: ' + res.error); return; }
+  window._ledgerAll = (window._ledgerAll||[]).filter(t => t.txn_id !== dropEntry.txn_id);
+  // Update the kept entry in local cache
+  const kept = window._ledgerAll.find(t => t.txn_id === keepId);
+  if (kept) { kept.uncertain = false; kept.confidence = 'merged'; }
+  renderLedger(sortedLedger(window._ledgerAll));
 }
 
 function renderLedger(txns) {
@@ -1651,9 +1670,12 @@ function renderLedger(txns) {
       : '';
     const txnJ = encodeURIComponent(JSON.stringify(t));
     const serial = t.seq || (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || '—';
-    const isSBI = (t.account||'').toUpperCase().startsWith('SBI');
-    const delBtn = isSBI ? `<button onclick="event.stopPropagation();deleteLedgerEntry('${t.txn_id}','${(t.paid_to||t.raw_description||'').replace(/'/g,'')}')"
-      style="background:none;border:none;color:#d1d5db;font-size:12px;cursor:pointer;padding:0 4px;" title="Delete entry">✕</button>` : '';
+    const isSBIProv = (t.account||'').toUpperCase().includes('PROV');
+    const _lbl = (t.paid_to||t.raw_description||'').replace(/'/g,'').replace(/"/g,'');
+    const delBtn = isSBIProv ? `<button onclick="event.stopPropagation();deleteLedgerEntry('${t.txn_id}','${_lbl}')"
+      style="background:none;border:none;color:#ef4444;font-size:12px;cursor:pointer;padding:0 4px;" title="Delete SBI-Prov entry">🗑</button>
+      <button onclick="event.stopPropagation();mergeLedgerEntry('${t.txn_id}','${_lbl}')"
+      style="background:none;border:none;color:#f59e0b;font-size:12px;cursor:pointer;padding:0 4px;" title="Merge with another entry">🔗</button>` : '';
     return `<tr class="${unc}" onclick="openEdit('${t.txn_id}','${txnJ}')">
       <td style="white-space:nowrap;font-size:.75rem;font-weight:600;color:#374151;">${serial}</td>
       <td style="white-space:nowrap">${fmtDate(t.date)}</td>
