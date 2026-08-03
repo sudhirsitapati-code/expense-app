@@ -1813,7 +1813,10 @@ function applyNotSureFilters() {
   const amtMax   = parseFloat(document.getElementById('nsFilterAmtMax')?.value) || Infinity;
 
   let filtered = _nsTxns.filter(t => {
-    const d = (t.date || '').slice(0, 10);
+    // dates stored as dd/mm/yyyy — convert to yyyy-mm-dd for comparison
+    const raw = t.date || '';
+    const parts = raw.split('/');
+    const d = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : raw.slice(0, 10);
     if (dateFrom && d < dateFrom) return false;
     if (dateTo   && d > dateTo)   return false;
     const amt = t.debit || t.credit || 0;
