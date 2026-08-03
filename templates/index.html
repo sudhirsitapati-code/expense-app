@@ -364,11 +364,26 @@
 <!-- ── Not Sure ── -->
 <div id="rp-notsure" class="d-none">
   <p class="text-muted small mb-3">Transactions where type or heading could not be determined. Edit below and save — they will move to the main ledger.</p>
+  <!-- Filter / sort bar -->
+  <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
+    <input type="date" id="nsFilterDateFrom" class="form-control form-control-sm" style="width:145px" placeholder="From date" oninput="applyNotSureFilters()">
+    <input type="date" id="nsFilterDateTo"   class="form-control form-control-sm" style="width:145px" placeholder="To date"   oninput="applyNotSureFilters()">
+    <div class="input-group input-group-sm" style="width:200px">
+      <span class="input-group-text">₹</span>
+      <input type="number" id="nsFilterAmtMin" class="form-control" placeholder="Min amt" oninput="applyNotSureFilters()">
+      <input type="number" id="nsFilterAmtMax" class="form-control" placeholder="Max amt" oninput="applyNotSureFilters()">
+    </div>
+    <button class="btn btn-sm btn-outline-secondary" onclick="clearNotSureFilters()">✕ Clear</button>
+    <span id="nsFilterCount" class="text-muted small ms-2"></span>
+  </div>
   <div class="table-wrap">
   <table class="table table-hover mb-0">
     <thead><tr>
-      <th>#</th><th>Date</th><th>Account</th><th>Description</th><th>Paid To</th>
-      <th class="text-end">Amount</th><th>Type ⚠</th><th>Heading ⚠</th><th>Remarks</th><th></th>
+      <th style="cursor:pointer" onclick="sortNotSure('seq')"># <span id="nsSort-seq"></span></th>
+      <th style="cursor:pointer" onclick="sortNotSure('date')">Date <span id="nsSort-date"></span></th>
+      <th>Account</th><th>Description</th><th>Paid To</th>
+      <th class="text-end" style="cursor:pointer" onclick="sortNotSure('amount')">Amount <span id="nsSort-amount"></span></th>
+      <th>Type ⚠</th><th>Heading ⚠</th><th>Remarks</th><th></th>
     </tr></thead>
     <tbody id="notSureBody"></tbody>
   </table>
@@ -1696,17 +1711,24 @@ function refreshHeadings(txnId, type) {
 }
 
 function renderNotSure(txns) {
+  _nsTxns = txns;
+  _nsSortKey = null; _nsSortAsc = true;
+  ['seq','date','amount'].forEach(k => { const el = document.getElementById('nsSort-'+k); if (el) el.textContent = ''; });
+  applyNotSureFilters();
+}
+
+function _renderNotSureRows(txns) {
   const tbody = document.getElementById('notSureBody');
   if (!txns.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No uncertain transactions 🎉</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">No entries match 🎉</td></tr>';
     return;
   }
   tbody.innerHTML = txns.map(t => {
-    const amt     = t.debit || t.credit || 0;
+    const amt      = t.debit || t.credit || 0;
     const typeOpts = TYPES.map(v =>
       `<option value="${v}" ${(t.type||'').toLowerCase()===v?'selected':''}>${v}</option>`).join('');
     const headOpts = headingOpts(t.type, t.heading);
-    const serial = t.seq || (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || '—';
+    const serial   = t.seq || (window._ledgerSerials && window._ledgerSerials[t.txn_id]) || '—';
     return `<tr id="ns-${t.txn_id}" class="uncertain-row">
       <td style="white-space:nowrap;font-size:.75rem;font-weight:600;color:#374151;">${serial}</td>
       <td style="white-space:nowrap">${fmtDate(t.date)}</td>
@@ -1777,6 +1799,60 @@ async function saveNotSure(txnId) {
   if (row) row.remove();
   const cnt = document.getElementById('notSureBadge');
   cnt.textContent = Math.max(0, parseInt(cnt.textContent||'0') - 1);
+}
+
+// ── Not Sure: sort & filter ──────────────────────────────────────────────────
+let _nsTxns    = [];
+let _nsSortKey = null;
+let _nsSortAsc = true;
+
+function applyNotSureFilters() {
+  const dateFrom = document.getElementById('nsFilterDateFrom')?.value || '';
+  const dateTo   = document.getElementById('nsFilterDateTo')?.value   || '';
+  const amtMin   = parseFloat(document.getElementById('nsFilterAmtMin')?.value) || 0;
+  const amtMax   = parseFloat(document.getElementById('nsFilterAmtMax')?.value) || Infinity;
+
+  let filtered = _nsTxns.filter(t => {
+    const d = (t.date || '').slice(0, 10);
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo   && d > dateTo)   return false;
+    const amt = t.debit || t.credit || 0;
+    if (amt < amtMin || amt > amtMax) return false;
+    return true;
+  });
+
+  if (_nsSortKey) {
+    filtered = [...filtered].sort((a, b) => {
+      let av, bv;
+      if (_nsSortKey === 'seq')    { av = a.seq || 0;           bv = b.seq || 0; }
+      if (_nsSortKey === 'date')   { av = a.date || '';          bv = b.date || ''; }
+      if (_nsSortKey === 'amount') { av = a.debit||a.credit||0;  bv = b.debit||b.credit||0; }
+      if (av < bv) return _nsSortAsc ? -1 : 1;
+      if (av > bv) return _nsSortAsc ?  1 : -1;
+      return 0;
+    });
+  }
+
+  const cnt = document.getElementById('nsFilterCount');
+  if (cnt) cnt.textContent = filtered.length < _nsTxns.length ? `${filtered.length} of ${_nsTxns.length} shown` : '';
+  _renderNotSureRows(filtered);
+}
+
+function sortNotSure(key) {
+  if (_nsSortKey === key) _nsSortAsc = !_nsSortAsc;
+  else { _nsSortKey = key; _nsSortAsc = true; }
+  ['seq','date','amount'].forEach(k => {
+    const el = document.getElementById('nsSort-'+k);
+    if (el) el.textContent = k === key ? (_nsSortAsc ? ' ▲' : ' ▼') : '';
+  });
+  applyNotSureFilters();
+}
+
+function clearNotSureFilters() {
+  ['nsFilterDateFrom','nsFilterDateTo','nsFilterAmtMin','nsFilterAmtMax'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  applyNotSureFilters();
 }
 
 function refreshSubmitHeadings(type) {
