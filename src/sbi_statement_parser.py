@@ -87,7 +87,7 @@ def _fy_fields(dt: Optional[datetime]) -> dict:
     return {"month_no": fn, "month_name": _FY_MONTH_NAME.get(fn, "")}
 
 
-def _open_pdf(pdf_bytes: bytes):
+def _open_pdf(pdf_bytes: bytes, extra_passwords: list = None):
     base = _get_sbi_password()
     print(f"[sbi_parser] password set: {bool(base)}, first4: {repr(base[:4]) if base else 'EMPTY'}")
     candidates = list(dict.fromkeys([
@@ -95,7 +95,7 @@ def _open_pdf(pdf_bytes: bytes):
         base.upper(),
         base.lower(),
         base.capitalize(),
-    ] + ([""] if not base else [])))
+    ] + (extra_passwords or []) + ([""] if not base else [])))
     for pw in candidates:
         try:
             pdf = pdfplumber.open(io.BytesIO(pdf_bytes), password=pw)
@@ -446,12 +446,12 @@ def _parse_sbi_tables(pdf) -> list:
     return transactions
 
 
-def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
+def _parse_pdf_transactions(pdf_bytes: bytes, extra_passwords: list = None) -> list:
     transactions = []
     account = "SBI-????"
 
     try:
-        with _open_pdf(pdf_bytes) as pdf:
+        with _open_pdf(pdf_bytes, extra_passwords=extra_passwords) as pdf:
             full_text = ""
             for page in pdf.pages:
                 full_text += (page.extract_text() or "") + "\n"
@@ -510,9 +510,12 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
     return enriched
 
 
-def _get_pdf_attachments(service, msg_id: str) -> list:
+def _get_pdf_attachments(service, msg_id: str) -> tuple:
+    """Return (pdfs: list[bytes], subject: str)."""
     pdfs = []
     msg = service.users().messages().get(userId="me", id=msg_id, format="full").execute()
+    headers = {h["name"].lower(): h["value"] for h in msg.get("payload", {}).get("headers", [])}
+    subject = headers.get("subject", "")
     parts = msg.get("payload", {}).get("parts", [])
 
     def walk_parts(parts):
@@ -535,7 +538,21 @@ def _get_pdf_attachments(service, msg_id: str) -> list:
                 walk_parts(part["parts"])
 
     walk_parts(parts)
-    return pdfs
+    return pdfs, subject
+
+
+def _extract_password_from_subject(subject: str) -> str:
+    """Pull a password token from Vincent's email subject (e.g. 'Pass word SUDHI31081976')."""
+    import re
+    # Match a word that looks like a password: alphanumeric, 6+ chars, no spaces
+    tokens = re.findall(r'\b[A-Za-z0-9]{6,}\b', subject)
+    # Exclude common English words and short words; prefer tokens with digits
+    noise = {"password", "Pass", "word", "Boss", "statement", "april", "may", "june",
+             "july", "august", "sbi", "boss", "the", "for", "and"}
+    candidates = [t for t in tokens if t.lower() not in {w.lower() for w in noise}]
+    # Prefer tokens that contain digits (likely passwords)
+    with_digits = [t for t in candidates if any(c.isdigit() for c in t)]
+    return (with_digits or candidates or [""])[0]
 
 
 def fetch_and_parse_sbi_statements(force_reprocess: bool = False) -> dict:
@@ -568,16 +585,21 @@ def fetch_and_parse_sbi_statements(force_reprocess: bool = False) -> dict:
     for msg_ref in msgs_to_process:
         msg_id = msg_ref["id"]
         try:
-            pdfs = _get_pdf_attachments(service, msg_id)
+            pdfs, subject = _get_pdf_attachments(service, msg_id)
         except Exception as e:
             print(f"[sbi] Failed to fetch attachments for {msg_id}: {e}")
             _save_processed_id(msg_id)
             continue
 
+        # Extract password from subject (Vincent writes it there, e.g. "Pass word SUDHI31081976")
+        subj_pw = _extract_password_from_subject(subject)
+        extra_pws = [subj_pw, subj_pw.upper(), subj_pw.lower()] if subj_pw else []
+        print(f"[sbi] subject={repr(subject[:60])}, extracted pw hint={repr(subj_pw[:6]) if subj_pw else 'none'}")
+
         password_failed = False
         for pdf_bytes in pdfs:
             try:
-                txns = _parse_pdf_transactions(pdf_bytes)
+                txns = _parse_pdf_transactions(pdf_bytes, extra_passwords=extra_pws)
                 added = 0
                 for t in txns:
                     tid = t.get("txn_id")
