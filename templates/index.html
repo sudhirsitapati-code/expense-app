@@ -333,6 +333,7 @@
       <button class="btn btn-sm btn-primary" onclick="syncLedger()"><i class="bi bi-cloud-download me-1"></i>Sync Gmail</button>
       <button class="btn btn-sm btn-outline-secondary" id="btnSyncPDF" onclick="syncPDFs(false)"><i class="bi bi-file-earmark-pdf me-1"></i>Sync PDFs</button>
       <button class="btn btn-sm btn-outline-danger" id="btnForcePDF" onclick="syncPDFs(true)" title="Force re-parse all statements"><i class="bi bi-arrow-clockwise me-1"></i>Force</button>
+      <button class="btn btn-sm btn-outline-warning" onclick="autoMergeProv()" title="Auto-merge SBI-Prov entries into matching SBI statement entries"><i class="bi bi-link-45deg me-1"></i>Merge Prov</button>
       <span id="syncStatus" class="text-muted small"></span>
     </div>
   </div>
@@ -1927,6 +1928,15 @@ async function saveEdit() {
   });
   editModal.hide();
   loadLedger();
+}
+
+async function autoMergeProv() {
+  if (!confirm('Auto-merge all SBI-Prov entries that have a matching SBI statement entry (same amount ±₹5, date ±3 days)?\n\nProv entries will be deleted; their paid_to/heading/type copied into the statement entry.')) return;
+  const r   = await fetch('/api/ledger/auto-merge-prov', {method:'POST'});
+  const res = await r.json();
+  if (!r.ok) { alert('Auto-merge failed'); return; }
+  alert(`Merged ${res.merged} pair(s).\n${res.remaining_prov} SBI-Prov entries still unmatched.`);
+  if (res.merged > 0) loadLedger();
 }
 
 async function syncPDFs(force) {

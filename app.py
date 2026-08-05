@@ -2427,7 +2427,78 @@ def api_ledger_merge():
     return jsonify({"ok": True, "kept": keep_id, "dropped": drop_id})
 
 
-@app.route("/api/master-ledger/<txn_id>", methods=["PATCH"])
+@app.route("/api/ledger/auto-merge-prov", methods=["POST"])
+@login_required
+def api_auto_merge_prov():
+    """
+    Auto-merge SBI-Prov entries into matching SBI statement entries.
+    Match criteria: same amount ±Rs 5, date within ±3 days.
+    Returns counts of merged pairs and remaining unmatched entries.
+    """
+    from datetime import datetime, timedelta
+
+    def _parse_date(s):
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(s.strip(), fmt)
+            except Exception:
+                pass
+        return None
+
+    ledger    = db.load("master_ledger") or []
+    sbi_stmt  = [t for t in ledger if (t.get("account") or "").upper() == "SBI-4852"]
+    sbi_prov  = [t for t in ledger if "prov" in (t.get("account") or "").lower()]
+
+    used_stmt = set()
+    used_prov = set()
+    pairs     = []
+
+    for p in sbi_prov:
+        if p["txn_id"] in used_prov:
+            continue
+        pd = _parse_date(p.get("date", ""))
+        pa = p.get("debit") or p.get("credit") or 0
+        for s in sbi_stmt:
+            if s["txn_id"] in used_stmt:
+                continue
+            sd = _parse_date(s.get("date", ""))
+            sa = s.get("debit") or s.get("credit") or 0
+            if pd and sd and abs((pd - sd).days) <= 3 and abs(pa - sa) <= 5:
+                pairs.append((p, s))
+                used_prov.add(p["txn_id"])
+                used_stmt.add(s["txn_id"])
+                break
+
+    drop_ids = set()
+    for prov, stmt in pairs:
+        for t in ledger:
+            if t["txn_id"] == stmt["txn_id"]:
+                for field in ("paid_to", "heading", "type", "transaction_details"):
+                    if prov.get(field):
+                        t[field] = prov[field]
+                prov_remarks = prov.get("remarks") or ""
+                stmt_remarks = t.get("remarks") or ""
+                note = f"SBI-Prov #{prov.get('seq','')} {prov.get('date','')} ₹{prov.get('debit') or prov.get('credit','')}"
+                t["remarks"]          = " | ".join(r for r in [prov_remarks, stmt_remarks, note] if r)
+                t["uncertain"]        = False
+                t["uncertain_fields"] = []
+                t["confidence"]       = "merged"
+                t["merged_prov_id"]   = prov["txn_id"]
+                break
+        drop_ids.add(prov["txn_id"])
+
+    ledger = [t for t in ledger if t["txn_id"] not in drop_ids]
+    if pairs:
+        db.save("master_ledger", ledger)
+
+    remaining_prov = [t for t in ledger if "prov" in (t.get("account") or "").lower()]
+    return jsonify({
+        "merged": len(pairs),
+        "remaining_prov": len(remaining_prov),
+        "pairs": [{"kept_seq": s.get("seq"), "dropped_seq": p.get("seq"),
+                   "date": s.get("date"), "amount": s.get("debit") or s.get("credit")}
+                  for p, s in pairs]
+    })
 @login_required
 def api_ledger_update(txn_id):
     """Update type, heading, paid_to, remarks, saving_agreed for a transaction."""
