@@ -1640,7 +1640,7 @@ async function mergeLedgerEntry(keepId, keepLabel) {
   if (!targetSeq || !targetSeq.trim()) return;
   const dropSeq = parseInt(targetSeq.trim(), 10);
   if (isNaN(dropSeq)) { alert('Please enter a valid entry number.'); return; }
-  if (!confirm(`Merge entry #${keepSeq} (KEEP) ← #${dropSeq} (DROP/DELETE)?\n\nThe drop entry will be permanently deleted.`)) return;
+  if (!confirm(`Merge #${keepSeq} with #${dropSeq}?\n\nSBI statement entry will be KEPT.\nSBI-Prov entry will be DROPPED (deleted).\nDescriptive info (paid_to, heading, type) from SBI-Prov will be copied across.`)) return;
   const r = await fetch('/api/ledger/merge', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({keep_id: keepId, drop_seq: dropSeq})

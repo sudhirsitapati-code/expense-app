@@ -2395,21 +2395,33 @@ def api_ledger_merge():
     keep_id = keep["txn_id"]
     drop_id = drop["txn_id"]
 
-    # Absorb useful fields from the dropped entry into the kept one
-    if not keep.get("paid_to") and drop.get("paid_to"):
-        keep["paid_to"] = drop["paid_to"]
-    if not keep.get("heading") and drop.get("heading"):
-        keep["heading"] = drop["heading"]
-    if not keep.get("type") and drop.get("type"):
-        keep["type"] = drop["type"]
-    merged_note = f"Merged with {drop.get('date','')} {drop.get('paid_to','?')} ₹{drop.get('debit') or drop.get('credit','?')}"
-    keep["remarks"] = ((keep.get("remarks") or "") + " | " + merged_note).strip(" |")
-    keep["uncertain"]       = False
-    keep["uncertain_fields"] = []
-    keep["confidence"]      = "merged"
-    keep["merged_drop_id"]  = drop_id
+    # Auto-swap so SBI statement is always kept and SBI-Prov is always dropped.
+    # Detect prov by account name containing 'prov' (case-insensitive).
+    def _is_prov(entry):
+        return "prov" in (entry.get("account") or "").lower()
 
-    # Remove the dropped entry
+    if _is_prov(keep) and not _is_prov(drop):
+        keep, drop = drop, keep
+        keep_id, drop_id = keep["txn_id"], drop["txn_id"]
+
+    # prov is now always `drop`; copy its descriptive fields into the SBI entry.
+    # SBI-Prov has the human-entered context; SBI statement has authoritative amount/date.
+    prov = drop
+    for field in ("paid_to", "heading", "type", "transaction_details"):
+        if prov.get(field):                         # always prefer prov's value
+            keep[field] = prov[field]
+    # Merge remarks: combine both, prov first
+    prov_remarks = prov.get("remarks") or ""
+    stmt_remarks = keep.get("remarks") or ""
+    combined = " | ".join(r for r in [prov_remarks, stmt_remarks] if r)
+    merged_note = f"SBI-Prov #{prov.get('seq','')} {prov.get('date','')} ₹{prov.get('debit') or prov.get('credit','')}"
+    keep["remarks"]          = " | ".join(r for r in [combined, merged_note] if r)
+    keep["uncertain"]        = False
+    keep["uncertain_fields"] = []
+    keep["confidence"]       = "merged"
+    keep["merged_prov_id"]   = drop_id
+
+    # Remove the dropped (prov) entry
     ledger = [t for t in ledger if t.get("txn_id") != drop_id]
     db.save("master_ledger", ledger)
     return jsonify({"ok": True, "kept": keep_id, "dropped": drop_id})
