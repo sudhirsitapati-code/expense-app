@@ -1894,7 +1894,7 @@ def api_master_ledger():
 
     # Optional filters
     only_uncertain = request.args.get("uncertain") == "1"
-    account_filter = request.args.get("account")
+    account_filter = request.args.getlist("account")  # supports multiple values
     bank_filter    = request.args.get("bank")
     type_filter    = request.args.get("type")
     heading_filter = request.args.get("heading")
@@ -1904,7 +1904,7 @@ def api_master_ledger():
     if only_uncertain:
         txns = [t for t in txns if t.get("uncertain")]
     if account_filter:
-        txns = [t for t in txns if t.get("account") == account_filter]
+        txns = [t for t in txns if t.get("account") in account_filter]
     if bank_filter:
         txns = [t for t in txns if t.get("bank") == bank_filter]
     if type_filter:
