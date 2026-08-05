@@ -2366,19 +2366,34 @@ def api_ledger_merge():
     the 'drop' entry is deleted.
     Body: { keep_id: str, drop_id: str }
     """
-    data    = request.get_json() or {}
-    keep_id = data.get("keep_id")
-    drop_id = data.get("drop_id")
-    if not keep_id or not drop_id or keep_id == drop_id:
-        return jsonify({"error": "provide keep_id and drop_id (must differ)"}), 400
+    data     = request.get_json() or {}
+    keep_id  = data.get("keep_id")
+    drop_id  = data.get("drop_id")
+    keep_seq = data.get("keep_seq")   # alternative: look up by seq number
+    drop_seq = data.get("drop_seq")
 
     ledger = db.load("master_ledger") or []
-    keep = next((t for t in ledger if t.get("txn_id") == keep_id), None)
-    drop = next((t for t in ledger if t.get("txn_id") == drop_id), None)
+
+    # Resolve by seq if txn_id not supplied
+    def _by_seq(seq):
+        try:
+            seq = int(seq)
+        except (TypeError, ValueError):
+            return None
+        return next((t for t in ledger if t.get("seq") == seq), None)
+
+    keep = next((t for t in ledger if t.get("txn_id") == keep_id), None) if keep_id else _by_seq(keep_seq)
+    drop = next((t for t in ledger if t.get("txn_id") == drop_id), None) if drop_id else _by_seq(drop_seq)
+
     if not keep:
-        return jsonify({"error": f"keep entry {keep_id} not found"}), 404
+        return jsonify({"error": f"keep entry not found (id={keep_id} seq={keep_seq})"}), 404
     if not drop:
-        return jsonify({"error": f"drop entry {drop_id} not found"}), 404
+        return jsonify({"error": f"drop entry not found (id={drop_id} seq={drop_seq})"}), 404
+    if keep.get("txn_id") == drop.get("txn_id"):
+        return jsonify({"error": "keep and drop are the same entry"}), 400
+
+    keep_id = keep["txn_id"]
+    drop_id = drop["txn_id"]
 
     # Absorb useful fields from the dropped entry into the kept one
     if not keep.get("paid_to") and drop.get("paid_to"):

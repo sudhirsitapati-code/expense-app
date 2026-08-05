@@ -1634,19 +1634,21 @@ async function deleteLedgerEntry(txnId, label) {
 }
 
 async function mergeLedgerEntry(keepId, keepLabel) {
-  const targetSeq = prompt(`Merge "${keepLabel}" into another entry.\n\nEnter the # (seq number) of the entry to drop/absorb:`);
-  if (!targetSeq) return;
-  const dropEntry = (window._ledgerAll || []).find(t => String(t.seq) === String(targetSeq.trim()));
-  if (!dropEntry) { alert('Entry #' + targetSeq + ' not found.'); return; }
-  if (!confirm(`Merge:\n  KEEP: #${(window._ledgerAll||[]).find(t=>t.txn_id===keepId)?.seq} ${keepLabel}\n  DROP: #${dropEntry.seq} ${dropEntry.paid_to||dropEntry.raw_description||''} ₹${dropEntry.debit||dropEntry.credit||0}\n\nThe dropped entry will be deleted.`)) return;
+  const keepEntry = (window._ledgerAll || []).find(t => t.txn_id === keepId);
+  const keepSeq   = keepEntry?.seq || '?';
+  const targetSeq = prompt(`Merge #${keepSeq} "${keepLabel}" with another entry.\n\nEnter the # (seq number) of the entry to drop/absorb:`);
+  if (!targetSeq || !targetSeq.trim()) return;
+  const dropSeq = parseInt(targetSeq.trim(), 10);
+  if (isNaN(dropSeq)) { alert('Please enter a valid entry number.'); return; }
+  if (!confirm(`Merge entry #${keepSeq} (KEEP) ← #${dropSeq} (DROP/DELETE)?\n\nThe drop entry will be permanently deleted.`)) return;
   const r = await fetch('/api/ledger/merge', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({keep_id: keepId, drop_id: dropEntry.txn_id})
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({keep_id: keepId, drop_seq: dropSeq})
   });
   const res = await r.json();
   if (!r.ok) { alert('Merge failed: ' + res.error); return; }
-  window._ledgerAll = (window._ledgerAll||[]).filter(t => t.txn_id !== dropEntry.txn_id);
-  // Update the kept entry in local cache
+  // Remove dropped entry from local cache (res.dropped is its txn_id)
+  window._ledgerAll = (window._ledgerAll || []).filter(t => t.txn_id !== res.dropped);
   const kept = window._ledgerAll.find(t => t.txn_id === keepId);
   if (kept) { kept.uncertain = false; kept.confidence = 'merged'; }
   renderLedger(sortedLedger(window._ledgerAll));
