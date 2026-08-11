@@ -42,6 +42,7 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "change-me")
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 engine = ApprovalEngine()
 
