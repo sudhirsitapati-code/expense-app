@@ -9,7 +9,7 @@ Heading values match ExpenseSummary exactly (see ACC26 for canonical list).
 
 import json
 import os
-from openai import AzureOpenAI
+from src.ai_client import get_ai_client
 
 
 # ── ACC26 canonical headings (from ExpenseSummary) ────────────────────────────
@@ -275,7 +275,7 @@ def _rule_classify(description: str):
     return None
 
 
-def _ai_classify_batch(transactions: list, client: AzureOpenAI, deployment: str) -> list:
+def _ai_classify_batch(transactions: list, client, deployment: str) -> list:
     if not transactions:
         return []
 
@@ -348,12 +348,7 @@ def classify_transactions(transactions: list) -> list:
     if not ai_needed_txns:
         return transactions
 
-    client = AzureOpenAI(
-        api_key=os.getenv("AZURE_OPENAI_KEY"),
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
-    )
-    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5.5")
+    client, deployment = get_ai_client()
 
     BATCH = 10
     for start in range(0, len(ai_needed_txns), BATCH):

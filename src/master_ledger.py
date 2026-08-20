@@ -126,6 +126,7 @@ HEADING_RULES = [
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 from src import db as _db
+from src.ai_client import get_ai_client
 
 _PATH_TO_KEY = {
     LEDGER_PATH: "master_ledger",
@@ -322,13 +323,7 @@ def classify_transaction(txn: dict) -> dict:
 def ai_classify_batch(transactions: list[dict]) -> list[dict]:
     """Use Azure OpenAI to classify uncertain transactions in batches of 15."""
     try:
-        from openai import AzureOpenAI
-        client = AzureOpenAI(
-            api_key=os.getenv("AZURE_OPENAI_KEY"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
-        )
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5.5")
+        client, deployment = get_ai_client()
     except Exception:
         return transactions
 

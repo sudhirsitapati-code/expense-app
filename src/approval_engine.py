@@ -8,7 +8,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
-from openai import AzureOpenAI
+from src.ai_client import get_ai_client
 from src.market_checker import MarketChecker
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -64,12 +64,7 @@ class ApprovalDecision:
 
 class ApprovalEngine:
     def __init__(self):
-        self.client = AzureOpenAI(
-            api_key=os.getenv("AZURE_OPENAI_KEY"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-        )
-        self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5.5")
+        self.client, self.deployment = get_ai_client()
         self.market_checker = MarketChecker()
 
     def _match_recurring(self, req: ExpenseRequest) -> Optional[dict]:

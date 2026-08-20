@@ -6,7 +6,7 @@ Four-layer market check using Azure OpenAI.
 import json
 import os
 from typing import Optional
-from openai import AzureOpenAI
+from src.ai_client import get_ai_client
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_DIR = os.path.join(BASE_DIR, "config")
@@ -20,12 +20,7 @@ ACC26_HISTORY_PATH = os.path.join(DATA_DIR, "acc26_history.json")
 
 class MarketChecker:
     def __init__(self):
-        self.client = AzureOpenAI(
-            api_key=os.getenv("AZURE_OPENAI_KEY"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-        )
-        self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5.5")
+        self.client, self.deployment = get_ai_client()
 
     def check(self, description: str, vendor: str, amount: float, category: str) -> dict:
         result = self._check_price_book(description, vendor, amount)

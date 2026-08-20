@@ -12,6 +12,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, send_from_directory
 
+from src.ai_client import get_ai_client
 from src.approval_engine import ApprovalEngine, ExpenseRequest
 from src.reconcile import run_reconciliation
 from src.acc27_writer import sync_approved_to_history, export_monthly_excel
@@ -3148,13 +3149,7 @@ def api_approvals_structured():
 def api_insights():
     """AI-generated spending insights from master ledger + approval log."""
     try:
-        from openai import AzureOpenAI
-        client = AzureOpenAI(
-            api_key=os.getenv("AZURE_OPENAI_KEY"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION","2024-12-01-preview"),
-        )
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT","gpt-5.5")
+        client, deployment = get_ai_client()
     except Exception:
         return jsonify({"insights":[]})
 
@@ -3211,13 +3206,7 @@ Be specific, not generic. No obvious tips."""
 def api_insights_chat():
     """Free-form chat with full access to all app data."""
     try:
-        from openai import AzureOpenAI
-        client = AzureOpenAI(
-            api_key=os.getenv("AZURE_OPENAI_KEY"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION","2024-12-01-preview"),
-        )
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT","gpt-5.5")
+        client, deployment = get_ai_client()
     except Exception as e:
         return jsonify({"reply": f"AI not configured: {e}"}), 500
 
@@ -3532,13 +3521,7 @@ def api_project_items_save(project_id):
 @login_required
 def api_project_item_ai(project_id, item_id):
     try:
-        from openai import AzureOpenAI
-        client = AzureOpenAI(
-            api_key=os.getenv("AZURE_OPENAI_KEY"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION","2024-12-01-preview"),
-        )
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT","gpt-5.5")
+        client, deployment = get_ai_client()
     except Exception as e:
         return jsonify({"comment": f"AI unavailable: {e}"})
 
