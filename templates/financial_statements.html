@@ -139,6 +139,7 @@ body { background:#f8f9fa; font-size:14px; }
   <div class="fs-tab active" onclick="switchTab('pl', this)">P&amp;L</div>
   <div class="fs-tab" onclick="switchTab('bs', this)">Balance Sheet</div>
   <div class="fs-tab" onclick="switchTab('detail', this)">Assets &amp; Liabilities Detail</div>
+  <div class="fs-tab" onclick="switchTab('contacts', this)">Contacts</div>
 </div>
 
 <!-- P&L Tab -->
@@ -202,6 +203,24 @@ body { background:#f8f9fa; font-size:14px; }
     </div>
   </div>
   <div id="ar-liabilities"></div>
+</div>
+
+<!-- Contacts Tab -->
+<div id="tab-contacts" class="tab-panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;">Financial Institution Contacts</div>
+    <button class="btn btn-sm" style="font-size:11px;background:#1e3a5f;color:#fff;border:none;padding:3px 12px;border-radius:6px;" onclick="addContactRow()">+ Add Row</button>
+  </div>
+  <table class="fs-table" id="contacts-table">
+    <thead><tr>
+      <th>Financial Institution</th>
+      <th>Name of Contact</th>
+      <th>Email</th>
+      <th>Telephone Number</th>
+      <th></th>
+    </tr></thead>
+    <tbody id="contacts-body"></tbody>
+  </table>
 </div>
 
 <script>
@@ -694,12 +713,58 @@ async function loadRegistry() {
   renderRegistry();
 }
 
+let _contacts = [];
+
+function escAttr(s) {
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+}
+
+async function loadContacts() {
+  const r = await fetch('/api/contacts');
+  _contacts = await r.json();
+  renderContacts();
+}
+
+function renderContacts() {
+  const body = document.getElementById('contacts-body');
+  body.innerHTML = _contacts.map((c, i) => `
+    <tr>
+      <td><input type="text" style="width:100%;border:none;background:transparent;font-size:14px;" value="${escAttr(c.institution)}" onblur="updateContact(${i},'institution',this.value)"></td>
+      <td><input type="text" style="width:100%;border:none;background:transparent;font-size:14px;" value="${escAttr(c.contact_name)}" onblur="updateContact(${i},'contact_name',this.value)"></td>
+      <td><input type="email" style="width:100%;border:none;background:transparent;font-size:14px;" value="${escAttr(c.email)}" onblur="updateContact(${i},'email',this.value)"></td>
+      <td><input type="tel" style="width:100%;border:none;background:transparent;font-size:14px;" value="${escAttr(c.phone)}" onblur="updateContact(${i},'phone',this.value)"></td>
+      <td><button class="ar-btn del" onclick="deleteContactRow(${i})">Delete</button></td>
+    </tr>
+  `).join('');
+}
+
+function updateContact(idx, field, value) {
+  _contacts[idx][field] = value;
+  saveContacts();
+}
+
+function addContactRow() {
+  _contacts.push({id: 'custom-' + Date.now(), institution:'', contact_name:'', email:'', phone:''});
+  renderContacts();
+}
+
+function deleteContactRow(idx) {
+  _contacts.splice(idx, 1);
+  saveContacts();
+  renderContacts();
+}
+
+async function saveContacts() {
+  await fetch('/api/contacts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_contacts)});
+}
+
 function switchTab(name, el) {
   document.querySelectorAll('.fs-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   if (name === 'detail') loadRegistry();
+  if (name === 'contacts') loadContacts();
 }
 
 loadData();

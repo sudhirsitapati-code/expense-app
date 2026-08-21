@@ -1124,6 +1124,49 @@ def api_asset_registry_reset():
     return jsonify({"ok": True})
 
 
+def _default_contacts():
+    registry = _default_asset_registry()
+    return [
+        {"id": item["id"], "institution": item["name"], "contact_name": "", "email": "", "phone": ""}
+        for cls in registry["classes"] for item in cls["items"]
+    ]
+
+
+def _sync_contacts_with_registry(contacts):
+    """Add a blank row for any asset-registry item that doesn't have a contact row yet."""
+    registry = db.load("asset_registry") or _default_asset_registry()
+    existing_ids = {c["id"] for c in contacts}
+    changed = False
+    for cls in registry["classes"]:
+        for item in cls["items"]:
+            if item["id"] not in existing_ids:
+                contacts.append({"id": item["id"], "institution": item["name"], "contact_name": "", "email": "", "phone": ""})
+                existing_ids.add(item["id"])
+                changed = True
+    return contacts, changed
+
+
+@app.route("/api/contacts", methods=["GET"])
+@login_required
+def api_contacts_get():
+    contacts = db.load("contacts")
+    if not contacts:
+        contacts = _default_contacts()
+        db.save("contacts", contacts)
+    else:
+        contacts, changed = _sync_contacts_with_registry(contacts)
+        if changed:
+            db.save("contacts", contacts)
+    return jsonify(contacts)
+
+@app.route("/api/contacts", methods=["POST"])
+@login_required
+def api_contacts_save():
+    data = request.get_json(force=True)
+    db.save("contacts", data)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/data-file/<path:filepath>", methods=["GET"])
 @login_required
 def api_data_file(filepath):
