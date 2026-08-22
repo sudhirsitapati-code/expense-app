@@ -2545,6 +2545,7 @@ def api_auto_merge_prov():
                    "date": s.get("date"), "amount": s.get("debit") or s.get("credit")}
                   for p, s in pairs]
     })
+@app.route("/api/master-ledger/<txn_id>", methods=["PATCH"])
 @login_required
 def api_ledger_update(txn_id):
     """Update type, heading, paid_to, remarks, saving_agreed for a transaction."""
