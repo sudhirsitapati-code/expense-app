@@ -1552,6 +1552,7 @@ def api_submit_expense():
 
     if decision.action == "AUTO_APPROVE":
         sync_approved_to_history()
+        _sync_approvals_to_ledger()
         try:
             send_auto_approval_notice(req.submitter, req.vendor, req.amount, decision.request_id)
         except Exception as ex:
@@ -5116,6 +5117,7 @@ def _handle_member_message(sender: str, body: str):
         if decision.action == "AUTO_APPROVE":
             send_auto_approval_notice(submitter, req.vendor, req.amount, decision.request_id)
             sync_approved_to_history()
+            _sync_approvals_to_ledger()
             return build_twiml_reply(f"✅ Auto-approved.\nRef: {decision.request_id}")
         elif decision.action == "ESCALATE":
             send_approval_request(decision.escalation_message)
@@ -5146,6 +5148,7 @@ def _handle_member_message(sender: str, body: str):
     if decision.action == "AUTO_APPROVE":
         send_auto_approval_notice(submitter, vendor, amount, decision.request_id)
         sync_approved_to_history()
+        _sync_approvals_to_ledger()
         reply = f"✅ Auto-approved!\nRef: {decision.request_id}"
         if decision.budget_alert:
             reply += "\n⚠️ Category nearing monthly budget."
