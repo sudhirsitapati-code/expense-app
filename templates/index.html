@@ -2048,6 +2048,17 @@ function toggleMisGroup(slug) {
   if (hdr) hdr.textContent = collapsed ? '+' : '−';
 }
 
+async function updateMisBudget(category, value, nMonths, period) {
+  const entered = Number(value) || 0;
+  // The cell shows the period-scaled budget; convert back to the annual figure that's actually stored.
+  const annual = period === 'ytd' ? entered : Math.round(entered * 12 / nMonths);
+  const r = await fetch('/api/budget-fy27');
+  const budget = await r.json();
+  budget.annual[category] = annual;
+  await fetch('/api/budget-fy27', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(budget)});
+  loadMIS(period);
+}
+
 async function loadMIS(period, btn) {
   ['misBtnMonth','misBtnQtr','misBtnYtd'].forEach(id =>
     document.getElementById(id)?.classList.remove('active'));
@@ -2220,6 +2231,7 @@ async function loadMIS(period, btn) {
 
   const isYtd = isHistorical || period === 'ytd';
   const cols = isFY27Ytd ? 8 : isYtd ? 6 : 5;
+  const nMonths = (d.period_months || []).length || 1;
 
   const tbody = document.getElementById('misBody');
   let html = '';
@@ -2240,7 +2252,7 @@ async function loadMIS(period, btn) {
         ${isFY27Ytd ? `<td class="text-end text-muted">${fmt(row.fy25_actual)}</td>` : ''}
         <td class="text-end">${fmt(row.fy26_actual)}</td>
         ${isYtd ? `<td class="text-end text-muted">${fmt(row.fy26_full_year)}</td>` : ''}
-        <td class="text-end">${fmt(row.fy27_budget)}</td>
+        <td class="text-end"><input type="number" value="${Math.round(row.fy27_budget||0)}" style="width:90px;text-align:right;border:1px solid transparent;background:transparent;" onfocus="this.style.borderColor='#ccc'" onblur="this.style.borderColor='transparent';updateMisBudget('${row.category}', this.value, ${nMonths}, '${period}')"></td>
         <td class="text-end ${row.fy27_actual>row.fy27_budget?'text-danger':''}">${fmt(row.fy27_actual)}</td>
         <td><div class="pct-bar"><div class="pct-fill" style="width:${Math.min(pct,100)}%;background:${col}"></div></div>
           <span style="font-size:10px;color:#666">${pct}%</span></td>
