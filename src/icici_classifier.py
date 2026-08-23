@@ -21,6 +21,7 @@ HEADINGS = [
     "Alcohol", "Wellness",
     # FAMILY
     "Clothes", "Gifts", "Medical", "Amma", "Ketki", "Children Education",
+    "Car Expense", "Tax Savings",
     # GIVING
     "Charity", "Uspaar",
     # LIFESTYLE
