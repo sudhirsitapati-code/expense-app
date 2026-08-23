@@ -342,8 +342,7 @@ def api_mis():
     period = request.args.get("period", "month")
     fy     = request.args.get("fy", "FY27")   # FY26 | FY27
 
-    with open(os.path.join(CONFIG_DIR, "budget_fy27.json")) as f:
-        _bfile = json.load(f)
+    _bfile = get_budget_fy27()
     budget_annual = _bfile["annual"]   # FY27 annual by ACC26 heading (Blueprint)
     budget_monthly_app = _bfile["monthly"]  # monthly by app category (approval engine)
 
@@ -1164,6 +1163,29 @@ def api_contacts_get():
 def api_contacts_save():
     data = request.get_json(force=True)
     db.save("contacts", data)
+    return jsonify({"ok": True})
+
+
+def _default_budget_fy27():
+    with open(os.path.join(CONFIG_DIR, "budget_fy27.json")) as f:
+        return json.load(f)
+
+
+def get_budget_fy27():
+    """Current FY27 budget — edited values from the DB if present, else the seed file."""
+    return db.load("budget_fy27") or _default_budget_fy27()
+
+
+@app.route("/api/budget-fy27", methods=["GET"])
+@login_required
+def api_budget_fy27_get():
+    return jsonify(get_budget_fy27())
+
+@app.route("/api/budget-fy27", methods=["POST"])
+@login_required
+def api_budget_fy27_save():
+    data = request.get_json(force=True)
+    db.save("budget_fy27", data)
     return jsonify({"ok": True})
 
 
@@ -3209,10 +3231,7 @@ def api_insights():
         if t.get("debit") and t.get("heading"):
             by_heading[t["heading"]] += t["debit"]
 
-    # Budget from file
-    budget_path = os.path.join(CONFIG_DIR, "budget_fy27.json")
-    with open(budget_path) as f:
-        budget_annual = json.load(f).get("annual",{})
+    budget_annual = get_budget_fy27().get("annual", {})
 
     summary = [
         {"heading": h, "spend": round(v), "budget": budget_annual.get(h,0)}

@@ -19,11 +19,17 @@ with open(os.path.join(CONFIG_DIR, "approved_recurring.json")) as f:
     APPROVED_RECURRING = json.load(f)["recurring"]
 
 with open(os.path.join(CONFIG_DIR, "budget_fy27.json")) as f:
-    BUDGET = json.load(f)["monthly"]
+    _DEFAULT_BUDGET_FY27 = json.load(f)
 
 APPROVAL_LOG_PATH = os.path.join(DATA_DIR, "approval_log.json")
 
 from src import db as _db
+
+
+def _current_budget_monthly() -> dict:
+    """Monthly budget by app category — DB-edited values if present, else the seed file.
+    Loaded fresh each time so edits via the Budget FY27 tab take effect immediately."""
+    return (_db.load("budget_fy27") or _DEFAULT_BUDGET_FY27).get("monthly", {})
 
 
 @dataclass
@@ -77,7 +83,7 @@ class ApprovalEngine:
         return None
 
     def _budget_alert(self, category: str, amount: float) -> bool:
-        monthly = BUDGET.get(category, 0)
+        monthly = _current_budget_monthly().get(category, 0)
         if monthly == 0:
             return False
         current = self._get_current_month_spend(category)

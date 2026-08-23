@@ -140,6 +140,7 @@ body { background:#f8f9fa; font-size:14px; }
   <div class="fs-tab" onclick="switchTab('bs', this)">Balance Sheet</div>
   <div class="fs-tab" onclick="switchTab('detail', this)">Assets &amp; Liabilities Detail</div>
   <div class="fs-tab" onclick="switchTab('contacts', this)">Contacts</div>
+  <div class="fs-tab" onclick="switchTab('budget', this)">Budget FY27</div>
 </div>
 
 <!-- P&L Tab -->
@@ -221,6 +222,23 @@ body { background:#f8f9fa; font-size:14px; }
     </tr></thead>
     <tbody id="contacts-body"></tbody>
   </table>
+</div>
+
+<!-- Budget FY27 Tab -->
+<div id="tab-budget" class="tab-panel">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;margin-bottom:6px;">Annual Budget (by heading — used in MIS &amp; Insights)</div>
+  <table class="fs-table" id="budget-annual-table" style="margin-bottom:24px;">
+    <thead><tr><th>Heading</th><th class="r">Annual Budget (₹)</th><th></th></tr></thead>
+    <tbody id="budget-annual-body"></tbody>
+  </table>
+  <button class="btn btn-sm" style="font-size:11px;background:#1e3a5f;color:#fff;border:none;padding:3px 12px;border-radius:6px;margin-bottom:24px;" onclick="addBudgetRow('annual')">+ Add Heading</button>
+
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;margin-bottom:6px;">Monthly Budget (by app category — used for auto-approval alerts)</div>
+  <table class="fs-table" id="budget-monthly-table">
+    <thead><tr><th>Category</th><th class="r">Monthly Budget (₹)</th><th></th></tr></thead>
+    <tbody id="budget-monthly-body"></tbody>
+  </table>
+  <button class="btn btn-sm" style="font-size:11px;background:#1e3a5f;color:#fff;border:none;padding:3px 12px;border-radius:6px;margin-top:10px;" onclick="addBudgetRow('monthly')">+ Add Category</button>
 </div>
 
 <script>
@@ -758,6 +776,63 @@ async function saveContacts() {
   await fetch('/api/contacts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_contacts)});
 }
 
+let _budget = {annual:{}, monthly:{}};
+
+async function loadBudget() {
+  const r = await fetch('/api/budget-fy27');
+  _budget = await r.json();
+  renderBudget();
+}
+
+function renderBudgetSection(kind) {
+  const body = document.getElementById('budget-' + kind + '-body');
+  const entries = Object.entries(_budget[kind] || {});
+  body.innerHTML = entries.map(([name, amt]) => `
+    <tr>
+      <td><input type="text" style="width:100%;border:none;background:transparent;font-size:14px;" value="${escAttr(name)}" onblur="renameBudgetRow('${kind}','${escAttr(name)}',this.value)"></td>
+      <td class="r"><input type="number" style="width:100%;border:none;background:transparent;font-size:14px;text-align:right;" value="${amt}" onblur="updateBudgetRow('${kind}','${escAttr(name)}',this.value)"></td>
+      <td><button class="ar-btn del" onclick="deleteBudgetRow('${kind}','${escAttr(name)}')">Delete</button></td>
+    </tr>
+  `).join('');
+}
+
+function renderBudget() {
+  renderBudgetSection('annual');
+  renderBudgetSection('monthly');
+}
+
+function updateBudgetRow(kind, name, value) {
+  _budget[kind][name] = Number(value) || 0;
+  saveBudget();
+}
+
+function renameBudgetRow(kind, oldName, newName) {
+  if (!newName || newName === oldName) return;
+  const amt = _budget[kind][oldName];
+  delete _budget[kind][oldName];
+  _budget[kind][newName] = amt;
+  saveBudget();
+  renderBudget();
+}
+
+function addBudgetRow(kind) {
+  let name = kind === 'annual' ? 'New Heading' : 'new_category';
+  let i = 1;
+  while (name in _budget[kind]) { i++; name = (kind === 'annual' ? 'New Heading ' : 'new_category_') + i; }
+  _budget[kind][name] = 0;
+  renderBudget();
+}
+
+function deleteBudgetRow(kind, name) {
+  delete _budget[kind][name];
+  saveBudget();
+  renderBudget();
+}
+
+async function saveBudget() {
+  await fetch('/api/budget-fy27', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_budget)});
+}
+
 function switchTab(name, el) {
   document.querySelectorAll('.fs-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
@@ -765,6 +840,7 @@ function switchTab(name, el) {
   document.getElementById('tab-' + name).classList.add('active');
   if (name === 'detail') loadRegistry();
   if (name === 'contacts') loadContacts();
+  if (name === 'budget') loadBudget();
 }
 
 loadData();
