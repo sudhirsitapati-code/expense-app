@@ -83,13 +83,13 @@ body { background:#f8f9fa; font-size:14px; }
 .ar-class-body.open { display:block; }
 .ar-item { border-bottom:0.5px solid #f1f5f9; }
 .ar-item:last-child { border-bottom:none; }
-.ar-item-row { display:grid; grid-template-columns:1fr 110px 110px 110px 80px; align-items:center; padding:8px 14px 8px 28px; cursor:pointer; gap:8px; }
+.ar-item-row { display:grid; grid-template-columns:1fr 110px 110px 110px 80px 100px; align-items:center; padding:8px 14px 8px 28px; cursor:pointer; gap:8px; }
 .ar-item-row:hover { background:#fafbff; }
 .ar-item-name { font-size:13px; color:#1e293b; display:flex; align-items:center; gap:6px; }
 .ar-item-name .ar-expand { flex-shrink:0; }
 .ar-val { font-size:12px; font-variant-numeric:tabular-nums; text-align:right; color:#475569; }
 .ar-val.highlight { color:#1e3a5f; font-weight:600; }
-.ar-col-hdr { display:grid; grid-template-columns:1fr 110px 110px 110px 80px; padding:5px 14px 5px 28px; gap:8px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
+.ar-col-hdr { display:grid; grid-template-columns:1fr 110px 110px 110px 80px 100px; padding:5px 14px 5px 28px; gap:8px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
 .ar-col-hdr span { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; color:#94a3b8; text-align:right; }
 .ar-col-hdr span:first-child { text-align:left; }
 .ar-detail { display:none; background:#fafbff; border-top:0.5px solid #e2e8f0; padding:14px 28px; }
@@ -554,6 +554,7 @@ function renderClass(cls, isLiab) {
       <span>Purchase (₹)</span>
       <span>Mar 31 '26</span>
       <span>Today</span>
+      <span>Last Updated</span>
     </div>`;
     cls.items.forEach(item => { html += renderItem(item, cls.id, isLiab); });
   } else {
@@ -577,6 +578,7 @@ function renderItem(item, clsId, isLiab) {
       <div class="ar-val">${item.purchase_value_L != null ? fmtLshort(item.purchase_value_L) : '—'}</div>
       <div class="ar-val highlight">${item.value_mar26_L != null ? fmtLshort(item.value_mar26_L) : '—'}</div>
       <div class="ar-val">${item.value_today_L != null ? fmtLshort(item.value_today_L) : '—'}</div>
+      <div class="ar-val" style="font-size:11px;color:#94a3b8;">${item.last_updated || '—'}</div>
     </div>
     <div class="ar-detail${detOpen?' open':''} ar-view-mode" id="arid-${item.id}">`;
 
@@ -677,11 +679,16 @@ function arSaveItem(itemId, clsId, e) {
   const cls = _registry.classes.find(c => c.id === clsId);
   const item = cls && cls.items.find(it => it.id === itemId);
   if (!item) return;
+  const newPurchase = inputs[1].value !== '' ? parseFloat(inputs[1].value) : null;
+  const newMar26    = inputs[2].value !== '' ? parseFloat(inputs[2].value) : null;
+  const newToday    = inputs[3].value !== '' ? parseFloat(inputs[3].value) : null;
+  const valueChanged = newPurchase !== item.purchase_value_L || newMar26 !== item.value_mar26_L || newToday !== item.value_today_L;
   item.date_acquired    = inputs[0].value.trim() || null;
-  item.purchase_value_L = inputs[1].value !== '' ? parseFloat(inputs[1].value) : null;
-  item.value_mar26_L    = inputs[2].value !== '' ? parseFloat(inputs[2].value) : null;
-  item.value_today_L    = inputs[3].value !== '' ? parseFloat(inputs[3].value) : null;
+  item.purchase_value_L = newPurchase;
+  item.value_mar26_L    = newMar26;
+  item.value_today_L    = newToday;
   item.notes            = inputs[4].value.trim() || null;
+  if (valueChanged) item.last_updated = new Date().toISOString().slice(0, 10);
   saveRegistry().then(() => renderRegistry());
 }
 
