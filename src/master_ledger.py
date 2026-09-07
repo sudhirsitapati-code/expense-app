@@ -1131,7 +1131,7 @@ def import_from_icici_transactions() -> int:
             "fy_year":         fy["fy_year"],
             "account":         t.get("account", "ICICI-????"),
             "account_type":    "savings",
-            "bank":            "ICICI",
+            "bank":            t.get("bank") or ("SBI" if "sbi" in (t.get("account") or "").lower() else "ICICI"),
             "raw_description": t.get("transaction_details") or t.get("description", ""),
             "paid_to":         t.get("paid_to", ""),
             "debit":           debit,
