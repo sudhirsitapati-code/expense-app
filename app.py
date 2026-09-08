@@ -1734,8 +1734,14 @@ def _sync_approvals_to_ledger():
     existing_ids = {t["txn_id"] for t in ledger}
 
     added = 0
+    log_changed = False
     for e in log:
         if e.get("action") not in ("AUTO_APPROVE","APPROVED","APPROVED_LOWER"):
+            continue
+        # Once synced, never re-add — even if the prov entry was later merged/deleted
+        # by auto-merge-prov. Relying on ledger membership alone caused merged entries
+        # to be silently resurrected as duplicates on the next sync.
+        if e.get("ledger_synced"):
             continue
         pm = (e.get("payment_method") or "cash").lower()
         is_sbi = pm in ("sbi", "sbi-4852", "sbi4852", "sbi3152", "sbi-3152", "sbi-3142", "sbi3142")
@@ -1745,15 +1751,21 @@ def _sync_approvals_to_ledger():
             continue
         txn = _approval_to_ledger_entry(e)
         if txn["txn_id"] in existing_ids:
+            e["ledger_synced"] = True
+            log_changed = True
             continue
         ledger.append(txn)
         existing_ids.add(txn["txn_id"])
+        e["ledger_synced"] = True
+        log_changed = True
         added += 1
 
     if added:
         ledger.sort(key=lambda t: t.get("date",""), reverse=True)
         _assign_missing_seq(ledger)
         db.save("master_ledger", ledger)
+    if log_changed:
+        db.save("approval_log", log)
     return added
 
 
