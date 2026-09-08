@@ -1780,13 +1780,15 @@ def api_mark_paid():
     # Push this entry straight into the ledger
     log   = db.load("approval_log")
     entry = next((e for e in log if e.get("request_id") == request_id), None)
-    if entry:
+    if entry and not entry.get("ledger_synced"):
         ledger = db.load("master_ledger")
         txn = _approval_to_ledger_entry(entry)
         if not any(t["txn_id"] == txn["txn_id"] for t in ledger):
             ledger.insert(0, txn)
             _assign_missing_seq(ledger)
             db.save("master_ledger", ledger)
+        entry["ledger_synced"] = True
+        db.save("approval_log", log)
 
     return jsonify({"status": "ok"})
 
