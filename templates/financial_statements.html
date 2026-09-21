@@ -83,13 +83,18 @@ body { background:#f8f9fa; font-size:14px; }
 .ar-class-body.open { display:block; }
 .ar-item { border-bottom:0.5px solid #f1f5f9; }
 .ar-item:last-child { border-bottom:none; }
-.ar-item-row { display:grid; grid-template-columns:1fr 110px 110px 110px 80px 100px; align-items:center; padding:8px 14px 8px 28px; cursor:pointer; gap:8px; }
+.ar-item-row { display:grid; grid-template-columns:1fr 110px 110px 110px 100px 100px; align-items:center; padding:8px 14px 8px 28px; cursor:pointer; gap:8px; }
 .ar-item-row:hover { background:#fafbff; }
 .ar-item-name { font-size:13px; color:#1e293b; display:flex; align-items:center; gap:6px; }
 .ar-item-name .ar-expand { flex-shrink:0; }
 .ar-val { font-size:12px; font-variant-numeric:tabular-nums; text-align:right; color:#475569; }
 .ar-val.highlight { color:#1e3a5f; font-weight:600; }
-.ar-col-hdr { display:grid; grid-template-columns:1fr 110px 110px 110px 80px 100px; padding:5px 14px 5px 28px; gap:8px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
+.ar-col-hdr { display:grid; grid-template-columns:1fr 110px 110px 110px 100px 100px; padding:5px 14px 5px 28px; gap:8px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
+.ar-today-in { width:100%; text-align:right; border:1px solid #e2e8f0; border-radius:4px; background:#fff; padding:2px 6px; font-size:12px; font-variant-numeric:tabular-nums; color:#1e293b; font-family:inherit; -moz-appearance:textfield; appearance:textfield; }
+.ar-today-in::-webkit-inner-spin-button, .ar-today-in::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+.ar-today-in:hover { border-color:#94a3b8; }
+.ar-today-in:focus { outline:none; border-color:#3b82f6; }
+.ar-today-in::placeholder { color:#cbd5e1; }
 .ar-col-hdr span { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; color:#94a3b8; text-align:right; }
 .ar-col-hdr span:first-child { text-align:left; }
 .ar-detail { display:none; background:#fafbff; border-top:0.5px solid #e2e8f0; padding:14px 28px; }
@@ -504,11 +509,14 @@ let _itemExpand = {}; // itemId → bool
 const fmtL = v => v != null ? '₹' + (v/100).toLocaleString('en-IN',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' Cr' : '—';
 const fmtLshort = v => v != null ? (v/100).toLocaleString('en-IN',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' Cr' : '—';
 
+// Latest known value of an item: the Today value you've typed in, otherwise its Mar 31 '26 value
+function arLatest(it) {
+  return it.value_today_L != null ? it.value_today_L : (it.value_mar26_L != null ? it.value_mar26_L : 0);
+}
+
+// Class total at the latest values
 function arClassTotal(cls) {
-  return cls.items.reduce((s, it) => {
-    const v = it.value_mar26_L;
-    return s + (v != null ? v : 0);
-  }, 0);
+  return cls.items.reduce((s, it) => s + arLatest(it), 0);
 }
 
 function renderRegistry() {
@@ -520,10 +528,15 @@ function renderRegistry() {
   assets.forEach(c => { totalA += arClassTotal(c); });
   liabs.forEach(c => { totalL += arClassTotal(c); });
 
+  // "As of" = the most recent date any Today value was entered (falls back to the Mar 31 '26 figures)
+  const dated = _registry.classes.flatMap(c => c.items).filter(it => it.value_today_L != null && it.last_updated).map(it => it.last_updated);
+  const asOf = dated.length ? dated.sort().pop() : null;
+  const asOfTxt = asOf ? `as of ${asOf}` : `Mar 31 '26 values`;
+
   document.getElementById('ar-kpis').innerHTML = `
-    <div class="kpi"><div class="kpi-label">Total Assets (Mar 31 '26)</div><div class="kpi-val blue">${fmtL(totalA)}</div></div>
-    <div class="kpi"><div class="kpi-label">Total Liabilities</div><div class="kpi-val red">${fmtL(totalL)}</div></div>
-    <div class="kpi"><div class="kpi-label">Net Worth</div><div class="kpi-val ${totalA-totalL>=0?'green':'red'}">${fmtL(totalA-totalL)}</div></div>
+    <div class="kpi"><div class="kpi-label">Total Assets (latest)</div><div class="kpi-val blue">${fmtL(totalA)}</div><div style="font-size:10px;color:#94a3b8;">${asOfTxt}</div></div>
+    <div class="kpi"><div class="kpi-label">Total Liabilities (latest)</div><div class="kpi-val red">${fmtL(totalL)}</div><div style="font-size:10px;color:#94a3b8;">${asOfTxt}</div></div>
+    <div class="kpi"><div class="kpi-label">Net Worth (latest)</div><div class="kpi-val ${totalA-totalL>=0?'green':'red'}">${fmtL(totalA-totalL)}</div><div style="font-size:10px;color:#94a3b8;">${asOfTxt}</div></div>
     <div class="kpi"><div class="kpi-label">Asset Classes</div><div class="kpi-val">${assets.length + liabs.length}</div></div>`;
 
   document.getElementById('ar-assets').innerHTML     = assets.map(c => renderClass(c, false)).join('');
@@ -553,7 +566,7 @@ function renderClass(cls, isLiab) {
       <span>Acquired</span>
       <span>Purchase (₹)</span>
       <span>Mar 31 '26</span>
-      <span>Today</span>
+      <span title="Type today's value in ₹ crore and press Enter or click away">Today (Cr) ✎</span>
       <span>Last Updated</span>
     </div>`;
     cls.items.forEach(item => { html += renderItem(item, cls.id, isLiab); });
@@ -577,7 +590,12 @@ function renderItem(item, clsId, isLiab) {
       <div class="ar-val">${item.date_acquired || '—'}</div>
       <div class="ar-val">${item.purchase_value_L != null ? fmtLshort(item.purchase_value_L) : '—'}</div>
       <div class="ar-val highlight">${item.value_mar26_L != null ? fmtLshort(item.value_mar26_L) : '—'}</div>
-      <div class="ar-val">${item.value_today_L != null ? fmtLshort(item.value_today_L) : '—'}</div>
+      <div class="ar-val" onclick="event.stopPropagation()">
+        <input type="number" step="any" class="ar-today-in" placeholder="₹ Cr" title="Today's value in ₹ crore — press Enter or click away to save"
+          value="${item.value_today_L != null ? +(item.value_today_L/100).toFixed(4) : ''}"
+          onkeydown="if (event.key === 'Enter') this.blur()"
+          onchange="arSaveToday('${item.id}', '${clsId}', this.value)">
+      </div>
       <div class="ar-val" style="font-size:11px;color:#94a3b8;">${item.last_updated || '—'}</div>
     </div>
     <div class="ar-detail${detOpen?' open':''} ar-view-mode" id="arid-${item.id}">`;
@@ -688,8 +706,40 @@ function arSaveItem(itemId, clsId, e) {
   item.value_mar26_L    = newMar26;
   item.value_today_L    = newToday;
   item.notes            = inputs[4].value.trim() || null;
-  if (valueChanged) item.last_updated = new Date().toISOString().slice(0, 10);
+  if (valueChanged) item.last_updated = todayISO();
   saveRegistry().then(() => renderRegistry());
+}
+
+// Local calendar date as YYYY-MM-DD (toISOString would give the UTC date, a day early in IST mornings)
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// Inline edit of Today's Value straight from the row. The cell is in ₹ crore (like the other columns);
+// the registry stores lakhs.
+async function arSaveToday(itemId, clsId, crText) {
+  const cls = _registry.classes.find(c => c.id === clsId);
+  const item = cls && cls.items.find(it => it.id === itemId);
+  if (!item) return;
+  const txt = String(crText).trim();
+  let newL = null;
+  if (txt !== '') {
+    const cr = parseFloat(txt);
+    if (isNaN(cr) || cr < 0) { renderRegistry(); return; }
+    newL = Math.round(cr * 10000) / 100;          // crore -> lakhs, 2 decimals
+    // Guard against typing lakhs into the crore box (e.g. 935 meaning ₹935 lakh)
+    const ref = item.value_mar26_L;
+    if (ref > 0 && newL > ref * 10 &&
+        !confirm(`₹${(newL/100).toLocaleString('en-IN')} Cr is more than 10× the Mar 31 value (₹${(ref/100).toLocaleString('en-IN')} Cr).\n\nThis box is in crore — did you mean ${(cr/100).toLocaleString('en-IN')} Cr? Click OK to keep ${(newL/100).toLocaleString('en-IN')} Cr, or Cancel to re-enter.`)) {
+      renderRegistry(); return;
+    }
+  }
+  if (newL === item.value_today_L || (newL == null && item.value_today_L == null)) return;
+  item.value_today_L = newL;
+  item.last_updated = todayISO();
+  await saveRegistry();
+  renderRegistry();
 }
 
 function arDeleteItem(itemId, clsId, e) {
@@ -723,7 +773,12 @@ function addNewClass(section) {
 }
 
 async function saveRegistry() {
-  await fetch('/api/asset-registry', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_registry)});
+  try {
+    const r = await fetch('/api/asset-registry', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_registry)});
+    if (!r.ok) alert('Save failed (' + r.status + ') — your change was not stored. Please try again.');
+  } catch (e) {
+    alert('Save failed — check your connection and try again.');
+  }
 }
 
 async function resetRegistry() {
