@@ -204,7 +204,6 @@ body { background:#f8f9fa; font-size:14px; }
 <!-- Assets & Liabilities Detail Tab -->
 <div id="tab-detail" class="tab-panel">
   <div id="ar-kpis" class="kpi-row" style="margin-bottom:14px;"></div>
-  <div id="ar-alloc" style="margin-bottom:18px;"></div>
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;">Assets</div>
@@ -220,6 +219,8 @@ body { background:#f8f9fa; font-size:14px; }
     </div>
   </div>
   <div id="ar-liabilities"></div>
+
+  <div id="ar-alloc" style="margin-top:22px;"></div>
 </div>
 
 <!-- Contacts Tab -->
@@ -575,7 +576,7 @@ async function loadAllocation() {
     });
     html += `<tr class="al-tot"><td>Net worth</td><td class="r">${(d.net_worth_L/100).toLocaleString('en-IN',{minimumFractionDigits:1,maximumFractionDigits:1})}</td>
         <td class="r">100.0%</td><td class="r" id="al-ideal-sum"></td></tr></tbody></table>
-      <div style="font-size:11px;color:#94a3b8;margin-top:4px;">Debt = NPS + EPF less your loans, so it is negative while loans are larger; percentages add up to 100%. Latest values are used. Hover a class to see what's in it.</div>`;
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px;">Debt = NPS + EPF + cash &amp; bank, less your loans, so it is negative while loans are larger; percentages add up to 100%. Latest values are used. Hover a class to see what's in it.</div>`;
     box.innerHTML = html;
     updateIdealSum();
   } catch (e) { box.innerHTML = ''; }

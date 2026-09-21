@@ -216,6 +216,7 @@ _ALLOC_CLASS_MAP = {
     "gold": "metals",
     "private_eq": "private_equity",
     "retirement": "debt",
+    "bank": "debt",
     "alt": "art_jewellery",
 }
 _ALLOC_ROWS = [
@@ -225,9 +226,9 @@ _ALLOC_ROWS = [
     ("intl_metals", "International metals"),
     ("metals", "Metals (India)"),
     ("private_equity", "Private equity"),
-    ("debt", "Debt (retirement funds less loans)"),
+    ("debt", "Debt (retirement funds + cash, less loans)"),
     ("art_jewellery", "Art & jewellery"),
-    ("other", "Other (cash & bank)"),
+    ("other", "Other"),
 ]
 # StanChart is one registry item; its Mar-31 breakdown decides how the latest value is split
 _STANCHART_METAL_SUBITEMS = {"sc_gdx", "sc_gld", "sc_slv"}
@@ -236,8 +237,9 @@ _STANCHART_CASH_SUBITEMS = {"sc_usd_cash", "sc_aver"}
 
 def _portfolio_allocation(registry, targets=None):
     """Allocation of net worth across the allocator rows, from the Assets & Liabilities registry.
-    Each item counts at its latest value (Today if entered, else Mar 31). Loans count as negative
-    Debt, so the rows add up to net worth. Values are in ₹ Lakhs."""
+    Each item counts at its latest value (Today if entered, else Mar 31). Debt = retirement funds
+    (NPS + EPF) + cash & bank, less loans (which count as negative), so the rows add up to net worth.
+    "Other" only appears if something doesn't fit a class. Values are in ₹ Lakhs."""
     rows = {k: {"value": 0.0, "parts": []} for k, _ in _ALLOC_ROWS}
     assets_total = liabs_total = 0.0
     dates = []
@@ -269,7 +271,7 @@ def _portfolio_allocation(registry, targets=None):
                 if total > 0:
                     assets_total += v
                     add("intl_metals", "StanChart gold/silver ETFs", v * metal / total)
-                    add("other", "StanChart cash", v * cash / total)
+                    add("debt", "StanChart cash", v * cash / total)
                     add("intl_equity", "StanChart equity ETFs", v * (total - metal - cash) / total)
                 else:
                     assets_total += v
