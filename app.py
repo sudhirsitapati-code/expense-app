@@ -207,6 +207,121 @@ def financial_statements():
     return render_template("financial_statements.html", user=session["user"])
 
 
+# ── Portfolio allocation (shown at the top of Assets & Liabilities Detail) ──────
+# Asset-registry class id -> allocator row. Anything not listed (and not a liability) lands in "other".
+_ALLOC_CLASS_MAP = {
+    "property": "real_estate",
+    "gcpl_shares": "indian_equity", "listed_equity": "indian_equity", "mutual_funds": "indian_equity",
+    "international_equity": "intl_equity",
+    "gold": "metals",
+    "private_eq": "private_equity",
+    "retirement": "debt",
+    "alt": "art_jewellery",
+}
+_ALLOC_ROWS = [
+    ("real_estate", "Real estate"),
+    ("indian_equity", "Indian equity"),
+    ("intl_equity", "International equity"),
+    ("intl_metals", "International metals"),
+    ("metals", "Metals (India)"),
+    ("private_equity", "Private equity"),
+    ("debt", "Debt (retirement funds less loans)"),
+    ("art_jewellery", "Art & jewellery"),
+    ("other", "Other (cash & bank)"),
+]
+# StanChart is one registry item; its Mar-31 breakdown decides how the latest value is split
+_STANCHART_METAL_SUBITEMS = {"sc_gdx", "sc_gld", "sc_slv"}
+_STANCHART_CASH_SUBITEMS = {"sc_usd_cash", "sc_aver"}
+
+
+def _portfolio_allocation(registry, targets=None):
+    """Allocation of net worth across the allocator rows, from the Assets & Liabilities registry.
+    Each item counts at its latest value (Today if entered, else Mar 31). Loans count as negative
+    Debt, so the rows add up to net worth. Values are in ₹ Lakhs."""
+    rows = {k: {"value": 0.0, "parts": []} for k, _ in _ALLOC_ROWS}
+    assets_total = liabs_total = 0.0
+    dates = []
+
+    def add(key, name, value):
+        rows[key]["value"] += value
+        rows[key]["parts"].append({"name": name, "value_L": round(value, 2)})
+
+    for cls in registry.get("classes", []):
+        is_liab = cls.get("section") == "liabilities"
+        for it in cls.get("items", []):
+            v = it.get("value_today_L")
+            if v is None:
+                v = it.get("value_mar26_L")
+            else:
+                if it.get("last_updated"):
+                    dates.append(it["last_updated"])
+            if v is None:
+                continue
+            name = it.get("name") or it.get("id")
+            if is_liab:
+                liabs_total += v
+                add("debt", name, -v)
+            elif it.get("id") == "stanchart_intl" and it.get("sub_items"):
+                subs = it["sub_items"]
+                total = sum(s.get("value_mar26_L") or 0 for s in subs)
+                metal = sum(s.get("value_mar26_L") or 0 for s in subs if s.get("id") in _STANCHART_METAL_SUBITEMS)
+                cash = sum(s.get("value_mar26_L") or 0 for s in subs if s.get("id") in _STANCHART_CASH_SUBITEMS)
+                if total > 0:
+                    assets_total += v
+                    add("intl_metals", "StanChart gold/silver ETFs", v * metal / total)
+                    add("other", "StanChart cash", v * cash / total)
+                    add("intl_equity", "StanChart equity ETFs", v * (total - metal - cash) / total)
+                else:
+                    assets_total += v
+                    add("intl_equity", name, v)
+            else:
+                assets_total += v
+                add(_ALLOC_CLASS_MAP.get(cls.get("id"), "other"), name, v)
+
+    net = assets_total - liabs_total
+    out = []
+    for key, label in _ALLOC_ROWS:
+        r = rows[key]
+        if key == "other" and not r["parts"]:
+            continue
+        r["parts"].sort(key=lambda p: -abs(p["value_L"]))
+        out.append({"key": key, "label": label, "value_L": round(r["value"], 2),
+                    "pct": round(r["value"] / net * 100, 1) if net else 0.0, "parts": r["parts"],
+                    "ideal": (targets or {}).get(key)})
+    return {"rows": out, "total_assets_L": round(assets_total, 2), "total_liabilities_L": round(liabs_total, 2),
+            "net_worth_L": round(net, 2), "as_of": max(dates) if dates else None}
+
+
+def _load_portfolio_targets():
+    t = db.load("portfolio_targets")
+    return t if isinstance(t, dict) else {}
+
+
+@app.route("/api/portfolio-allocation", methods=["GET"])
+@login_required
+def api_portfolio_allocation():
+    return jsonify(_portfolio_allocation(db.load("asset_registry") or _default_asset_registry(),
+                                         _load_portfolio_targets()))
+
+
+@app.route("/api/portfolio-targets", methods=["POST"])
+@login_required
+def api_portfolio_targets_save():
+    """Save the ideal % per allocator row: {row_key: number or null}."""
+    data = request.get_json(force=True) or {}
+    valid = {k for k, _ in _ALLOC_ROWS}
+    clean = {}
+    for k, v in data.items():
+        if k not in valid:
+            continue
+        try:
+            clean[k] = None if v in (None, "") else round(float(v), 2)
+        except (TypeError, ValueError):
+            return jsonify({"error": f"invalid number for {k}"}), 400
+    db.save("portfolio_targets", clean)
+    return jsonify({"ok": True})
+
+
 # Keep old routes redirecting to /expenses
 @app.route("/entry")
 @app.route("/dashboard")
