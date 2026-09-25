@@ -160,6 +160,11 @@ def index():
 def tax():
     return render_template("tax.html", user=session["user"])
 
+# Hamir Advisors LLP is a separate tax entity, so its bank account is left out of anything tax-related.
+# Everywhere else (ledger, MIS, income totals) it counts like any other account.
+TAX_EXCLUDED_ACCOUNTS = {"ICICI-1691"}
+
+
 @app.route("/api/tax/ledger-income/<fy>")
 @login_required
 def tax_ledger_income(fy):
@@ -173,7 +178,8 @@ def tax_ledger_income(fy):
         return jsonify({"error": "Unknown FY"}), 400
 
     ledger = db.load("master_ledger") or []
-    entries = [t for t in ledger if t.get("fy_year") == ledger_year]
+    entries = [t for t in ledger if t.get("fy_year") == ledger_year
+               and t.get("account") not in TAX_EXCLUDED_ACCOUNTS]
 
     from collections import defaultdict
     credits = defaultdict(float)
@@ -520,11 +526,12 @@ def api_mis():
         "Malhar":"Property","Maintenance Expense":"Property","Home office":"Property",
         "One Time Charge":"Property","Kalpataru Maintenance":"Property",
         "Kashid":"Property","Rent":"Property",
+        "Hamir Rent":"Business","Hamir Staff":"Business","Hamir Admin":"Business","Hamir Travel":"Business","Hamir Car":"Business","Official Expense":"Business",
         "Financial Expense / OD Interest":"Financial","Financial Expense":"Financial",
         "Insurance":"Financial","Home Loan":"Financial","Tax":"Financial",
         "Personal Loans":"Financial",
     }
-    SUPER_ORDER = ["Household","Personal","Family","Giving","Lifestyle","Property","Financial"]
+    SUPER_ORDER = ["Household","Personal","Family","Giving","Lifestyle","Business","Property","Financial"]
 
     # App category → ACC26 heading (for FY27 actual from approval log)
     APP_TO_HEADING = {

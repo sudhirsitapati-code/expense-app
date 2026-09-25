@@ -913,6 +913,7 @@
             <option value="ICICI-0018">ICICI-0018</option>
             <option value="ICICI-9175">ICICI-9175</option>
             <option value="ICICI-7009">ICICI-7009</option>
+            <option value="ICICI-1691">ICICI-1691 (Hamir Advisors)</option>
             <option value="ICICI-7281">ICICI-7281</option>
             <option value="cash">cash</option>
           </select>
@@ -1748,8 +1749,9 @@ const HEADINGS_BY_TYPE = {
                'Tax Savings','Charity',
                'Uspaar','Holiday','Eating Out','Entertainment','Malhar','Maintenance Expense',
                'Home office','One Time Charge','Kalpataru Maintenance',
-               'Financial Expense','Insurance','Home Loan','Tax','Misc','None'],
-  income:     ['Salary','Asian Paints','Interest','Dividends','ESOP Grant','Capital Gains','Gift','Refund','Misc'],
+               'Financial Expense','Insurance','Home Loan','Tax','Misc','None',
+               'Official Expense','Hamir Rent','Hamir Staff','Hamir Admin','Hamir Travel','Hamir Car'],
+  income:     ['Salary','Asian Paints','Misho','Hamir Equity','Hamir Advent','Interest','Dividends','ESOP Grant','Capital Gains','Gift','Refund','Misc'],
   investment: ['Art','Foreign Investment','GCPL Share Sale','Property Investment',
                'Loan Repayment','Renovation','Jewelry','Startup','Club','Loans','Uspaar'],
   transfer:   ['Interbank','Cash'],
@@ -2083,7 +2085,7 @@ async function loadMIS(period, btn) {
     const tbody = document.getElementById('misBody');
     const fmtCell = (v, ym) => ym > nowYM ? '<td class="text-end" style="color:#ccc">—</td>'
                                            : `<td class="text-end">${v ? fmt(v) : '—'}</td>`;
-    const NON_FIN = new Set(['Household','Personal','Family','Giving','Lifestyle','Property']);
+    const NON_FIN = new Set(['Household','Personal','Family','Giving','Lifestyle','Business','Property']);
     let html = '';
     let nfAvg = 0, nfMonthly = {};
     months.forEach(m => nfMonthly[m] = 0);
@@ -2147,7 +2149,7 @@ async function loadMIS(period, btn) {
     const futureQ = new Set(['fy27_q3','fy27_q4']);
     const qCell = (v, k) => futureQ.has(k) ? '<td class="text-end" style="color:#ccc">—</td>'
                                             : `<td class="text-end">${v ? fmt(v) : '—'}</td>`;
-    const NON_FIN_Q = new Set(['Household','Personal','Family','Giving','Lifestyle','Property']);
+    const NON_FIN_Q = new Set(['Household','Personal','Family','Giving','Lifestyle','Business','Property']);
     let html = '';
     let nfQ = {fy26_q1:0,fy26_q2:0,fy26_q3:0,fy26_q4:0,fy27_q1:0,fy27_q2:0,fy27_q3:0,fy27_q4:0};
     (d.groups || []).forEach(g => {
@@ -2235,7 +2237,7 @@ async function loadMIS(period, btn) {
 
   const tbody = document.getElementById('misBody');
   let html = '';
-  const NON_FIN_SUPERS = ['Household','Personal','Family','Giving','Lifestyle','Property'];
+  const NON_FIN_SUPERS = ['Household','Personal','Family','Giving','Lifestyle','Business','Property'];
   let nonFinTotal = {fy24:0, fy25:0, fy26:0, fy26fy:0, budget:0, actual:0};
   (d.groups||[]).forEach(g => {
     const slug = g.super_category.replace(/\s+/g,'_');
