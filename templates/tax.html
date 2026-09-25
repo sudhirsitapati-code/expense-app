@@ -435,9 +435,9 @@ async function importFromLedger() {
       if (h === 'Dividends' || h === 'GCPL Dividends') head = 'Other Sources';
       if (h === 'Investment') { skipped++; return; }  // not income
 
-      // Avoid duplicate if same heading+amount already exists (rough check)
+      // Skip if this heading was already imported from the ledger (matched on source, since the note never names the heading)
       const alreadyExists = income.some(x =>
-        x.note && x.note.includes('ledger') && x.note.includes(h)
+        x.source === (h || 'Ledger credit') && x.note && x.note.includes('expense ledger')
       );
       if (alreadyExists) { skipped++; return; }
 
@@ -452,9 +452,23 @@ async function importFromLedger() {
       added++;
     });
 
+    // Official expenses are deducted from the board income (Asian Paints, Misho). One line, refreshed on each import.
+    const OFFICIAL_LABEL = 'Less: Official expenses (deducted from board income)';
+    const oe = data.official_expense || {total: 0};
+    const oeAmt = Math.round(oe.total || 0);
+    const oeIdx = income.findIndex(x => x.source === OFFICIAL_LABEL);
+    if (oeAmt !== 0 || oeIdx >= 0) {
+      const oeEntry = {
+        head: 'Other Sources', _id: oeIdx >= 0 ? income[oeIdx]._id : ++counter,
+        source: OFFICIAL_LABEL, gross: -oeAmt, tds: null,
+        note: `${oe.count || 0} Official Expense entries in the expense records, net of reimbursements. Excludes the Hamir Advisors account. Refreshes on every import.`,
+      };
+      if (oeIdx >= 0) income[oeIdx] = oeEntry; else income.push(oeEntry);
+    }
+
     saveIncome(fy, income);
     renderIncome(fy);
-    btn.innerHTML = `<i class="bi bi-check-lg me-1"></i>${added} added${skipped?' ('+skipped+' skipped)':''}`;
+    btn.innerHTML = `<i class="bi bi-check-lg me-1"></i>${added} added${skipped?' ('+skipped+' skipped)':''}${oeAmt ? ' · official exp. −₹' + oeAmt.toLocaleString('en-IN') : ''}`;
     setTimeout(()=>{ btn.disabled=false; btn.innerHTML='<i class="bi bi-database-up me-1"></i>Import from Ledger'; }, 3000);
   } catch(e) {
     btn.disabled = false;

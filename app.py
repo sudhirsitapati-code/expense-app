@@ -163,6 +163,12 @@ def tax():
 # Hamir Advisors LLP is a separate tax entity, so its bank account is left out of anything tax-related.
 # Everywhere else (ledger, MIS, income totals) it counts like any other account.
 TAX_EXCLUDED_ACCOUNTS = {"ICICI-1691"}
+# Accounts that are always listed (filters, account status) even before their first transaction is imported.
+KNOWN_ACCOUNTS = {
+    "ICICI-1691": {"bank": "ICICI", "account_type": "savings", "label": "Hamir Advisors LLP", "opened": "2026-09"},
+}
+# Official expenses (board / professional) are deducted from that income when tax is worked out.
+OFFICIAL_EXPENSE_HEADING = "Official Expense"
 
 
 @app.route("/api/tax/ledger-income/<fy>")
@@ -184,11 +190,22 @@ def tax_ledger_income(fy):
     from collections import defaultdict
     credits = defaultdict(float)
     samples = defaultdict(list)
+    official = {"debit": 0.0, "credit": 0.0, "count": 0, "samples": []}
     for t in entries:
+        heading = t.get("heading") or ""
+        if heading == OFFICIAL_EXPENSE_HEADING:
+            # Netted against income (spend less any reimbursement) — never counted as income itself
+            dr, cr_ = float(t.get("debit") or 0), float(t.get("credit") or 0)
+            official["debit"] += dr
+            official["credit"] += cr_
+            official["count"] += 1
+            if dr and len(official["samples"]) < 5:
+                official["samples"].append({"date": t.get("date", ""), "paid_to": t.get("paid_to", ""),
+                                            "amount": dr, "account": t.get("account", "")})
+            continue
         cr = float(t.get("credit") or 0)
         if cr < 10:
             continue
-        heading = t.get("heading") or ""
         credits[heading] += cr
         if len(samples[heading]) < 5:
             samples[heading].append({
@@ -205,7 +222,9 @@ def tax_ledger_income(fy):
             "total": total,
             "samples": samples[heading],
         })
-    return jsonify({"fy": fy, "ledger_year": ledger_year, "credits": result})
+    return jsonify({"fy": fy, "ledger_year": ledger_year, "credits": result,
+                    "official_expense": {"total": round(official["debit"] - official["credit"], 2),
+                                         "count": official["count"], "samples": official["samples"]}})
 
 @app.route("/financial-statements")
 @login_required
@@ -1190,6 +1209,8 @@ def _default_asset_registry():
         {"id":"bank","label":"Bank Accounts","section":"assets","icon":"bi-bank","items":[
             {"id":"icici_1331","name":"ICICI Bank 1331 (savings)","date_acquired":None,"purchase_value_L":None,"value_mar26_L":15,"value_today_L":None,
              "notes":"Primary operating account. ICICI Bank A/c ending 1331.","documents":[],"sub_items":[]},
+            {"id":"icici_1691","name":"ICICI Bank 1691 (Hamir Advisors LLP)","date_acquired":None,"purchase_value_L":None,"value_mar26_L":None,"value_today_L":None,
+             "notes":"Hamir Advisors LLP current account, opened Sept 2026. Separate tax entity; counted with your income and MIS.","documents":[],"sub_items":[]},
             {"id":"sbi_4852","name":"SBI 4852 (savings)","date_acquired":None,"purchase_value_L":None,"value_mar26_L":5,"value_today_L":None,
              "notes":"SBI savings account. Approximate balance.","documents":[],"sub_items":[]},
         ]},
@@ -2134,7 +2155,7 @@ def api_master_ledger():
     uncertain_ct = sum(1 for t in txns if t.get("uncertain"))
 
     # Accounts list for filter dropdown
-    all_accounts = sorted({t.get("account","") for t in load_ledger() if t.get("account")})
+    all_accounts = sorted({t.get("account","") for t in load_ledger() if t.get("account")} | set(KNOWN_ACCOUNTS))
 
     return jsonify({
         "transactions": txns,
@@ -2513,10 +2534,19 @@ def api_account_status():
             if txn.get("balance") is not None:
                 accounts[acct]["latest_balance"] = txn.get("balance")
 
+    for acct, meta in KNOWN_ACCOUNTS.items():
+        if acct not in accounts:
+            accounts[acct] = {"account": acct, "bank": meta["bank"], "account_type": meta["account_type"], "months": {},
+                              "latest_dt": None, "latest_date": "", "latest_balance": None}
+        accounts[acct]["label"] = meta.get("label")
+        accounts[acct]["opened"] = meta.get("opened")
+
     result = sorted(accounts.values(), key=lambda x: x["account"])
     for r in result:
         r["fy_months"] = fy_months
-        r["month_counts"] = [r["months"].get(ym, 0) for ym in fy_months]
+        opened = r.get("opened")
+        # None = the account didn't exist yet that month (shown as "—", not as a missing-data gap)
+        r["month_counts"] = [None if (opened and ym < opened) else r["months"].get(ym, 0) for ym in fy_months]
         del r["months"]
         del r["latest_dt"]
     return jsonify({"accounts": result, "fy_months": fy_months})

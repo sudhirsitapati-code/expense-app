@@ -1751,7 +1751,7 @@ const HEADINGS_BY_TYPE = {
                'Home office','One Time Charge','Kalpataru Maintenance',
                'Financial Expense','Insurance','Home Loan','Tax','Misc','None',
                'Official Expense','Hamir Rent','Hamir Staff','Hamir Admin','Hamir Travel','Hamir Car'],
-  income:     ['Salary','Asian Paints','Misho','Hamir Equity','Hamir Advent','Interest','Dividends','ESOP Grant','Capital Gains','Gift','Refund','Misc'],
+  income:     ['Salary','Asian Paints','Misho','Hamir EQT','Hamir Advent','Interest','Dividends','ESOP Grant','Capital Gains','Gift','Refund','Misc'],
   investment: ['Art','Foreign Investment','GCPL Share Sale','Property Investment',
                'Loan Repayment','Renovation','Jewelry','Startup','Club','Loans','Uspaar'],
   transfer:   ['Interbank','Cash'],
@@ -2816,12 +2816,13 @@ async function loadAcctStatus() {
       const cells = fy_months.map((ym, i) => {
         const cnt = a.month_counts[i];
         const isFuture = ym > nowYm;
+        if (cnt === null) return `<td class="text-center" style="background:#f8f9fa;color:#ccc;font-size:11px" title="Account not open yet">—</td>`;
         if (isFuture) return `<td class="text-center" style="background:#f8f9fa;color:#ccc;font-size:11px">—</td>`;
         if (cnt === 0) return `<td class="text-center" style="background:#fee2e2" title="No transactions"><span style="color:#dc2626;font-size:13px">✗</span></td>`;
         return `<td class="text-center" style="background:#dcfce7;font-size:11px;color:#166534" title="${cnt} transactions">${cnt}</td>`;
       }).join('');
       return `<tr>
-        <td class="fw-semibold" style="white-space:nowrap">${a.account}</td>
+        <td class="fw-semibold" style="white-space:nowrap">${a.account}${a.label ? `<div class="text-muted fw-normal" style="font-size:10px">${a.label}</div>` : ''}</td>
         <td class="text-muted" style="font-size:11px">${a.bank||'—'}</td>
         <td class="text-muted" style="font-size:11px">${a.account_type||'—'}</td>
         <td class="text-end" style="font-size:11px;white-space:nowrap">${a.latest_date||'—'}</td>
