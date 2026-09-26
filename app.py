@@ -293,7 +293,6 @@ def api_hamir_billing_save():
             "start": str(e.get("start") or "")[:5],
             "end": str(e.get("end") or "")[:5],
             "client": e.get("client") if e.get("client") in HAMIR_CLIENTS else HAMIR_CLIENTS[0],
-            "basis": str(e.get("basis") or "")[:200],
             "amount": amount,
             "amount_auto": bool(e.get("amount_auto", True)),
             "work": str(e.get("work") or "")[:4000],
