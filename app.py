@@ -232,6 +232,97 @@ def financial_statements():
     return render_template("financial_statements.html", user=session["user"])
 
 
+# ── Hamir Advisors: consulting billing log (EQT, Advent) ─────────────────────
+# Client engagements are under NDA, so this whole section is visible to the owner only.
+HAMIR_OWNER = "sudhir"
+HAMIR_CLIENTS = ("EQT", "Advent")
+# Editable in the page. EQT is banded by hours worked in the day; Advent is per hour.
+_HAMIR_DEFAULT_RATES = {
+    "EQT": {"up_to_2h": 1000, "up_to_4h": 2000, "up_to_6h": 3000, "up_to_8h": 4000},
+    "Advent": {"hourly": 375},
+}
+
+
+@app.route("/hamir-advisors")
+@login_required
+def hamir_advisors():
+    if session.get("user") != HAMIR_OWNER:
+        return redirect(url_for("home"))
+    return render_template("hamir_advisors.html", user=session["user"])
+
+
+def _hamir_rates():
+    saved = db.load("hamir_rates")
+    rates = {k: dict(v) for k, v in _HAMIR_DEFAULT_RATES.items()}
+    if isinstance(saved, dict):
+        for client, vals in saved.items():
+            if client in rates and isinstance(vals, dict):
+                rates[client].update({k: v for k, v in vals.items() if k in rates[client]})
+    return rates
+
+
+@app.route("/api/hamir/billing", methods=["GET"])
+@login_required
+def api_hamir_billing_get():
+    if session.get("user") != HAMIR_OWNER:
+        return jsonify({"error": "forbidden"}), 403
+    entries = db.load("hamir_billing_log")
+    return jsonify({"entries": entries if isinstance(entries, list) else [], "rates": _hamir_rates()})
+
+
+@app.route("/api/hamir/billing", methods=["POST"])
+@login_required
+def api_hamir_billing_save():
+    """Save the whole billing log: {"entries": [...]}. Only known fields are kept."""
+    if session.get("user") != HAMIR_OWNER:
+        return jsonify({"error": "forbidden"}), 403
+    raw = (request.get_json(force=True) or {}).get("entries")
+    if not isinstance(raw, list) or len(raw) > 5000:
+        return jsonify({"error": "entries must be a list"}), 400
+    clean = []
+    for e in raw:
+        if not isinstance(e, dict):
+            continue
+        try:
+            amount = None if e.get("amount") in (None, "") else round(float(e["amount"]), 2)
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid amount"}), 400
+        clean.append({
+            "id": str(e.get("id") or "")[:40],
+            "date": str(e.get("date") or "")[:10],
+            "start": str(e.get("start") or "")[:5],
+            "end": str(e.get("end") or "")[:5],
+            "client": e.get("client") if e.get("client") in HAMIR_CLIENTS else HAMIR_CLIENTS[0],
+            "basis": str(e.get("basis") or "")[:200],
+            "amount": amount,
+            "amount_auto": bool(e.get("amount_auto", True)),
+            "work": str(e.get("work") or "")[:4000],
+            "paid": bool(e.get("paid")),
+        })
+    db.save("hamir_billing_log", clean)
+    return jsonify({"ok": True, "count": len(clean)})
+
+
+@app.route("/api/hamir/rates", methods=["POST"])
+@login_required
+def api_hamir_rates_save():
+    if session.get("user") != HAMIR_OWNER:
+        return jsonify({"error": "forbidden"}), 403
+    data = request.get_json(force=True) or {}
+    rates = _hamir_rates()
+    for client, vals in data.items():
+        if client not in rates or not isinstance(vals, dict):
+            continue
+        for k, v in vals.items():
+            if k in rates[client]:
+                try:
+                    rates[client][k] = round(float(v), 2)
+                except (TypeError, ValueError):
+                    return jsonify({"error": f"invalid rate for {client} {k}"}), 400
+    db.save("hamir_rates", rates)
+    return jsonify({"ok": True, "rates": rates})
+
+
 # ── Portfolio allocation (shown at the top of Assets & Liabilities Detail) ──────
 # Asset-registry class id -> allocator row. Anything not listed (and not a liability) lands in "other".
 _ALLOC_CLASS_MAP = {

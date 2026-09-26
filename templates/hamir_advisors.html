@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hamir Advisors Income</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<style>
+body { background:#f8f9fa; font-size:14px; }
+.topbar { background:#1e293b; color:#f1f5f9; padding:10px 20px; display:flex; align-items:center; gap:16px; }
+.topbar a { color:#94a3b8; text-decoration:none; font-size:12px; }
+.topbar a:hover { color:#f1f5f9; }
+.fs-tabs { display:flex; background:#fff; border-bottom:1px solid #e2e8f0; padding:0 20px; }
+.fs-tab { padding:11px 20px; font-size:13px; font-weight:500; color:#64748b; border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; }
+.fs-tab.active { color:#3b82f6; border-bottom-color:#3b82f6; }
+.tab-panel { padding:18px 20px; }
+
+.rates { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px; margin-bottom:14px; }
+.rates summary { cursor:pointer; font-size:12px; font-weight:600; color:#475569; }
+.rates .rate-grid { display:flex; flex-wrap:wrap; gap:22px; margin-top:10px; align-items:flex-start; }
+.rates .rate-box { font-size:12px; color:#475569; }
+.rates .rate-box b { display:block; margin-bottom:5px; color:#1e293b; }
+.rates label { display:inline-flex; align-items:center; gap:6px; margin-right:12px; margin-bottom:4px; font-size:12px; }
+.rates input { width:84px; text-align:right; border:1px solid #e2e8f0; border-radius:4px; padding:2px 6px; font-size:12px; }
+.rates .hint { font-size:11px; color:#94a3b8; margin-top:6px; }
+
+.toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.toolbar .ttl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#64748b; }
+.btn-add { font-size:12px; background:#1e3a5f; color:#fff; border:none; padding:5px 14px; border-radius:6px; }
+
+.log-wrap { background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow-x:auto; }
+table.log { width:100%; border-collapse:collapse; min-width:1080px; }
+.log th { text-align:left; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; color:#94a3b8; padding:8px 10px; background:#f8fafc; border-bottom:1px solid #e2e8f0; white-space:nowrap; }
+.log th.r, .log td.r { text-align:right; }
+.log td { padding:6px 10px; border-bottom:0.5px solid #f1f5f9; vertical-align:top; font-size:13px; }
+.log tr.paid td { background:#f0fdf4; }
+.log input[type=date], .log input[type=time], .log input[type=number], .log select, .log textarea {
+  border:1px solid #e2e8f0; border-radius:4px; padding:3px 6px; font-size:12px; font-family:inherit; background:#fff; color:#1e293b; }
+.log input:focus, .log select:focus, .log textarea:focus { outline:none; border-color:#3b82f6; }
+.log input[type=time] { width:104px; }
+.log input[type=date] { width:132px; }
+.log input.amt { width:96px; text-align:right; font-variant-numeric:tabular-nums; }
+.log textarea { width:100%; min-width:250px; resize:vertical; min-height:30px; }
+.log .hrs { font-variant-numeric:tabular-nums; color:#475569; padding-top:8px; white-space:nowrap; text-align:right; }
+.log .basis { font-size:11px; color:#94a3b8; max-width:190px; line-height:1.35; }
+.log .edited { font-size:10px; color:#d97706; cursor:pointer; text-decoration:underline; display:block; text-align:right; }
+.log .tick { text-align:center; padding-top:8px; }
+.log .tick input { width:18px; height:18px; cursor:pointer; accent-color:#16a34a; }
+.del { background:none; border:none; color:#cbd5e1; font-size:15px; padding:4px 6px; cursor:pointer; }
+.del:hover { color:#dc2626; }
+.empty { padding:34px; text-align:center; color:#94a3b8; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <strong>Hamir Advisors Income</strong>
+  <span style="color:#334155">|</span>
+  <a href="/">← Home</a>
+  <a href="/financial-statements" class="ms-2">Financial Statements</a>
+  <a href="/expenses" class="ms-2">Expenses</a>
+  <span class="ms-auto" style="font-size:11px; color:#475569;">{{ user }}</span>
+</div>
+
+<div class="fs-tabs">
+  <div class="fs-tab active">Master Billing Log</div>
+</div>
+
+<div class="tab-panel">
+
+  <details class="rates">
+    <summary>Rates (click to view or change)</summary>
+    <div class="rate-grid">
+      <div class="rate-box"><b>EQT — day-rate bands (by hours worked that day)</b>
+        <label>up to 2h $<input type="number" step="any" data-rate="EQT.up_to_2h"></label>
+        <label>2–4h $<input type="number" step="any" data-rate="EQT.up_to_4h"></label>
+        <label>4–6h $<input type="number" step="any" data-rate="EQT.up_to_6h"></label>
+        <label>6–8h (and over) $<input type="number" step="any" data-rate="EQT.up_to_8h"></label>
+      </div>
+      <div class="rate-box"><b>Advent — per hour</b>
+        <label>$ per hour <input type="number" step="any" data-rate="Advent.hourly"></label>
+      </div>
+    </div>
+    <div class="hint">Changing a rate only affects new entries, or entries whose times or client you edit — past amounts stay as billed.</div>
+  </details>
+
+  <div class="toolbar">
+    <div class="ttl">Master billing log (USD)</div>
+    <button class="btn-add" onclick="addEntry()">+ Add entry</button>
+  </div>
+
+  <div class="log-wrap">
+    <table class="log">
+      <thead><tr>
+        <th>Date</th><th>Start</th><th>End</th><th class="r">Hours</th><th>Client</th>
+        <th>Basis of agreement</th><th class="r">Amount to charge</th><th>Work done</th><th style="text-align:center">Paid</th><th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let _entries = [], _rates = null;
+const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const usd = v => '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2});
+
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// ── billing rules ───────────────────────────────────────────────────────────
+function hoursOf(e) {
+  if (!e.start || !e.end) return null;
+  const [sh, sm] = e.start.split(':').map(Number), [eh, em] = e.end.split(':').map(Number);
+  const mins = (eh * 60 + em) - (sh * 60 + sm);
+  return mins > 0 ? mins / 60 : null;
+}
+function autoAmount(e) {
+  const h = hoursOf(e);
+  if (h == null) return null;
+  if (e.client === 'Advent') return Math.round(h * _rates.Advent.hourly * 100) / 100;
+  const b = _rates.EQT;                                  // EQT: banded by the hours worked
+  return h <= 2 ? b.up_to_2h : h <= 4 ? b.up_to_4h : h <= 6 ? b.up_to_6h : b.up_to_8h;
+}
+function basisOf(client) {
+  if (client === 'Advent') return usd(_rates.Advent.hourly) + ' per hour';
+  const b = _rates.EQT;
+  return `Day-rate bands: up to 2h ${usd(b.up_to_2h)} · 2–4h ${usd(b.up_to_4h)} · 4–6h ${usd(b.up_to_6h)} · 6–8h ${usd(b.up_to_8h)}`;
+}
+
+// ── load / save ─────────────────────────────────────────────────────────────
+async function load() {
+  const d = await (await fetch('/api/hamir/billing')).json();
+  _entries = d.entries || [];
+  _rates = d.rates;
+  document.querySelectorAll('[data-rate]').forEach(i => {
+    const [c, k] = i.dataset.rate.split('.'); i.value = _rates[c][k];
+    i.onchange = saveRates;
+  });
+  render();
+}
+async function save() {
+  try {
+    const r = await fetch('/api/hamir/billing', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({entries: _entries})});
+    if (!r.ok) alert('Could not save (' + r.status + '). Please try again.');
+  } catch (e) { alert('Could not save — check your connection and try again.'); }
+}
+async function saveRates() {
+  const body = {EQT: {}, Advent: {}};
+  document.querySelectorAll('[data-rate]').forEach(i => { const [c, k] = i.dataset.rate.split('.'); body[c][k] = parseFloat(i.value); });
+  const r = await fetch('/api/hamir/rates', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (r.ok) _rates = (await r.json()).rates; else alert('Could not save the rates.');
+}
+
+// ── rows ────────────────────────────────────────────────────────────────────
+function render() {
+  const rows = [..._entries].sort((a, b) => (b.date + ' ' + b.start).localeCompare(a.date + ' ' + a.start));
+  if (!rows.length) { document.getElementById('rows').innerHTML = `<tr><td colspan="10" class="empty">No entries yet — click <b>+ Add entry</b> to log your first session.</td></tr>`; return; }
+  document.getElementById('rows').innerHTML = rows.map(e => {
+    const h = hoursOf(e);
+    return `<tr class="${e.paid ? 'paid' : ''}">
+      <td><input type="date" value="${esc(e.date)}" onchange="setF('${e.id}','date',this.value)"></td>
+      <td><input type="time" value="${esc(e.start)}" onchange="setF('${e.id}','start',this.value)"></td>
+      <td><input type="time" value="${esc(e.end)}" onchange="setF('${e.id}','end',this.value)"></td>
+      <td class="hrs">${h != null ? h.toFixed(2) : '—'}</td>
+      <td><select onchange="setF('${e.id}','client',this.value)">
+        ${['EQT','Advent'].map(c => `<option${e.client === c ? ' selected' : ''}>${c}</option>`).join('')}</select></td>
+      <td class="basis">${esc(e.basis)}</td>
+      <td class="r"><input type="number" step="any" class="amt" value="${e.amount != null ? e.amount : ''}" placeholder="$"
+            onchange="setF('${e.id}','amount',this.value)">
+        ${e.amount_auto === false ? `<span class="edited" title="Recalculate from the agreement" onclick="resetAmount('${e.id}')">edited · reset</span>` : ''}</td>
+      <td><textarea rows="1" onchange="setF('${e.id}','work',this.value)" placeholder="Work done…">${esc(e.work)}</textarea></td>
+      <td class="tick"><input type="checkbox" ${e.paid ? 'checked' : ''} onchange="setF('${e.id}','paid',this.checked)" title="Tick once the money has been paid"></td>
+      <td><button class="del" title="Delete this entry" onclick="delEntry('${e.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function setF(id, field, value) {
+  const e = _entries.find(x => x.id === id); if (!e) return;
+  if (field === 'amount') {
+    e.amount = value === '' ? null : parseFloat(value);
+    e.amount_auto = false;                       // typed by hand — stop auto-calculating
+  } else if (field === 'paid') {
+    e.paid = !!value;
+  } else {
+    e[field] = value;
+    if (field === 'client') e.basis = basisOf(value);
+    if ((field === 'start' || field === 'end' || field === 'client') && e.amount_auto !== false) e.amount = autoAmount(e);
+  }
+  save();
+  if (field !== 'work') render();
+}
+function resetAmount(id) {
+  const e = _entries.find(x => x.id === id); if (!e) return;
+  e.amount_auto = true; e.amount = autoAmount(e); e.basis = basisOf(e.client);
+  save(); render();
+}
+function addEntry() {
+  const last = _entries.length ? _entries[_entries.length - 1].client : 'EQT';
+  const e = {id: 'b' + Date.now() + Math.floor(Math.random() * 1000), date: todayISO(), start: '', end: '', client: last,
+             basis: basisOf(last), amount: null, amount_auto: true, work: '', paid: false};
+  _entries.push(e); save(); render();
+}
+function delEntry(id) {
+  if (!confirm('Delete this entry?')) return;
+  _entries = _entries.filter(x => x.id !== id); save(); render();
+}
+
+load();
+</script>
+</body>
+</html>

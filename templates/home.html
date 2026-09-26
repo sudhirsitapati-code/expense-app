@@ -114,12 +114,13 @@ body {
         <div class="label">Tax Management</div>
         <div class="desc">Income tax planning, advance tax tracking, deductions, and ITR filing support.</div>
       </a>
-      <div class="nav-card" onclick="alert('Investment Management coming soon')">
-        <div class="icon">📈</div>
-        <div class="label">Investment Management</div>
-        <div class="desc">Portfolio overview, mutual funds, equities, real estate, and returns analysis.</div>
-        <span class="placeholder-badge">Coming soon</span>
-      </div>
+      {% if user == 'sudhir' %}
+      <a href="/hamir-advisors" class="nav-card active-card">
+        <div class="icon">💼</div>
+        <div class="label">Hamir Advisors Income</div>
+        <div class="desc">Consulting billing log for EQT and Advent — time spent, amounts charged, and payments received.</div>
+      </a>
+      {% endif %}
       <a href="/financial-statements" class="nav-card active-card">
         <div class="icon">📊</div>
         <div class="label">Financial Statements</div>
