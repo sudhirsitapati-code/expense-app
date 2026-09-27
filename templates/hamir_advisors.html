@@ -27,6 +27,7 @@ body { background:#f8f9fa; font-size:14px; }
 .toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
 .toolbar .ttl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#64748b; }
 .btn-add { font-size:12px; background:#1e3a5f; color:#fff; border:none; padding:5px 14px; border-radius:6px; }
+.btn-add:disabled { background:#cbd5e1; cursor:default; }
 
 .log-wrap { background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow-x:auto; }
 table.log { width:100%; border-collapse:collapse; min-width:880px; }
@@ -86,7 +87,7 @@ table.log { width:100%; border-collapse:collapse; min-width:880px; }
 
   <div class="toolbar">
     <div class="ttl">Master billing log (USD)</div>
-    <button class="btn-add" onclick="addEntry()">+ Add entry</button>
+    <button class="btn-add" id="addBtn" onclick="addEntry()" disabled>+ Add entry</button>
   </div>
 
   <div class="log-wrap">
@@ -101,7 +102,7 @@ table.log { width:100%; border-collapse:collapse; min-width:880px; }
 </div>
 
 <script>
-let _entries = [], _rates = null;
+let _entries = [], _rates = null, _loaded = false;
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const usd = v => '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2});
 
@@ -128,6 +129,8 @@ function autoAmount(e) {
 }
 // ── load / save ─────────────────────────────────────────────────────────────
 async function load() {
+  document.getElementById('rows').innerHTML = `<tr><td colspan="9" class="empty">Loading…</td></tr>`;
+  document.getElementById('addBtn').disabled = true;
   const d = await (await fetch('/api/hamir/billing')).json();
   _entries = d.entries || [];
   _entries.forEach(e => { if (e.hours == null) { const h = hoursFromClock(e); if (h != null) e.hours = h; } });
@@ -136,13 +139,26 @@ async function load() {
     const [c, k] = i.dataset.rate.split('.'); i.value = _rates[c][k];
     i.onchange = saveRates;
   });
+  _loaded = true;
+  document.getElementById('addBtn').disabled = false;
   render();
 }
-async function save() {
-  try {
-    const r = await fetch('/api/hamir/billing', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({entries: _entries})});
-    if (!r.ok) alert('Could not save (' + r.status + '). Please try again.');
-  } catch (e) { alert('Could not save — check your connection and try again.'); }
+// Saves are chained, never run at the same time. Each one still sends the full, latest list of
+// entries (nothing is skipped) — chaining only fixes the ORDER they arrive in. Without this, two
+// saves fired close together (e.g. filling in several fields quickly) could reach the server out
+// of order, and the older one — sent first but arriving second — would silently overwrite the
+// newer one, making an entry you'd just added or edited disappear on the next reload.
+let _saveChain = Promise.resolve();
+function save() {
+  if (!_loaded) return _saveChain;         // nothing fetched from the server yet — never overwrite it
+  const snapshot = JSON.stringify({entries: _entries});   // frozen now, sent in this exact order
+  _saveChain = _saveChain.then(async () => {
+    try {
+      const r = await fetch('/api/hamir/billing', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: snapshot});
+      if (!r.ok) alert('Could not save (' + r.status + '). Please try again.');
+    } catch (e) { alert('Could not save — check your connection and try again.'); }
+  });
+  return _saveChain;
 }
 async function saveRates() {
   const body = {EQT: {}, Advent: {}};
