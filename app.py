@@ -285,14 +285,16 @@ def api_hamir_billing_save():
             continue
         try:
             amount = None if e.get("amount") in (None, "") else round(float(e["amount"]), 2)
+            hours = None if e.get("hours") in (None, "") else round(float(e["hours"]), 2)
         except (TypeError, ValueError):
-            return jsonify({"error": "invalid amount"}), 400
+            return jsonify({"error": "invalid amount or hours"}), 400
         clean.append({
             "id": str(e.get("id") or "")[:40],
             "date": str(e.get("date") or "")[:10],
             "start": str(e.get("start") or "")[:5],
             "end": str(e.get("end") or "")[:5],
             "client": e.get("client") if e.get("client") in HAMIR_CLIENTS else HAMIR_CLIENTS[0],
+            "hours": hours,
             "amount": amount,
             "amount_auto": bool(e.get("amount_auto", True)),
             "work": str(e.get("work") or "")[:4000],

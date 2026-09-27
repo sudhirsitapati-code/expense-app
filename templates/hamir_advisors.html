@@ -38,6 +38,7 @@ table.log { width:100%; border-collapse:collapse; min-width:880px; }
   border:1px solid #e2e8f0; border-radius:4px; padding:3px 6px; font-size:12px; font-family:inherit; background:#fff; color:#1e293b; }
 .log input:focus, .log select:focus, .log textarea:focus { outline:none; border-color:#3b82f6; }
 .log input[type=time] { width:104px; }
+.log input.hrs { width:66px; text-align:right; font-variant-numeric:tabular-nums; }
 .log input[type=date] { width:132px; }
 .log input.amt { width:96px; text-align:right; font-variant-numeric:tabular-nums; }
 .log textarea { width:100%; min-width:250px; resize:vertical; min-height:30px; }
@@ -110,14 +111,16 @@ function todayISO() {
 }
 
 // ── billing rules ───────────────────────────────────────────────────────────
-function hoursOf(e) {
+// Hours worked from the clock times — only used to auto-fill the Hours box when both times are
+// given. The Hours box itself (e.hours) is what's actually saved and billed from.
+function hoursFromClock(e) {
   if (!e.start || !e.end) return null;
   const [sh, sm] = e.start.split(':').map(Number), [eh, em] = e.end.split(':').map(Number);
   const mins = (eh * 60 + em) - (sh * 60 + sm);
-  return mins > 0 ? mins / 60 : null;
+  return mins > 0 ? Math.round(mins / 60 * 100) / 100 : null;
 }
 function autoAmount(e) {
-  const h = hoursOf(e);
+  const h = e.hours;
   if (h == null) return null;
   if (e.client === 'Advent') return Math.round(h * _rates.Advent.hourly * 100) / 100;
   const b = _rates.EQT;                                  // EQT: banded by the hours worked
@@ -127,6 +130,7 @@ function autoAmount(e) {
 async function load() {
   const d = await (await fetch('/api/hamir/billing')).json();
   _entries = d.entries || [];
+  _entries.forEach(e => { if (e.hours == null) { const h = hoursFromClock(e); if (h != null) e.hours = h; } });
   _rates = d.rates;
   document.querySelectorAll('[data-rate]').forEach(i => {
     const [c, k] = i.dataset.rate.split('.'); i.value = _rates[c][k];
@@ -152,12 +156,12 @@ function render() {
   const rows = [..._entries].sort((a, b) => (b.date + ' ' + b.start).localeCompare(a.date + ' ' + a.start));
   if (!rows.length) { document.getElementById('rows').innerHTML = `<tr><td colspan="9" class="empty">No entries yet — click <b>+ Add entry</b> to log your first session.</td></tr>`; return; }
   document.getElementById('rows').innerHTML = rows.map(e => {
-    const h = hoursOf(e);
     return `<tr class="${e.paid ? 'paid' : ''}">
       <td><input type="date" value="${esc(e.date)}" onchange="setF('${e.id}','date',this.value)"></td>
       <td><input type="time" value="${esc(e.start)}" onchange="setF('${e.id}','start',this.value)"></td>
       <td><input type="time" value="${esc(e.end)}" onchange="setF('${e.id}','end',this.value)"></td>
-      <td class="hrs">${h != null ? h.toFixed(2) : '—'}</td>
+      <td><input type="number" step="0.25" min="0" class="hrs" placeholder="hrs" value="${e.hours != null ? e.hours : ''}"
+            onchange="setF('${e.id}','hours',this.value)"></td>
       <td><select onchange="setF('${e.id}','client',this.value)">
         ${['EQT','Advent'].map(c => `<option${e.client === c ? ' selected' : ''}>${c}</option>`).join('')}</select></td>
       <td class="r"><input type="number" step="any" class="amt" value="${e.amount != null ? e.amount : ''}" placeholder="$"
@@ -177,8 +181,15 @@ function setF(id, field, value) {
     e.amount_auto = false;                       // typed by hand — stop auto-calculating
   } else if (field === 'paid') {
     e.paid = !!value;
+  } else if (field === 'hours') {
+    e.hours = value === '' ? null : parseFloat(value);
+    if (e.amount_auto !== false) e.amount = autoAmount(e);
   } else {
     e[field] = value;
+    if (field === 'start' || field === 'end') {
+      const h = hoursFromClock(e);
+      if (h != null) e.hours = h;                      // fills the Hours box for you; still yours to overwrite
+    }
     if ((field === 'start' || field === 'end' || field === 'client') && e.amount_auto !== false) e.amount = autoAmount(e);
   }
   save();
@@ -192,7 +203,7 @@ function resetAmount(id) {
 function addEntry() {
   const last = _entries.length ? _entries[_entries.length - 1].client : 'EQT';
   const e = {id: 'b' + Date.now() + Math.floor(Math.random() * 1000), date: todayISO(), start: '', end: '', client: last,
-             amount: null, amount_auto: true, work: '', paid: false};
+             hours: null, amount: null, amount_auto: true, work: '', paid: false};
   _entries.push(e); save(); render();
 }
 function delEntry(id) {
