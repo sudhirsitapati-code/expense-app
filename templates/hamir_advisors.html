@@ -35,10 +35,10 @@ table.log { width:100%; border-collapse:collapse; min-width:880px; }
 .log th.r, .log td.r { text-align:right; }
 .log td { padding:6px 10px; border-bottom:0.5px solid #f1f5f9; vertical-align:top; font-size:13px; }
 .log tr.paid td { background:#f0fdf4; }
-.log input[type=date], .log input[type=time], .log input[type=number], .log select, .log textarea {
+.log input[type=date], .log input[type=text], .log input[type=number], .log select, .log textarea {
   border:1px solid #e2e8f0; border-radius:4px; padding:3px 6px; font-size:12px; font-family:inherit; background:#fff; color:#1e293b; }
 .log input:focus, .log select:focus, .log textarea:focus { outline:none; border-color:#3b82f6; }
-.log input[type=time] { width:104px; }
+.log input.time-in { width:74px; font-variant-numeric:tabular-nums; }
 .log input.hrs { width:66px; text-align:right; font-variant-numeric:tabular-nums; }
 .log input[type=date] { width:132px; }
 .log input.amt { width:96px; text-align:right; font-variant-numeric:tabular-nums; }
@@ -174,8 +174,8 @@ function render() {
   document.getElementById('rows').innerHTML = rows.map(e => {
     return `<tr class="${e.paid ? 'paid' : ''}">
       <td><input type="date" value="${esc(e.date)}" onchange="setF('${e.id}','date',this.value)"></td>
-      <td><input type="time" value="${esc(e.start)}" onchange="setF('${e.id}','start',this.value)"></td>
-      <td><input type="time" value="${esc(e.end)}" onchange="setF('${e.id}','end',this.value)"></td>
+      <td><input type="text" inputmode="numeric" class="time-in" placeholder="10:00" value="${esc(e.start)}" onchange="setTime('${e.id}','start',this.value)"></td>
+      <td><input type="text" inputmode="numeric" class="time-in" placeholder="13:30" value="${esc(e.end)}" onchange="setTime('${e.id}','end',this.value)"></td>
       <td><input type="number" step="0.25" min="0" class="hrs" placeholder="hrs" value="${e.hours != null ? e.hours : ''}"
             onchange="setF('${e.id}','hours',this.value)"></td>
       <td><select onchange="setF('${e.id}','client',this.value)">
@@ -190,6 +190,25 @@ function render() {
   }).join('');
 }
 
+// Accepts "10:00", "9:30", "0930", "9", "9am", "9:30pm" — the native time picker was unreliable, so
+// Start/End are now plain text you type into directly, same as every other field on this page.
+function parseTimeInput(raw) {
+  const s = (raw || '').trim().toLowerCase();
+  if (s === '') return '';
+  const m = s.match(/^(\d{1,2})(?::?(\d{2}))?\s*(am|pm)?$/);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const mi = m[2] ? parseInt(m[2], 10) : 0, ap = m[3];
+  if (mi > 59 || (!ap && h > 23) || (ap && (h < 1 || h > 12))) return null;
+  if (ap === 'pm' && h < 12) h += 12;
+  if (ap === 'am' && h === 12) h = 0;
+  return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
+}
+function setTime(id, field, raw) {
+  const v = parseTimeInput(raw);
+  if (v === null) { alert(`Couldn't read "${raw}" as a time — try e.g. 10:00, 9:30am, or 14:30.`); render(); return; }
+  setF(id, field, v);
+}
 function setF(id, field, value) {
   const e = _entries.find(x => x.id === id); if (!e) return;
   if (field === 'amount') {
