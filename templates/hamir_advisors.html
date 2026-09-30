@@ -15,6 +15,12 @@ body { background:#f8f9fa; font-size:14px; }
 .fs-tab.active { color:#3b82f6; border-bottom-color:#3b82f6; }
 .tab-panel { padding:18px 20px; }
 
+.kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
+.kpi { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; }
+.kpi-label { font-size:11px; color:#64748b; margin-bottom:5px; }
+.kpi-val { font-size:20px; font-weight:700; color:#1e293b; }
+.kpi-val.green { color:#16a34a; } .kpi-val.amber { color:#d97706; }
+
 .rates { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px; margin-bottom:14px; }
 .rates summary { cursor:pointer; font-size:12px; font-weight:600; color:#475569; }
 .rates .rate-grid { display:flex; flex-wrap:wrap; gap:22px; margin-top:10px; align-items:flex-start; }
@@ -68,6 +74,8 @@ table.log { width:100%; border-collapse:collapse; min-width:880px; }
 </div>
 
 <div class="tab-panel">
+
+  <div class="kpi-row" id="kpis"></div>
 
   <details class="rates">
     <summary>Rates (click to view or change)</summary>
@@ -167,8 +175,20 @@ async function saveRates() {
   if (r.ok) _rates = (await r.json()).rates; else alert('Could not save the rates.');
 }
 
+// ── totals ──────────────────────────────────────────────────────────────────
+function renderKpis() {
+  const billed = _entries.reduce((s, e) => s + (e.amount || 0), 0);
+  const paid = _entries.reduce((s, e) => s + (e.paid ? (e.amount || 0) : 0), 0);
+  const balance = billed - paid;
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-label">Total Billed</div><div class="kpi-val">${usd(billed)}</div></div>
+    <div class="kpi"><div class="kpi-label">Total Paid</div><div class="kpi-val green">${usd(paid)}</div></div>
+    <div class="kpi"><div class="kpi-label">Balance to be Paid</div><div class="kpi-val ${balance > 0 ? 'amber' : ''}">${usd(balance)}</div></div>`;
+}
+
 // ── rows ────────────────────────────────────────────────────────────────────
 function render() {
+  renderKpis();
   const rows = [..._entries].sort((a, b) => (b.date + ' ' + b.start).localeCompare(a.date + ' ' + a.start));
   if (!rows.length) { document.getElementById('rows').innerHTML = `<tr><td colspan="9" class="empty">No entries yet — click <b>+ Add entry</b> to log your first session.</td></tr>`; return; }
   document.getElementById('rows').innerHTML = rows.map(e => {
