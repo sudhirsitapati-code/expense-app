@@ -36,7 +36,7 @@ body { background:#f8f9fa; font-size:14px; }
   <a class="tax-tab"        href="#" data-view="computation" onclick="switchView('computation');return false;">Tax Computation</a>
   <a class="tax-tab"        href="#" data-view="esop"        onclick="switchView('esop');return false;">ESOP Holdings</a>
   <a class="tax-tab"        href="#" data-view="hamir"       onclick="switchView('hamir');return false;">Hamir (tax view)</a>
-  <a class="tax-tab"        href="#" data-view="board"       onclick="switchView('board');return false;">Sudhir &rarr; Board (Asian Paints)</a>
+  <a class="tax-tab"        href="#" data-view="board"       onclick="switchView('board');return false;">Sudhir expenses (Asian Paints)</a>
   <a class="tax-tab"        href="#" data-view="checklist"   onclick="switchView('checklist');return false;">Documents &amp; Alerts</a>
   <div class="ms-auto d-flex align-items-center gap-2 py-1">
     <label style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin:0;">FY</label>
@@ -480,11 +480,11 @@ async function renderBoardTax(skipLoad) {
           <td><input type="number" min="0" max="100" class="form-control form-control-sm text-end" value="${r.pct}" onchange="taOverride('${r.txn_id}',{pct:this.value},'renderBoardTax')"></td>
           <td class="text-end">${taInr(r.allocated)}</td>
           <td><input class="form-control form-control-sm" value="${taEsc(r.note)}" placeholder="basis / evidence" onchange="taOverride('${r.txn_id}',{note:this.value},'renderBoardTax')"></td></tr>`).join('')
-          : `<tr><td colspan="9" class="text-muted p-2">${rule==='driver'?'No Staff Salary entries match the driver name yet. Payments to him are currently recorded as petty expenses (Groceries / Malhar). Tell me his monthly salary and how it is paid, or re-tag the entries as Staff Salary.':'Nothing in this period.'}</td></tr>`}</tbody></table></div></div>`;
+          : `<tr><td colspan="9" class="text-muted p-2">${rule==='driver'?'Nothing to allocate: the driver is not being paid a salary yet. If that changes, record it as Staff Salary to the driver name below and it will appear here.':'Nothing in this period.'}</td></tr>`}</tbody></table></div></div>`;
   }).join('');
   box.innerHTML = `
   <div class="d-flex align-items-center gap-2 mb-2">
-    <h6 class="mb-0 fw-bold">Sudhir's own spend allocated to Asian Paints board income</h6> ${taFySelect("_taFy=this.value;renderBoardTax()")}
+    <h6 class="mb-0 fw-bold">Sudhir expenses — allocated to Asian Paints board income</h6> ${taFySelect("_taFy=this.value;renderBoardTax()")}
   </div>
   <div class="text-muted mb-3" style="font-size:12px;">Rules are yours; the ledger is untouched. Each row shows what it really is plus the proposed tax classification and the % that can go to the board.
     The CA decides what is finally claimed.</div>
@@ -492,6 +492,8 @@ async function renderBoardTax(skipLoad) {
     <div class="row g-3 align-items-end" style="font-size:12.5px;">
       <div class="col-auto"><label class="form-label mb-1 fw-semibold">Board joining date</label>
         <input type="date" class="form-control form-control-sm" value="${c.board_start}" onchange="taCfg({board_start:this.value})"></div>
+      <div class="col-auto"><label class="form-label mb-1 fw-semibold">Vincent from</label>
+        <input type="date" class="form-control form-control-sm" value="${c.vincent_start}" onchange="taCfg({vincent_start:this.value})"></div>
       <div class="col-auto"><label class="form-label mb-1 fw-semibold">Vincent %</label>
         <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.rule_pct.vincent}" onchange="taCfg({rule_pct:{vincent:this.value}})"></div>
       <div class="col-auto"><label class="form-label mb-1 fw-semibold">Driver %</label>

@@ -250,13 +250,14 @@ def _tax_alloc_config():
     cfg = db.load(_TAX_ALLOC_KEY)
     if not isinstance(cfg, dict):
         cfg = {}
-    cfg.setdefault("board_start", "2026-07-01")
+    cfg.setdefault("board_start", "2026-05-28")
+    cfg.setdefault("vincent_start", "2026-06-01")
     cfg.setdefault("rule_pct", {})
     for k, v in {"vincent": 100.0, "driver": 100.0, "travel": 100.0}.items():
         cfg["rule_pct"].setdefault(k, v)
     cfg.setdefault("heading_pct", {})
     for k in ("Eating Out", "Entertainment"):
-        cfg["heading_pct"].setdefault(k, 0.0)
+        cfg["heading_pct"].setdefault(k, 50.0)
     cfg.setdefault("driver_regex", "shiloch|shiloj|shilaj|shilajit")
     cfg.setdefault("travel_headings", ["Holiday", "Car Expense"])
     cfg.setdefault("overrides", {})
@@ -275,7 +276,11 @@ def _tax_alloc_build(fy):
     try:
         board_start = _date.fromisoformat(cfg["board_start"])
     except Exception:
-        board_start = _date(2026, 7, 1)
+        board_start = _date(2026, 5, 28)
+    try:
+        vincent_start = _date.fromisoformat(cfg["vincent_start"])
+    except Exception:
+        vincent_start = _date(2026, 6, 1)
     drv = _re.compile(cfg["driver_regex"] or "$^", _re.I)
     ov = cfg["overrides"]
     hamir, board = [], []
@@ -318,7 +323,7 @@ def _tax_alloc_build(fy):
             rule = "hospitality"
         if not rule:
             continue
-        after = d.date() >= board_start
+        after = d.date() >= (vincent_start if rule == "vincent" else board_start)
         if rule == "hospitality":
             default = float(cfg["heading_pct"].get(heading, 0)) if after else 0.0
         elif rule == "travel":
@@ -329,7 +334,8 @@ def _tax_alloc_build(fy):
         board.append({**base, "rule": rule, "tax_class": o.get("tax_class") or _BOARD_RULE_CLASS[rule],
                       "pct": pct, "default_pct": default, "board_specific": bool(o.get("board_specific")),
                       "after_board_start": after, "allocated": round(net * pct / 100.0, 2)})
-    key = lambda r: r["date"][-4:] + r["date"][3:5] + r["date"][:2] if len(r["date"]) == 10 else r["date"]
+    key = lambda r: (r["date"] if r["date"][:4].isdigit() and r["date"][4:5] == "-"
+                     else r["date"][-4:] + "-" + r["date"][3:5] + "-" + r["date"][:2])
     hamir.sort(key=key); board.sort(key=key)
     by_class = {}
     for r in hamir:
@@ -340,7 +346,7 @@ def _tax_alloc_build(fy):
         e["eligible"] = round(e["eligible"] + r["amount"], 2)
         e["allocated"] = round(e["allocated"] + r["allocated"], 2)
         e["count"] += 1
-    return {"fy": fy, "config": {k: cfg[k] for k in ("board_start", "rule_pct", "heading_pct", "driver_regex", "travel_headings")},
+    return {"fy": fy, "config": {k: cfg[k] for k in ("board_start", "vincent_start", "rule_pct", "heading_pct", "driver_regex", "travel_headings")},
             "hamir": {"rows": hamir, "total": round(sum(r["allocated"] for r in hamir), 2), "by_class": by_class,
                       "paid_total": round(sum(r["amount"] for r in hamir), 2)},
             "board": {"rows": board, "total": round(sum(r["allocated"] for r in board), 2), "by_rule": by_rule,
@@ -362,7 +368,7 @@ def api_tax_allocation_save():
     body = request.get_json(force=True) or {}
     cfg = _tax_alloc_config()
     for k, v in (body.get("config") or {}).items():
-        if k in ("board_start", "driver_regex"):
+        if k in ("board_start", "vincent_start", "driver_regex"):
             cfg[k] = str(v)
         elif k in ("rule_pct", "heading_pct") and isinstance(v, dict):
             for kk, vv in v.items():
