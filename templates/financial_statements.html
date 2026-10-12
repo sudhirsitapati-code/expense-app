@@ -1072,7 +1072,7 @@ function renderXirr() {
   const allGain = basisRows.reduce((s, r) => s + r.gain, 0);
   const allInv = basisRows.reduce((s, r) => s + r.invested, 0);
   document.getElementById('xr-kpis').innerHTML = `
-    <div class="kpi"><div class="kpi-label">Portfolio XIRR</div><div class="kpi-val ${pf.xirr != null && pf.xirr < 0 ? 'red' : 'green'}">${xrPct(pf.xirr)}</div>
+    <div class="kpi"><div class="kpi-label">Portfolio XIRR (dated flows only)</div><div class="kpi-val ${pf.xirr != null && pf.xirr < 0 ? 'red' : 'green'}">${xrPct(pf.xirr)}</div>
       <div style="font-size:10px;color:#94a3b8;">${pf.n} investments with cash flows</div></div>
     <div class="kpi"><div class="kpi-label">Value (with flows)</div><div class="kpi-val blue">₹${xrCr(pf.value)} Cr</div></div>
     <div class="kpi"><div class="kpi-label">Invested (with flows)</div><div class="kpi-val">₹${xrCr(pf.invested)} Cr</div></div>
