@@ -231,7 +231,8 @@ body { background:#f8f9fa; font-size:14px; }
     Values come from <b>Assets &amp; Liabilities Detail</b> (or type a new one in the Value column here).
     Click <b>flows</b> on a row to enter what you put in (negative) and took out (positive) with dates.
     <b>Every 6 months:</b> refresh the values, add any new flows, then press <b>Save snapshot</b> to record the XIRR.
-    <span style="color:#94a3b8;">* = held under a year, so the annualised figure is only indicative.</span>
+    <span style="color:#94a3b8;">* = held under a year, so the annualised figure is only indicative. † = cost on record but no dated cash flow, so no XIRR yet.
+    Written-off and exited holdings stay on the list so each class shows what you have really made or lost.</span>
   </div>
   <table class="al-table" id="xr-table"><thead><tr>
     <th>Investment</th><th class="r">Value (₹ Cr) ✎</th><th>As of</th><th class="r">Invested (₹ Cr)</th>
@@ -1007,8 +1008,12 @@ function xrItems() {
       const asOf = hasToday ? (it.value_as_of || it.last_updated || todayISO()) : '2026-03-31';
       const flows = (_xr.flows[it.id] || []).map(f => ({d: f.date, a: Number(f.amount), note: f.note || ''}));
       const value = valL * 1e5;
-      const invested = -flows.filter(f => f.a < 0).reduce((s, f) => s + f.a, 0);
+      const flowInvested = -flows.filter(f => f.a < 0).reduce((s, f) => s + f.a, 0);
       const received = flows.filter(f => f.a > 0).reduce((s, f) => s + f.a, 0);
+      // No dated money-in on file: fall back to the recorded cost so written-off / exited items still count
+      const costOnly = flowInvested === 0 && it.purchase_value_L != null && it.purchase_value_L > 0;
+      const invested = costOnly ? it.purchase_value_L * 1e5 : flowInvested;
+      const hasBasis = flowInvested > 0 || costOnly;
       let x = null, young = false;
       if (flows.length) {
         x = xirrCalc([...flows, {d: asOf, a: value}]);
@@ -1016,7 +1021,8 @@ function xrItems() {
         young = xrDays(first, asOf) < 365;
       }
       out.push({id: it.id, clsId: c.id, clsLabel: c.label, name: it.name, value, asOf, flows, invested, received,
-                gain: flows.length ? value + received - invested : null, xirr: x, young});
+                hasBasis, costOnly, writtenOff: !!it.written_off || (hasBasis && value === 0),
+                gain: hasBasis ? value + received - invested : null, xirr: x, young});
     });
   });
   return out;
@@ -1041,25 +1047,45 @@ function renderXirr() {
   const rows = xrItems();
   const pf = xrPortfolio(rows);
   const totalValue = rows.reduce((s, r) => s + r.value, 0);
+  const basisRows = rows.filter(r => r.hasBasis);
+  const allGain = basisRows.reduce((s, r) => s + r.gain, 0);
+  const allInv = basisRows.reduce((s, r) => s + r.invested, 0);
   document.getElementById('xr-kpis').innerHTML = `
     <div class="kpi"><div class="kpi-label">Portfolio XIRR</div><div class="kpi-val ${pf.xirr != null && pf.xirr < 0 ? 'red' : 'green'}">${xrPct(pf.xirr)}</div>
       <div style="font-size:10px;color:#94a3b8;">${pf.n} investments with cash flows</div></div>
     <div class="kpi"><div class="kpi-label">Value (with flows)</div><div class="kpi-val blue">₹${xrCr(pf.value)} Cr</div></div>
     <div class="kpi"><div class="kpi-label">Invested (with flows)</div><div class="kpi-val">₹${xrCr(pf.invested)} Cr</div></div>
     <div class="kpi"><div class="kpi-label">All investments (latest)</div><div class="kpi-val">₹${xrCr(totalValue)} Cr</div>
-      <div style="font-size:10px;color:#94a3b8;">${rows.length - pf.n} still need cash flows</div></div>`;
+      <div style="font-size:10px;color:#94a3b8;">${rows.length - pf.n} still need dated cash flows</div></div>
+    <div class="kpi"><div class="kpi-label">Made / lost, incl. written-off</div><div class="kpi-val ${allGain < 0 ? 'red' : 'green'}">₹${xrCr(allGain)} Cr</div>
+      <div style="font-size:10px;color:#94a3b8;">on ₹${xrCr(allInv)} Cr of known cost, ${basisRows.length} holdings</div></div>`;
   let html = '', cur = null;
-  rows.forEach(r => {
+  const subtotal = (clsId) => {
+    const g = rows.filter(r => r.clsId === clsId);
+    const b = g.filter(r => r.hasBasis);
+    const inv = b.reduce((s, r) => s + r.invested, 0);
+    const gain = b.reduce((s, r) => s + r.gain, 0);
+    const val = g.reduce((s, r) => s + r.value, 0);
+    const dated = g.filter(r => r.flows.length);
+    const fl = []; dated.forEach(r => { r.flows.forEach(f => fl.push({d: f.d, a: f.a})); fl.push({d: r.asOf, a: r.value}); });
+    const x = fl.length ? xirrCalc(fl) : null;
+    const wo = g.filter(r => r.writtenOff).length;
+    return `<tr class="al-tot"><td>Class total${wo ? ` <span style="font-weight:400;font-size:11px;">(incl. ${wo} written-off / exited)</span>` : ''}</td>
+      <td class="r">${xrCr(val)}</td><td></td><td class="r">${b.length ? xrCr(inv) : '—'}</td>
+      <td class="r ${gain < 0 ? 'neg' : ''}">${b.length ? xrCr(gain) : '—'}</td>
+      <td class="r">${x != null ? xrPct(x) : '—'}</td><td style="font-size:10px;font-weight:400;">${dated.length ? 'XIRR on ' + dated.length + ' dated' : ''}</td></tr>`;
+  };
+  rows.forEach((r, i) => {
     if (r.clsId !== cur) { cur = r.clsId; html += `<tr><td colspan="7" style="background:#f8fafc;font-weight:700;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.3px;">${escAttr(r.clsLabel)}</td></tr>`; }
     const open = !!_xrOpen[r.id];
     html += `<tr>
-      <td>${escAttr(r.name)}</td>
+      <td>${escAttr(r.name)}${r.writtenOff ? ' <span style="font-size:10px;color:#b45309;background:#fef3c7;border-radius:8px;padding:1px 7px;">written off / exited</span>' : ''}</td>
       <td class="r"><input type="number" step="0.01" class="al-ideal" style="width:96px;" value="${+(r.value / 1e7).toFixed(4)}"
             onkeydown="if(event.key==='Enter')this.blur()" onchange="xrSaveValue('${r.id}','${r.clsId}',this.value)"></td>
       <td style="font-size:11px;color:#94a3b8;">${r.asOf}</td>
-      <td class="r">${r.flows.length ? xrCr(r.invested) : '—'}</td>
+      <td class="r">${r.hasBasis ? xrCr(r.invested) + (r.costOnly ? '<sup title="cost on record, no dated cash flow">†</sup>' : '') : '—'}</td>
       <td class="r ${r.gain != null && r.gain < 0 ? 'neg' : ''}">${r.gain != null ? xrCr(r.gain) : '—'}</td>
-      <td class="r now ${r.xirr != null && r.xirr < 0 ? 'neg' : ''}">${r.flows.length ? xrPct(r.xirr, r.young) : '<span style="font-weight:400;color:#cbd5e1;">add flows</span>'}</td>
+      <td class="r now ${r.xirr != null && r.xirr < 0 ? 'neg' : ''}">${r.xirr != null ? xrPct(r.xirr, r.young) : (r.costOnly ? '<span style="font-weight:400;color:#cbd5e1;">cost only</span>' : '<span style="font-weight:400;color:#cbd5e1;">add flows</span>')}</td>
       <td><a href="#" style="font-size:11px;" onclick="xrToggle('${r.id}');return false;">${open ? 'close' : 'flows (' + r.flows.length + ')'}</a></td></tr>`;
     if (open) {
       const txt = r.flows.map(f => `${f.d}, ${f.a}${f.note ? ', ' + f.note : ''}`).join('\n');
@@ -1068,6 +1094,7 @@ function renderXirr() {
         <textarea id="xrt-${r.id}" rows="${Math.max(3, Math.min(14, r.flows.length + 2))}" style="width:100%;font-family:ui-monospace,Menlo,monospace;font-size:12px;border:1px solid #e2e8f0;border-radius:6px;padding:6px;">${escAttr(txt)}</textarea>
         <button class="ar-btn save" onclick="xrSaveFlows('${r.id}')">Save flows</button></td></tr>`;
     }
+    if (i === rows.length - 1 || rows[i + 1].clsId !== r.clsId) html += subtotal(r.clsId);
   });
   document.getElementById('xr-body').innerHTML = html;
 
