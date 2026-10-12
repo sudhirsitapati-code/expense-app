@@ -238,6 +238,7 @@ body { background:#f8f9fa; font-size:14px; }
     <th>Investment</th><th class="r">Value (₹ Cr) ✎</th><th>As of</th><th class="r">Invested (₹ Cr)</th>
     <th class="r">Gain (₹ Cr)</th><th class="r">XIRR</th><th></th>
   </tr></thead><tbody id="xr-body"></tbody></table>
+  <div id="xr-memo" style="margin-top:10px;"></div>
   <div style="display:flex;align-items:center;gap:10px;margin:14px 0 6px;">
     <button class="btn btn-sm" style="font-size:11px;background:#1e3a5f;color:#fff;border:none;padding:4px 14px;border-radius:6px;" onclick="xrSnapshot()">Save snapshot</button>
     <span style="font-size:11px;color:#94a3b8;">Stores today's XIRR for every investment so you can compare 6-monthly.</span>
@@ -979,6 +980,7 @@ async function saveBudget() {
 
 // ── Investment XIRR ─────────────────────────────────────────────────────────
 let _xr = {flows:{}, snapshots:[]};
+let _xrMemo = [];
 const _xrOpen = {};
 const XR_SKIP = new Set(['bank','insurance']);
 
@@ -1001,8 +1003,14 @@ function xirrCalc(flows) {
 
 function xrItems() {
   const out = [];
+  _xrMemo = [];
   (_registry ? _registry.classes : []).filter(c => c.section === 'assets' && !XR_SKIP.has(c.id)).forEach(c => {
     c.items.forEach(it => {
+      if (it.xirr_exclude) {
+        const v = (it.value_today_L != null ? it.value_today_L : (it.value_mar26_L || 0)) * 1e5;
+        _xrMemo.push({name: it.name, value: v, why: it.notes || ''});
+        return;
+      }
       const hasToday = it.value_today_L != null;
       const valL = hasToday ? it.value_today_L : (it.value_mar26_L || 0);
       const asOf = hasToday ? (it.value_as_of || it.last_updated || todayISO()) : '2026-03-31';
@@ -1097,6 +1105,11 @@ function renderXirr() {
     if (i === rows.length - 1 || rows[i + 1].clsId !== r.clsId) html += subtotal(r.clsId);
   });
   document.getElementById('xr-body').innerHTML = html;
+  const memoTot = _xrMemo.reduce((t, m) => t + m.value, 0);
+  document.getElementById('xr-memo').innerHTML = _xrMemo.length ? `
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;margin-bottom:4px;">Not counted in returns (received as compensation) — ₹${xrCr(memoTot)} Cr</div>
+    <table class="al-table"><tbody>${_xrMemo.map(m => `<tr><td>${escAttr(m.name)}</td><td class="r">₹${xrCr(m.value)} Cr</td></tr>`).join('')}</tbody></table>
+    <div style="font-size:11px;color:#94a3b8;margin-top:4px;">Employer shares arrive through salary and the tax is already paid, so there is no investment decision to measure. They still count in net worth.</div>` : '';
 
   const sn = _xr.snapshots || [];
   document.getElementById('xr-snaps').innerHTML = sn.length ? `
