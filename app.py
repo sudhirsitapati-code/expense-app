@@ -226,6 +226,164 @@ def tax_ledger_income(fy):
                     "official_expense": {"total": round(official["debit"] - official["credit"], 2),
                                          "count": official["count"], "samples": official["samples"]}})
 
+
+# ── Tax allocation: ledger stays plain; this layer proposes a tax view ────────────────────────
+_TAX_ALLOC_KEY = "tax_allocation"
+_TAX_FY_RANGE = {"FY25": ((2024, 4, 1), (2025, 3, 31)), "FY26": ((2025, 4, 1), (2026, 3, 31)),
+                 "FY27": ((2026, 4, 1), (2027, 3, 31))}
+_HAMIR_CLASS_DEFAULT = {
+    "Hamir Travel": "Travel & conveyance", "Hamir Admin": "Office & administration",
+    "Hamir Staff": "Staff cost", "Hamir Rent": "Rent", "Hamir Car": "Vehicle (capital asset - depreciation)",
+    "Official Expense": "Professional tools, software & subscriptions",
+    "One Time Charge": "Events / hospitality (review)", "Holiday": "Travel (review: business purpose?)",
+    "Ketki": "Not a business cost - treat as drawings", "Misc": "Miscellaneous (review)",
+}
+_BOARD_RULE_CLASS = {
+    "vincent": "Staff cost - assistant supporting board work (Asian Paints)",
+    "driver": "Conveyance - driver for board duties",
+    "travel": "Travel - board meetings",
+    "hospitality": "Hospitality / entertainment (business share)",
+}
+
+
+def _tax_alloc_config():
+    cfg = db.load(_TAX_ALLOC_KEY)
+    if not isinstance(cfg, dict):
+        cfg = {}
+    cfg.setdefault("board_start", "2026-07-01")
+    cfg.setdefault("rule_pct", {})
+    for k, v in {"vincent": 100.0, "driver": 100.0, "travel": 100.0}.items():
+        cfg["rule_pct"].setdefault(k, v)
+    cfg.setdefault("heading_pct", {})
+    for k in ("Eating Out", "Entertainment"):
+        cfg["heading_pct"].setdefault(k, 0.0)
+    cfg.setdefault("driver_regex", "shiloch|shiloj|shilaj|shilajit")
+    cfg.setdefault("travel_headings", ["Holiday", "Car Expense"])
+    cfg.setdefault("overrides", {})
+    return cfg
+
+
+def _tax_alloc_build(fy):
+    import re as _re
+    from src.master_ledger import _parse_date as _pd
+    from datetime import date as _date
+    if fy not in _TAX_FY_RANGE:
+        return None
+    (y1, m1, d1), (y2, m2, d2) = _TAX_FY_RANGE[fy]
+    lo, hi = _date(y1, m1, d1), _date(y2, m2, d2)
+    cfg = _tax_alloc_config()
+    try:
+        board_start = _date.fromisoformat(cfg["board_start"])
+    except Exception:
+        board_start = _date(2026, 7, 1)
+    drv = _re.compile(cfg["driver_regex"] or "$^", _re.I)
+    ov = cfg["overrides"]
+    hamir, board = [], []
+    for t in db.load("master_ledger") or []:
+        d = _pd(t.get("date", ""))
+        if not d or not (lo <= d.date() <= hi):
+            continue
+        if t.get("account") == "cash":
+            continue
+        typ = (t.get("type") or "").lower()
+        net = float(t.get("debit") or 0) - float(t.get("credit") or 0)
+        if abs(net) < 1:
+            continue
+        heading = t.get("heading") or ""
+        text = f"{t.get('paid_to') or ''} {t.get('raw_description') or ''}".lower()
+        o = ov.get(t.get("txn_id"), {})
+        base = {"txn_id": t.get("txn_id"), "date": t.get("date"), "account": t.get("account"),
+                "paid_to": (t.get("paid_to") or "")[:40],
+                "desc": (t.get("raw_description") or "")[:70].replace("\n", " "),
+                "amount": round(net, 2), "ledger_heading": heading or "(none)",
+                "uncertain": bool(t.get("uncertain")), "note": o.get("note", "")}
+        if t.get("account") in TAX_EXCLUDED_ACCOUNTS:
+            if typ not in ("expense", "investment") or net < 0:
+                continue
+            pct = float(o["pct"]) if "pct" in o else 100.0
+            cls = o.get("tax_class") or _HAMIR_CLASS_DEFAULT.get(heading, "Review")
+            hamir.append({**base, "type": typ, "tax_class": cls, "pct": pct,
+                          "allocated": round(net * pct / 100.0, 2)})
+            continue
+        if typ != "expense":
+            continue
+        rule = None
+        if heading == "Staff Salary" and "vincent" in text:
+            rule = "vincent"
+        elif heading == "Staff Salary" and drv.search(text):
+            rule = "driver"
+        elif heading in cfg["travel_headings"]:
+            rule = "travel"
+        elif heading in ("Eating Out", "Entertainment"):
+            rule = "hospitality"
+        if not rule:
+            continue
+        after = d.date() >= board_start
+        if rule == "hospitality":
+            default = float(cfg["heading_pct"].get(heading, 0)) if after else 0.0
+        elif rule == "travel":
+            default = float(cfg["rule_pct"]["travel"]) if (after and o.get("board_specific")) else 0.0
+        else:
+            default = float(cfg["rule_pct"][rule]) if after else 0.0
+        pct = float(o["pct"]) if "pct" in o else default
+        board.append({**base, "rule": rule, "tax_class": o.get("tax_class") or _BOARD_RULE_CLASS[rule],
+                      "pct": pct, "default_pct": default, "board_specific": bool(o.get("board_specific")),
+                      "after_board_start": after, "allocated": round(net * pct / 100.0, 2)})
+    key = lambda r: r["date"][-4:] + r["date"][3:5] + r["date"][:2] if len(r["date"]) == 10 else r["date"]
+    hamir.sort(key=key); board.sort(key=key)
+    by_class = {}
+    for r in hamir:
+        by_class[r["tax_class"]] = round(by_class.get(r["tax_class"], 0) + r["allocated"], 2)
+    by_rule = {}
+    for r in board:
+        e = by_rule.setdefault(r["rule"], {"eligible": 0.0, "allocated": 0.0, "count": 0})
+        e["eligible"] = round(e["eligible"] + r["amount"], 2)
+        e["allocated"] = round(e["allocated"] + r["allocated"], 2)
+        e["count"] += 1
+    return {"fy": fy, "config": {k: cfg[k] for k in ("board_start", "rule_pct", "heading_pct", "driver_regex", "travel_headings")},
+            "hamir": {"rows": hamir, "total": round(sum(r["allocated"] for r in hamir), 2), "by_class": by_class,
+                      "paid_total": round(sum(r["amount"] for r in hamir), 2)},
+            "board": {"rows": board, "total": round(sum(r["allocated"] for r in board), 2), "by_rule": by_rule,
+                      "eligible_total": round(sum(r["amount"] for r in board), 2)}}
+
+
+@app.route("/api/tax/allocation/<fy>")
+@login_required
+def api_tax_allocation_get(fy):
+    out = _tax_alloc_build(fy)
+    if out is None:
+        return jsonify({"error": "Unknown FY"}), 400
+    return jsonify(out)
+
+
+@app.route("/api/tax/allocation", methods=["POST"])
+@login_required
+def api_tax_allocation_save():
+    body = request.get_json(force=True) or {}
+    cfg = _tax_alloc_config()
+    for k, v in (body.get("config") or {}).items():
+        if k in ("board_start", "driver_regex"):
+            cfg[k] = str(v)
+        elif k in ("rule_pct", "heading_pct") and isinstance(v, dict):
+            for kk, vv in v.items():
+                cfg[k][kk] = max(0.0, min(100.0, float(vv)))
+    for tid, patch in (body.get("overrides") or {}).items():
+        o = cfg["overrides"].setdefault(tid, {})
+        for kk in ("pct", "tax_class", "note", "board_specific"):
+            if kk in patch:
+                val = patch[kk]
+                if val is None or val == "":
+                    o.pop(kk, None)
+                elif kk == "pct":
+                    o[kk] = max(0.0, min(100.0, float(val)))
+                else:
+                    o[kk] = val
+        if not o:
+            cfg["overrides"].pop(tid, None)
+    db.save(_TAX_ALLOC_KEY, cfg)
+    return jsonify({"ok": True})
+
+
 @app.route("/financial-statements")
 @login_required
 def financial_statements():

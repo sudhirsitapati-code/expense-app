@@ -35,6 +35,8 @@ body { background:#f8f9fa; font-size:14px; }
   <a class="tax-tab"        href="#" data-view="deductions"  onclick="switchView('deductions');return false;">Deductions</a>
   <a class="tax-tab"        href="#" data-view="computation" onclick="switchView('computation');return false;">Tax Computation</a>
   <a class="tax-tab"        href="#" data-view="esop"        onclick="switchView('esop');return false;">ESOP Holdings</a>
+  <a class="tax-tab"        href="#" data-view="hamir"       onclick="switchView('hamir');return false;">Hamir (tax view)</a>
+  <a class="tax-tab"        href="#" data-view="board"       onclick="switchView('board');return false;">Sudhir &rarr; Board (Asian Paints)</a>
   <a class="tax-tab"        href="#" data-view="checklist"   onclick="switchView('checklist');return false;">Documents &amp; Alerts</a>
   <div class="ms-auto d-flex align-items-center gap-2 py-1">
     <label style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin:0;">FY</label>
@@ -50,6 +52,8 @@ body { background:#f8f9fa; font-size:14px; }
   <div id="taxViewDeductions"  class="d-none"></div>
   <div id="taxViewComputation" class="d-none"></div>
   <div id="taxViewEsop"        class="d-none"></div>
+  <div id="taxViewHamir"       class="d-none"></div>
+  <div id="taxViewBoard"       class="d-none"></div>
   <div id="taxViewChecklist"   class="d-none"></div>
 </div>
 
@@ -382,16 +386,146 @@ function inr(n) {
 }
 
 // ── View switcher ─────────────────────────────────────────────────────────────
+
+// ── Tax allocation (Hamir tab + Sudhir → Asian Paints tab) ───────────────────────────────────
+// The master ledger stays plain. These tabs show what each expense really is, plus a proposed
+// tax classification and the % that can go to the business. Everything is editable and saved.
+let _taFy = 'FY27', _taData = null;
+const taInr = v => (v < 0 ? '−₹' : '₹') + Math.abs(Math.round(v)).toLocaleString('en-IN');
+const taEsc = t => String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+
+async function taLoad() {
+  const r = await fetch('/api/tax/allocation/' + _taFy);
+  _taData = await r.json();
+  if (_taData.error) throw new Error(_taData.error);
+}
+async function taPost(body) {
+  const r = await fetch('/api/tax/allocation', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (!r.ok) { alert('Save failed (' + r.status + ')'); return false; }
+  return true;
+}
+function taFySelect(onchange) {
+  return `<select class="form-select form-select-sm w-auto d-inline-block" onchange="${onchange}">
+    ${['FY27','FY26'].map(f => `<option value="${f}" ${f===_taFy?'selected':''}>${f==='FY27'?'FY 2026–27':'FY 2025–26'}</option>`).join('')}</select>`;
+}
+async function taOverride(txnId, patch, rerender) {
+  if (await taPost({overrides: {[txnId]: patch}})) { await taLoad(); window[rerender](true); }
+}
+
+async function renderHamirTax(skipLoad) {
+  const box = document.getElementById('taxViewHamir');
+  if (!skipLoad) { box.innerHTML = '<div class="p-4 text-muted">Loading…</div>'; try { await taLoad(); } catch(e) { box.innerHTML = '<div class="p-4 text-danger">'+taEsc(e.message)+'</div>'; return; } }
+  const h = _taData.hamir;
+  const cls = Object.entries(h.by_class).sort((a,b)=>b[1]-a[1]);
+  box.innerHTML = `
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <h6 class="mb-0 fw-bold">Hamir Advisors LLP — expenses for tax</h6> ${taFySelect("_taFy=this.value;renderHamirTax()")}
+  </div>
+  <div class="text-muted mb-3" style="font-size:12px;">Everything paid from the Hamir account (ICICI 1691). The ledger keeps the real heading; the
+    <b>tax classification</b> is the proposal for the LLP's books. Edit the classification or % and it saves.</div>
+  <div class="row g-2 mb-3">
+    <div class="col-auto"><div class="border rounded px-3 py-2"><div class="text-muted" style="font-size:11px;">PAID FROM HAMIR</div><div class="fw-bold">${taInr(h.paid_total)}</div></div></div>
+    <div class="col-auto"><div class="border rounded px-3 py-2"><div class="text-muted" style="font-size:11px;">ALLOCATED TO HAMIR</div><div class="fw-bold text-success">${taInr(h.total)}</div></div></div>
+    <div class="col-auto"><div class="border rounded px-3 py-2"><div class="text-muted" style="font-size:11px;">ENTRIES</div><div class="fw-bold">${h.rows.length}</div></div></div>
+  </div>
+  ${cls.length ? `<div class="mb-3"><div class="text-muted mb-1" style="font-size:11px;font-weight:600;">BY TAX CLASSIFICATION</div>
+    <table class="table table-sm table-borderless mb-0" style="font-size:12.5px;max-width:520px;"><tbody>
+    ${cls.map(([k,v]) => `<tr><td>${taEsc(k)}</td><td class="text-end">${taInr(v)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+  <div class="table-responsive"><table class="table table-sm table-hover" style="font-size:12.5px;min-width:900px;">
+    <thead class="table-light"><tr><th>Date</th><th>Paid to</th><th>What it actually is</th><th class="text-end">Amount</th>
+      <th style="min-width:230px;">Tax classification</th><th style="width:70px;" class="text-end">% Hamir</th><th class="text-end">Allocated</th><th>Note</th></tr></thead>
+    <tbody>${h.rows.length ? h.rows.map(r => `<tr class="${r.type==='investment'?'table-warning':''}">
+      <td class="text-nowrap">${r.date}</td><td>${taEsc(r.paid_to || r.desc.slice(0,28))}</td>
+      <td>${taEsc(r.ledger_heading)}${r.type==='investment'?' <span class="badge text-bg-warning">capital</span>':''}${r.uncertain?' <span class="badge text-bg-secondary">uncertain</span>':''}</td>
+      <td class="text-end">${taInr(r.amount)}</td>
+      <td><input class="form-control form-control-sm" value="${taEsc(r.tax_class)}" onchange="taOverride('${r.txn_id}',{tax_class:this.value},'renderHamirTax')"></td>
+      <td><input type="number" min="0" max="100" class="form-control form-control-sm text-end" value="${r.pct}" onchange="taOverride('${r.txn_id}',{pct:this.value},'renderHamirTax')"></td>
+      <td class="text-end">${taInr(r.allocated)}</td>
+      <td><input class="form-control form-control-sm" value="${taEsc(r.note)}" placeholder="basis / evidence" onchange="taOverride('${r.txn_id}',{note:this.value},'renderHamirTax')"></td></tr>`).join('')
+      : '<tr><td colspan="8" class="text-muted p-3">No expenses from the Hamir account in this year.</td></tr>'}</tbody></table></div>`;
+}
+
+const TA_RULES = {
+  vincent:     {title: "Vincent's salary",                      help: "Agreed to be allocated to Asian Paints."},
+  travel:      {title: 'Board-specific travel',                 help: 'Tick the trips that were for board work (from the joining date). Only ticked rows are allocated.'},
+  driver:      {title: "Driver's salary",                       help: 'Payee matches the driver name below and the entry is a Staff Salary.'},
+  hospitality: {title: 'Eating out & entertainment (share)',    help: 'Allocated at the % set above for each heading; override any row.'}
+};
+async function taCfg(patch) { if (await taPost({config: patch})) { await taLoad(); renderBoardTax(true); } }
+
+async function renderBoardTax(skipLoad) {
+  const box = document.getElementById('taxViewBoard');
+  if (!skipLoad) { box.innerHTML = '<div class="p-4 text-muted">Loading…</div>'; try { await taLoad(); } catch(e) { box.innerHTML = '<div class="p-4 text-danger">'+taEsc(e.message)+'</div>'; return; } }
+  const b = _taData.board, c = _taData.config;
+  const order = ['vincent','travel','driver','hospitality'];
+  const sections = order.map(rule => {
+    const rows = b.rows.filter(r => r.rule === rule);
+    const tot = b.by_rule[rule] || {eligible:0, allocated:0, count:0};
+    return `<div class="mb-4">
+      <div class="d-flex align-items-baseline gap-3 mb-1">
+        <h6 class="mb-0 fw-bold">${TA_RULES[rule].title}</h6>
+        <span class="text-muted" style="font-size:12px;">${TA_RULES[rule].help}</span>
+        <span class="ms-auto" style="font-size:12.5px;">spent <b>${taInr(tot.eligible)}</b> → allocated <b class="text-success">${taInr(tot.allocated)}</b></span>
+      </div>
+      <div class="table-responsive"><table class="table table-sm table-hover mb-0" style="font-size:12.5px;min-width:880px;">
+        <thead class="table-light"><tr><th>Date</th><th>Paid to</th><th>What it actually is</th><th class="text-end">Amount</th>
+          ${rule==='travel'?'<th class="text-center">Board trip?</th>':''}
+          <th style="min-width:210px;">Tax classification</th><th style="width:70px;" class="text-end">%</th><th class="text-end">Allocated</th><th>Note</th></tr></thead>
+        <tbody>${rows.length ? rows.map(r => `<tr class="${r.after_board_start?'':'text-muted'}">
+          <td class="text-nowrap">${r.date}${r.after_board_start?'':' <span class="badge text-bg-light">pre-board</span>'}</td>
+          <td>${taEsc(r.paid_to || r.desc.slice(0,28))}</td><td>${taEsc(r.ledger_heading)}</td>
+          <td class="text-end">${taInr(r.amount)}</td>
+          ${rule==='travel'?`<td class="text-center"><input type="checkbox" ${r.board_specific?'checked':''} onchange="taOverride('${r.txn_id}',{board_specific:this.checked||null},'renderBoardTax')"></td>`:''}
+          <td><input class="form-control form-control-sm" value="${taEsc(r.tax_class)}" onchange="taOverride('${r.txn_id}',{tax_class:this.value},'renderBoardTax')"></td>
+          <td><input type="number" min="0" max="100" class="form-control form-control-sm text-end" value="${r.pct}" onchange="taOverride('${r.txn_id}',{pct:this.value},'renderBoardTax')"></td>
+          <td class="text-end">${taInr(r.allocated)}</td>
+          <td><input class="form-control form-control-sm" value="${taEsc(r.note)}" placeholder="basis / evidence" onchange="taOverride('${r.txn_id}',{note:this.value},'renderBoardTax')"></td></tr>`).join('')
+          : `<tr><td colspan="9" class="text-muted p-2">${rule==='driver'?'No Staff Salary entries match the driver name yet. Payments to him are currently recorded as petty expenses (Groceries / Malhar). Tell me his monthly salary and how it is paid, or re-tag the entries as Staff Salary.':'Nothing in this period.'}</td></tr>`}</tbody></table></div></div>`;
+  }).join('');
+  box.innerHTML = `
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <h6 class="mb-0 fw-bold">Sudhir's own spend allocated to Asian Paints board income</h6> ${taFySelect("_taFy=this.value;renderBoardTax()")}
+  </div>
+  <div class="text-muted mb-3" style="font-size:12px;">Rules are yours; the ledger is untouched. Each row shows what it really is plus the proposed tax classification and the % that can go to the board.
+    The CA decides what is finally claimed.</div>
+  <div class="border rounded p-3 mb-3" style="background:#f8fafc;">
+    <div class="row g-3 align-items-end" style="font-size:12.5px;">
+      <div class="col-auto"><label class="form-label mb-1 fw-semibold">Board joining date</label>
+        <input type="date" class="form-control form-control-sm" value="${c.board_start}" onchange="taCfg({board_start:this.value})"></div>
+      <div class="col-auto"><label class="form-label mb-1 fw-semibold">Vincent %</label>
+        <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.rule_pct.vincent}" onchange="taCfg({rule_pct:{vincent:this.value}})"></div>
+      <div class="col-auto"><label class="form-label mb-1 fw-semibold">Driver %</label>
+        <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.rule_pct.driver}" onchange="taCfg({rule_pct:{driver:this.value}})"></div>
+      <div class="col-auto"><label class="form-label mb-1 fw-semibold">Board trip %</label>
+        <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.rule_pct.travel}" onchange="taCfg({rule_pct:{travel:this.value}})"></div>
+      <div class="col-auto"><label class="form-label mb-1 fw-semibold">Eating out %</label>
+        <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.heading_pct['Eating Out']}" onchange="taCfg({heading_pct:{'Eating Out':this.value}})"></div>
+      <div class="col-auto"><label class="form-label mb-1 fw-semibold">Entertainment %</label>
+        <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.heading_pct['Entertainment']}" onchange="taCfg({heading_pct:{'Entertainment':this.value}})"></div>
+      <div class="col"><label class="form-label mb-1 fw-semibold">Driver name match</label>
+        <input class="form-control form-control-sm" value="${taEsc(c.driver_regex)}" onchange="taCfg({driver_regex:this.value})"></div>
+    </div>
+  </div>
+  <div class="row g-2 mb-4">
+    <div class="col-auto"><div class="border rounded px-3 py-2"><div class="text-muted" style="font-size:11px;">ELIGIBLE SPEND</div><div class="fw-bold">${taInr(b.eligible_total)}</div></div></div>
+    <div class="col-auto"><div class="border rounded px-3 py-2"><div class="text-muted" style="font-size:11px;">ALLOCATED TO ASIAN PAINTS</div><div class="fw-bold text-success">${taInr(b.total)}</div></div></div>
+    <div class="col-auto"><div class="border rounded px-3 py-2"><div class="text-muted" style="font-size:11px;">STAYS PERSONAL</div><div class="fw-bold">${taInr(b.eligible_total - b.total)}</div></div></div>
+  </div>
+  ${sections}`;
+}
+
 function switchView(view) {
   document.querySelectorAll('.tax-tab').forEach(l => l.classList.remove('active'));
   document.querySelector('.tax-tab[data-view="'+view+'"]')?.classList.add('active');
-  ['income','deductions','computation','esop','checklist'].forEach(v =>
+  ['income','deductions','computation','esop','hamir','board','checklist'].forEach(v =>
     document.getElementById('taxView'+v.charAt(0).toUpperCase()+v.slice(1)).classList.toggle('d-none', v!==view));
   const fy = document.getElementById('taxFySelect').value;
   if (view==='income')      renderIncome(fy);
   if (view==='deductions')  renderDeductions(fy);
   if (view==='computation') renderComputation(fy);
   if (view==='esop')        renderEsop();
+  if (view==='hamir')       renderHamirTax();
+  if (view==='board')       renderBoardTax();
   if (view==='checklist')   renderChecklist(fy);
 }
 
