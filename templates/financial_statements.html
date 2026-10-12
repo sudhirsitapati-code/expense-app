@@ -74,7 +74,19 @@ body { background:#f8f9fa; font-size:14px; }
 .ar-class-hdr:hover { background:#f1f5f9; }
 .ar-class-hdr .ar-icon { font-size:16px; color:#1e3a5f; width:20px; text-align:center; flex-shrink:0; }
 .ar-class-hdr .ar-label { font-size:13px; font-weight:600; color:#1e293b; flex:1; }
-.ar-class-hdr .ar-total { font-size:13px; font-weight:700; color:#1e3a5f; min-width:90px; text-align:right; }
+.ar-class-hdr .ar-total { font-size:13px; font-weight:700; color:#1e3a5f; width:120px; text-align:right; }
+.ar-class-hdr .ar-total.cur { width:150px; }
+.ar-class-hdr .ar-total.mar { color:#64748b; font-weight:600; }
+.ar-class-hdr .ar-add-btn { width:56px; margin-left:4px; }
+@media (max-width: 720px) {
+  .ar-item-row, .ar-col-hdr { grid-template-columns:1fr 62px 96px; padding-right:62px; padding-left:14px; gap:4px; }
+  .ar-class-hdr { gap:6px; padding:8px 8px; }
+  .ar-class-hdr .ar-total { width:62px; font-size:12px; }
+  .ar-class-hdr .ar-total.cur { width:96px; }
+  .ar-class-hdr .ar-add-btn { width:50px; padding:2px 4px; }
+  .ar-class-hdr .ar-label { font-size:12px; }
+  .ar-item-name { font-size:12px; }
+}
 .ar-class-hdr .ar-add-btn { font-size:11px; padding:2px 10px; border-radius:5px; border:1px solid #cbd5e1; background:#fff; color:#475569; cursor:pointer; white-space:nowrap; }
 .ar-class-hdr .ar-add-btn:hover { background:#1e3a5f; color:#fff; border-color:#1e3a5f; }
 .ar-class-hdr .ar-expand { font-size:12px; font-weight:700; width:18px; height:18px; border-radius:4px; background:#e2e8f0; color:#475569; display:flex;align-items:center;justify-content:center; flex-shrink:0; transition:background .1s; }
@@ -83,13 +95,13 @@ body { background:#f8f9fa; font-size:14px; }
 .ar-class-body.open { display:block; }
 .ar-item { border-bottom:0.5px solid #f1f5f9; }
 .ar-item:last-child { border-bottom:none; }
-.ar-item-row { display:grid; grid-template-columns:1fr 110px 110px 110px 100px 100px; align-items:center; padding:8px 14px 8px 28px; cursor:pointer; gap:8px; }
+.ar-item-row { display:grid; grid-template-columns:1fr 120px 150px; align-items:center; padding:7px 84px 7px 28px; cursor:pointer; gap:8px; }
 .ar-item-row:hover { background:#fafbff; }
 .ar-item-name { font-size:13px; color:#1e293b; display:flex; align-items:center; gap:6px; }
 .ar-item-name .ar-expand { flex-shrink:0; }
 .ar-val { font-size:12px; font-variant-numeric:tabular-nums; text-align:right; color:#475569; }
 .ar-val.highlight { color:#1e3a5f; font-weight:600; }
-.ar-col-hdr { display:grid; grid-template-columns:1fr 110px 110px 110px 100px 100px; padding:5px 14px 5px 28px; gap:8px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
+.ar-col-hdr { display:grid; grid-template-columns:1fr 120px 150px; padding:5px 84px 5px 28px; gap:8px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
 .ar-today-in { width:100%; text-align:right; border:1px solid #e2e8f0; border-radius:4px; background:#fff; padding:2px 6px; font-size:12px; font-variant-numeric:tabular-nums; color:#1e293b; font-family:inherit; -moz-appearance:textfield; appearance:textfield; }
 .ar-today-in::-webkit-inner-spin-button, .ar-today-in::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 .ar-today-in:hover { border-color:#94a3b8; }
@@ -568,10 +580,13 @@ function renderRegistry() {
   const asOf = dated.length ? dated.sort().pop() : null;
   const asOfTxt = asOf ? `as of ${asOf}` : `Mar 31 '26 values`;
 
+  const marA = assets.reduce((t, c) => t + c.items.reduce((s, it) => s + (it.value_mar26_L || 0), 0), 0);
+  const marL = liabs.reduce((t, c) => t + c.items.reduce((s, it) => s + (it.value_mar26_L || 0), 0), 0);
+  const dlt = (cur, mar) => { const d = cur - mar; return (d >= 0 ? '+' : '−') + '₹' + Math.abs(d/100).toLocaleString('en-IN',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' Cr'; };
   document.getElementById('ar-kpis').innerHTML = `
-    <div class="kpi"><div class="kpi-label">Total Assets (latest)</div><div class="kpi-val blue">${fmtL(totalA)}</div><div style="font-size:10px;color:#94a3b8;">${asOfTxt}</div></div>
-    <div class="kpi"><div class="kpi-label">Total Liabilities (latest)</div><div class="kpi-val red">${fmtL(totalL)}</div><div style="font-size:10px;color:#94a3b8;">${asOfTxt}</div></div>
-    <div class="kpi"><div class="kpi-label">Net Worth (latest)</div><div class="kpi-val ${totalA-totalL>=0?'green':'red'}">${fmtL(totalA-totalL)}</div><div style="font-size:10px;color:#94a3b8;">${asOfTxt}</div></div>
+    <div class="kpi"><div class="kpi-label">Total Assets (current)</div><div class="kpi-val blue">${fmtL(totalA)}</div><div style="font-size:10px;color:#94a3b8;">Mar 31 '26: ${fmtL(marA)} · ${dlt(totalA, marA)}</div></div>
+    <div class="kpi"><div class="kpi-label">Total Liabilities (current)</div><div class="kpi-val red">${fmtL(totalL)}</div><div style="font-size:10px;color:#94a3b8;">Mar 31 '26: ${fmtL(marL)} · ${dlt(totalL, marL)}</div></div>
+    <div class="kpi"><div class="kpi-label">Net Worth (current)</div><div class="kpi-val ${totalA-totalL>=0?'green':'red'}">${fmtL(totalA-totalL)}</div><div style="font-size:10px;color:#94a3b8;">Mar 31 '26: ${fmtL(marA-marL)} · ${dlt(totalA-totalL, marA-marL)}</div></div>
     <div class="kpi"><div class="kpi-label">Asset Classes</div><div class="kpi-val">${assets.length + liabs.length}</div></div>`;
 
   document.getElementById('ar-assets').innerHTML     = assets.map(c => renderClass(c, false)).join('');
@@ -626,7 +641,8 @@ async function saveIdeals() {
 
 function renderClass(cls, isLiab) {
   const total = arClassTotal(cls);
-  const open = !!_arExpand[cls.id];
+  const marTotal = cls.items.reduce((t, it) => t + (it.value_mar26_L || 0), 0);
+  const open = _arExpand[cls.id] !== false;
   const liabCls = isLiab ? ' ar-liability' : '';
   const hasItems = cls.items.length > 0;
   const insNote = cls.id === 'insurance' ? `<span class="ar-ins-note">⚠ review &amp; complete</span>` : '';
@@ -636,7 +652,8 @@ function renderClass(cls, isLiab) {
       <span class="ar-expand${open?' open':''}" id="arce-${cls.id}">${open?'−':'+'}</span>
       <i class="bi ${cls.icon} ar-icon"></i>
       <span class="ar-label">${cls.label}${insNote}</span>
-      <span class="ar-total">${total > 0 ? fmtLshort(total) : '—'}</span>
+      <span class="ar-total mar">${marTotal > 0 ? fmtLshort(marTotal) : '—'}</span>
+      <span class="ar-total cur">${total > 0 ? fmtLshort(total) : '—'}</span>
       <button class="ar-add-btn" onclick="addArItem('${cls.id}',event)">+ Add</button>
     </div>
     <div class="ar-class-body${open?' open':''}" id="arcb-${cls.id}">`;
@@ -644,11 +661,8 @@ function renderClass(cls, isLiab) {
   if (hasItems) {
     html += `<div class="ar-col-hdr">
       <span>Asset</span>
-      <span>Acquired</span>
-      <span>Purchase (₹)</span>
       <span>Mar 31 '26</span>
-      <span title="Type today's value in ₹ crore and press Enter or click away">Today (Cr) ✎</span>
-      <span>Last Updated</span>
+      <span title="Type the current value in ₹ crore and press Enter or click away">Current (₹ Cr) ✎</span>
     </div>`;
     cls.items.forEach(item => { html += renderItem(item, cls.id, isLiab); });
   } else {
@@ -668,16 +682,14 @@ function renderItem(item, clsId, isLiab) {
         <span class="ar-expand${detOpen?' open':''}" id="arie-${item.id}">${detOpen?'−':'+'}</span>
         ${item.name}
       </div>
-      <div class="ar-val">${item.date_acquired || '—'}</div>
-      <div class="ar-val">${item.purchase_value_L != null ? fmtLshort(item.purchase_value_L) : '—'}</div>
-      <div class="ar-val highlight">${item.value_mar26_L != null ? fmtLshort(item.value_mar26_L) : '—'}</div>
+      <div class="ar-val">${item.value_mar26_L != null ? fmtLshort(item.value_mar26_L) : '—'}</div>
       <div class="ar-val" onclick="event.stopPropagation()">
         <input type="number" step="any" class="ar-today-in" placeholder="₹ Cr" title="Today's value in ₹ crore — press Enter or click away to save"
           value="${item.value_today_L != null ? +(item.value_today_L/100).toFixed(4) : ''}"
           onkeydown="if (event.key === 'Enter') this.blur()"
           onchange="arSaveToday('${item.id}', '${clsId}', this.value)">
+        <div style="font-size:10px;color:#94a3b8;margin-top:1px;">${item.value_today_L != null ? 'as of ' + (item.value_as_of || item.last_updated || '') : 'Mar 31 value'}</div>
       </div>
-      <div class="ar-val" style="font-size:11px;color:#94a3b8;">${item.last_updated || '—'}</div>
     </div>
     <div class="ar-detail${detOpen?' open':''} ar-view-mode" id="arid-${item.id}">`;
 
@@ -740,10 +752,11 @@ function renderItem(item, clsId, isLiab) {
 }
 
 function toggleArClass(clsId) {
-  _arExpand[clsId] = !_arExpand[clsId];
-  document.getElementById('arce-' + clsId).classList.toggle('open', !!_arExpand[clsId]);
+  const wasOpen = _arExpand[clsId] !== false;
+  _arExpand[clsId] = !wasOpen;
+  document.getElementById('arce-' + clsId).classList.toggle('open', _arExpand[clsId]);
   document.getElementById('arce-' + clsId).textContent = _arExpand[clsId] ? '−' : '+';
-  document.getElementById('arcb-' + clsId).classList.toggle('open', !!_arExpand[clsId]);
+  document.getElementById('arcb-' + clsId).classList.toggle('open', _arExpand[clsId]);
 }
 
 function toggleArItem(itemId) {
