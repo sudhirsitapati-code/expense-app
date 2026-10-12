@@ -112,11 +112,13 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
     try:
         with _open_pdf(pdf_bytes) as pdf:
             full_text = ""
+            all_tables = []
             for page in pdf.pages:
                 text = page.extract_text() or ""
                 full_text += text + "\n"
 
                 tables = page.extract_tables()
+                all_tables.extend(tables)
                 for table in tables:
                     for row in table:
                         if not row:
@@ -133,9 +135,11 @@ def _parse_pdf_transactions(pdf_bytes: bytes) -> list:
             savings_txns = _parse_savings_statement_text(full_text)  # savings 1331-style
             od_sav_txns  = _parse_od_savings_text(full_text)     # OD savings 9175/7281-style
             od_txns      = _parse_from_text(full_text)           # legacy OD e-statement
-            best_text = max([cc_txns, savings_txns, od_sav_txns, od_txns], key=len)
-            winner = "cc" if best_text is cc_txns else "savings" if best_text is savings_txns else "od_savings" if best_text is od_sav_txns else "od"
-            print(f"[parser] acct={account} cc={len(cc_txns)} savings={len(savings_txns)} od_sav={len(od_sav_txns)} od={len(od_txns)} winner={winner}")
+            curr_txns    = _parse_current_account_tables(all_tables)  # Current Account (e.g. Hamir)
+            best_text = max([cc_txns, savings_txns, od_sav_txns, od_txns, curr_txns], key=len)
+            winner = ("cc" if best_text is cc_txns else "savings" if best_text is savings_txns else
+                      "od_savings" if best_text is od_sav_txns else "od" if best_text is od_txns else "current_acct")
+            print(f"[parser] acct={account} cc={len(cc_txns)} savings={len(savings_txns)} od_sav={len(od_sav_txns)} od={len(od_txns)} current_acct={len(curr_txns)} winner={winner}")
             print(f"[parser] text_sample={repr(full_text[:300])}")
             for i, t in enumerate(best_text[:5]):
                 print(f"[parser] txn[{i}] {t}")
@@ -278,6 +282,52 @@ def _parse_od_savings_text(text: str) -> list:
             i += 1
 
     return transactions
+
+
+_MONTH_ABBR = {"jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,"jul":7,"aug":8,"sep":9,"oct":10,"nov":11,"dec":12}
+
+
+def _parse_current_account_tables(tables: list) -> list:
+    """Parse ICICI 'Current Account' statements (e.g. Hamir Advisors LLP) — these come as a clean
+    PDF table with separate Withdrawal(Dr)/Deposit(Cr) columns, unlike the other ICICI formats
+    which need text-pattern guessing. Row shape:
+    [S.no, Transaction ID, Transaction date, Cheque No, Description, Withdrawal(Dr), Deposit(Cr), Available Balance]
+    """
+    date_re = re.compile(r"(\d{1,2})[\s-]*([A-Za-z]{3})[a-z]*[\s'-]*(\d{4})")
+
+    def amt(cell):
+        c = str(cell or "").replace(",", "").replace("\n", "").strip()
+        try:
+            v = float(c)
+            return v if v > 0 else None
+        except ValueError:
+            return None
+
+    out = []
+    for table in tables:
+        for row in table:
+            if not row or len(row) < 8:
+                continue
+            cells = [str(c or "").replace("\n", " ").strip() for c in row]
+            m = date_re.search(cells[2])
+            if not m:
+                continue
+            d, mon, y = m.groups()
+            mon_num = _MONTH_ABBR.get(mon.lower())
+            if not mon_num:
+                continue
+            debit, credit = amt(cells[5]), amt(cells[6])
+            if debit is None and credit is None:
+                continue
+            desc = re.sub(r"\s+", " ", cells[4]).strip()
+            out.append({
+                "date": f"{int(d):02d}/{mon_num:02d}/{y}",
+                "description": desc,
+                "amount": debit if debit is not None else credit,
+                "txn_direction": "debit" if debit is not None else "credit",
+                "balance": amt(cells[7]),
+            })
+    return out
 
 
 def _parse_cc_statement_text(text: str) -> list:

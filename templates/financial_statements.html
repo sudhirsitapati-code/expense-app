@@ -154,6 +154,7 @@ body { background:#f8f9fa; font-size:14px; }
   <div class="fs-tab active" onclick="switchTab('pl', this)">P&amp;L</div>
   <div class="fs-tab" onclick="switchTab('bs', this)">Balance Sheet</div>
   <div class="fs-tab" onclick="switchTab('detail', this)">Assets &amp; Liabilities Detail</div>
+  <div class="fs-tab" onclick="switchTab('xirr', this)">Investment XIRR</div>
   <div class="fs-tab" onclick="switchTab('contacts', this)">Contacts</div>
   <div class="fs-tab" onclick="switchTab('budget', this)">Budget FY27</div>
 </div>
@@ -221,6 +222,26 @@ body { background:#f8f9fa; font-size:14px; }
   <div id="ar-liabilities"></div>
 
   <div id="ar-alloc" style="margin-top:22px;"></div>
+</div>
+
+<!-- Investment XIRR Tab -->
+<div id="tab-xirr" class="tab-panel">
+  <div id="xr-kpis" class="kpi-row" style="margin-bottom:10px;"></div>
+  <div style="font-size:12px;color:#64748b;margin-bottom:10px;line-height:1.5;">
+    Values come from <b>Assets &amp; Liabilities Detail</b> (or type a new one in the Value column here).
+    Click <b>flows</b> on a row to enter what you put in (negative) and took out (positive) with dates.
+    <b>Every 6 months:</b> refresh the values, add any new flows, then press <b>Save snapshot</b> to record the XIRR.
+    <span style="color:#94a3b8;">* = held under a year, so the annualised figure is only indicative.</span>
+  </div>
+  <table class="al-table" id="xr-table"><thead><tr>
+    <th>Investment</th><th class="r">Value (₹ Cr) ✎</th><th>As of</th><th class="r">Invested (₹ Cr)</th>
+    <th class="r">Gain (₹ Cr)</th><th class="r">XIRR</th><th></th>
+  </tr></thead><tbody id="xr-body"></tbody></table>
+  <div style="display:flex;align-items:center;gap:10px;margin:14px 0 6px;">
+    <button class="btn btn-sm" style="font-size:11px;background:#1e3a5f;color:#fff;border:none;padding:4px 14px;border-radius:6px;" onclick="xrSnapshot()">Save snapshot</button>
+    <span style="font-size:11px;color:#94a3b8;">Stores today's XIRR for every investment so you can compare 6-monthly.</span>
+  </div>
+  <div id="xr-snaps"></div>
 </div>
 
 <!-- Contacts Tab -->
@@ -764,7 +785,7 @@ function arSaveItem(itemId, clsId, e) {
   item.value_mar26_L    = newMar26;
   item.value_today_L    = newToday;
   item.notes            = inputs[4].value.trim() || null;
-  if (valueChanged) item.last_updated = todayISO();
+  if (valueChanged) { item.last_updated = todayISO(); item.value_as_of = todayISO(); }
   saveRegistry().then(() => renderRegistry());
 }
 
@@ -796,6 +817,7 @@ async function arSaveToday(itemId, clsId, crText) {
   if (newL === item.value_today_L || (newL == null && item.value_today_L == null)) return;
   item.value_today_L = newL;
   item.last_updated = todayISO();
+  item.value_as_of = todayISO();
   await saveRegistry();
   renderRegistry();
 }
@@ -953,12 +975,167 @@ async function saveBudget() {
   await fetch('/api/budget-fy27', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_budget)});
 }
 
+
+// ── Investment XIRR ─────────────────────────────────────────────────────────
+let _xr = {flows:{}, snapshots:[]};
+const _xrOpen = {};
+const XR_SKIP = new Set(['bank','insurance']);
+
+function xrDays(a, b) { return (new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000; }
+
+// flows: [{d:'YYYY-MM-DD', a:number}] -> annual rate, or null when it can't be solved
+function xirrCalc(flows) {
+  if (!flows.some(f => f.a > 0) || !flows.some(f => f.a < 0)) return null;
+  const t0 = flows.reduce((m, f) => f.d < m ? f.d : m, flows[0].d);
+  const npv = r => flows.reduce((s, f) => s + f.a / Math.pow(1 + r, xrDays(t0, f.d) / 365), 0);
+  let lo = -0.9999, hi = 100, fl = npv(lo);
+  const fh = npv(hi);
+  if (!isFinite(fl) || !isFinite(fh) || fl * fh > 0) return null;
+  for (let i = 0; i < 200; i++) {
+    const m = (lo + hi) / 2, fm = npv(m);
+    if (fl * fm <= 0) { hi = m; } else { lo = m; fl = fm; }
+  }
+  return (lo + hi) / 2;
+}
+
+function xrItems() {
+  const out = [];
+  (_registry ? _registry.classes : []).filter(c => c.section === 'assets' && !XR_SKIP.has(c.id)).forEach(c => {
+    c.items.forEach(it => {
+      const hasToday = it.value_today_L != null;
+      const valL = hasToday ? it.value_today_L : (it.value_mar26_L || 0);
+      const asOf = hasToday ? (it.value_as_of || it.last_updated || todayISO()) : '2026-03-31';
+      const flows = (_xr.flows[it.id] || []).map(f => ({d: f.date, a: Number(f.amount), note: f.note || ''}));
+      const value = valL * 1e5;
+      const invested = -flows.filter(f => f.a < 0).reduce((s, f) => s + f.a, 0);
+      const received = flows.filter(f => f.a > 0).reduce((s, f) => s + f.a, 0);
+      let x = null, young = false;
+      if (flows.length) {
+        x = xirrCalc([...flows, {d: asOf, a: value}]);
+        const first = flows.reduce((m, f) => f.d < m ? f.d : m, flows[0].d);
+        young = xrDays(first, asOf) < 365;
+      }
+      out.push({id: it.id, clsId: c.id, clsLabel: c.label, name: it.name, value, asOf, flows, invested, received,
+                gain: flows.length ? value + received - invested : null, xirr: x, young});
+    });
+  });
+  return out;
+}
+
+const xrCr = v => (v / 1e7).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const xrPct = (x, young) => x == null ? '—' : (x * 100).toFixed(1) + '%' + (young ? '*' : '');
+
+function xrPortfolio(rows) {
+  const flows = [];
+  let value = 0, invested = 0;
+  rows.filter(r => r.flows.length).forEach(r => {
+    r.flows.forEach(f => flows.push({d: f.d, a: f.a}));
+    flows.push({d: r.asOf, a: r.value});
+    value += r.value; invested += r.invested;
+  });
+  return {xirr: flows.length ? xirrCalc(flows) : null, value, invested, n: rows.filter(r => r.flows.length).length};
+}
+
+function renderXirr() {
+  if (!_registry) return;
+  const rows = xrItems();
+  const pf = xrPortfolio(rows);
+  const totalValue = rows.reduce((s, r) => s + r.value, 0);
+  document.getElementById('xr-kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-label">Portfolio XIRR</div><div class="kpi-val ${pf.xirr != null && pf.xirr < 0 ? 'red' : 'green'}">${xrPct(pf.xirr)}</div>
+      <div style="font-size:10px;color:#94a3b8;">${pf.n} investments with cash flows</div></div>
+    <div class="kpi"><div class="kpi-label">Value (with flows)</div><div class="kpi-val blue">₹${xrCr(pf.value)} Cr</div></div>
+    <div class="kpi"><div class="kpi-label">Invested (with flows)</div><div class="kpi-val">₹${xrCr(pf.invested)} Cr</div></div>
+    <div class="kpi"><div class="kpi-label">All investments (latest)</div><div class="kpi-val">₹${xrCr(totalValue)} Cr</div>
+      <div style="font-size:10px;color:#94a3b8;">${rows.length - pf.n} still need cash flows</div></div>`;
+  let html = '', cur = null;
+  rows.forEach(r => {
+    if (r.clsId !== cur) { cur = r.clsId; html += `<tr><td colspan="7" style="background:#f8fafc;font-weight:700;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.3px;">${escAttr(r.clsLabel)}</td></tr>`; }
+    const open = !!_xrOpen[r.id];
+    html += `<tr>
+      <td>${escAttr(r.name)}</td>
+      <td class="r"><input type="number" step="0.01" class="al-ideal" style="width:96px;" value="${+(r.value / 1e7).toFixed(4)}"
+            onkeydown="if(event.key==='Enter')this.blur()" onchange="xrSaveValue('${r.id}','${r.clsId}',this.value)"></td>
+      <td style="font-size:11px;color:#94a3b8;">${r.asOf}</td>
+      <td class="r">${r.flows.length ? xrCr(r.invested) : '—'}</td>
+      <td class="r ${r.gain != null && r.gain < 0 ? 'neg' : ''}">${r.gain != null ? xrCr(r.gain) : '—'}</td>
+      <td class="r now ${r.xirr != null && r.xirr < 0 ? 'neg' : ''}">${r.flows.length ? xrPct(r.xirr, r.young) : '<span style="font-weight:400;color:#cbd5e1;">add flows</span>'}</td>
+      <td><a href="#" style="font-size:11px;" onclick="xrToggle('${r.id}');return false;">${open ? 'close' : 'flows (' + r.flows.length + ')'}</a></td></tr>`;
+    if (open) {
+      const txt = r.flows.map(f => `${f.d}, ${f.a}${f.note ? ', ' + f.note : ''}`).join('\n');
+      html += `<tr><td colspan="7" style="background:#fcfcfd;">
+        <div style="font-size:11px;color:#64748b;margin-bottom:4px;">One per line: <code>YYYY-MM-DD, amount, note</code>. Money you put in is negative, money you took out is positive (₹).</div>
+        <textarea id="xrt-${r.id}" rows="${Math.max(3, Math.min(14, r.flows.length + 2))}" style="width:100%;font-family:ui-monospace,Menlo,monospace;font-size:12px;border:1px solid #e2e8f0;border-radius:6px;padding:6px;">${escAttr(txt)}</textarea>
+        <button class="ar-btn save" onclick="xrSaveFlows('${r.id}')">Save flows</button></td></tr>`;
+    }
+  });
+  document.getElementById('xr-body').innerHTML = html;
+
+  const sn = _xr.snapshots || [];
+  document.getElementById('xr-snaps').innerHTML = sn.length ? `
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;margin:6px 0;">Snapshots</div>
+    <table class="al-table"><thead><tr><th>Date</th><th class="r">Portfolio XIRR</th><th class="r">Value (₹ Cr)</th><th>By investment</th></tr></thead><tbody>
+    ${sn.slice().sort((a, b) => b.date.localeCompare(a.date)).map(s => `<tr><td>${s.date}</td><td class="r now">${xrPct(s.portfolio_xirr)}</td>
+      <td class="r">${xrCr((s.value_with_flows || 0))}</td>
+      <td style="font-size:11px;color:#64748b;">${(s.rows || []).filter(x => x.xirr != null).map(x => escAttr(x.name) + ' ' + (x.xirr * 100).toFixed(1) + '%').join(' · ')}</td></tr>`).join('')}
+    </tbody></table>` : '';
+}
+
+function xrToggle(id) { _xrOpen[id] = !_xrOpen[id]; renderXirr(); }
+
+async function xrPost() {
+  try {
+    const r = await fetch('/api/investment-xirr', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(_xr)});
+    if (!r.ok) alert('Save failed (' + r.status + '). Please try again.');
+  } catch (e) { alert('Save failed — check your connection.'); }
+}
+
+async function xrSaveFlows(id) {
+  const lines = document.getElementById('xrt-' + id).value.split('\n').map(l => l.trim()).filter(Boolean);
+  const out = [];
+  for (const l of lines) {
+    const parts = l.split(',').map(p => p.trim());
+    const amt = Number((parts[1] || '').replace(/[₹\s]/g, ''));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(parts[0] || '') || isNaN(new Date(parts[0]).getTime()) || !isFinite(amt) || parts[1] === '') {
+      alert('Could not read this line:\n' + l + '\n\nUse: YYYY-MM-DD, amount, note'); return;
+    }
+    out.push({date: parts[0], amount: amt, note: parts.slice(2).join(', ')});
+  }
+  if (out.length) _xr.flows[id] = out; else delete _xr.flows[id];
+  await xrPost();
+  renderXirr();
+}
+
+async function xrSaveValue(id, clsId, crText) {
+  await arSaveToday(id, clsId, crText);
+  renderXirr();
+}
+
+async function xrSnapshot() {
+  const rows = xrItems();
+  const pf = xrPortfolio(rows);
+  const snap = {date: todayISO(), portfolio_xirr: pf.xirr, value_with_flows: pf.value,
+    rows: rows.filter(r => r.flows.length).map(r => ({id: r.id, name: r.name, value_L: r.value / 1e5, xirr: r.xirr}))};
+  _xr.snapshots = (_xr.snapshots || []).filter(s => s.date !== snap.date).concat([snap]);
+  await xrPost();
+  renderXirr();
+}
+
+async function loadXirr() {
+  const [rr, xr] = await Promise.all([fetch('/api/asset-registry'), fetch('/api/investment-xirr')]);
+  _registry = await rr.json();
+  _xr = await xr.json();
+  _xr.flows = _xr.flows || {}; _xr.snapshots = _xr.snapshots || [];
+  renderXirr();
+}
+
 function switchTab(name, el) {
   document.querySelectorAll('.fs-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   if (name === 'detail') loadRegistry();
+  if (name === 'xirr') loadXirr();
   if (name === 'contacts') loadContacts();
   if (name === 'budget') loadBudget();
 }

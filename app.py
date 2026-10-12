@@ -237,9 +237,12 @@ def financial_statements():
 HAMIR_OWNER = "sudhir"
 HAMIR_CLIENTS = ("EQT", "Advent")
 # Editable in the page. EQT is banded by hours worked in the day; Advent is per hour.
+# All figures in INR. Converted from the original USD terms at ~Rs 96/USD (30 Sep 2026 mid-market
+# rate) at the owner's request — EQT bands: $1,000/2,000/3,000/4,000; Advent: Rs 3.5L/day pro rata
+# over an 8-hour day = Rs 43,750/hour.
 _HAMIR_DEFAULT_RATES = {
-    "EQT": {"up_to_2h": 1000, "up_to_4h": 2000, "up_to_6h": 3000, "up_to_8h": 4000},
-    "Advent": {"hourly": 375},
+    "EQT": {"up_to_2h": 96000, "up_to_4h": 192000, "up_to_6h": 288000, "up_to_8h": 384000},
+    "Advent": {"hourly": 43750},
 }
 
 
@@ -1353,6 +1356,26 @@ def api_asset_registry_save():
     db.save("asset_registry", data)
     return jsonify({"ok": True})
 
+@app.route("/api/investment-xirr", methods=["GET"])
+@login_required
+def api_investment_xirr_get():
+    d = db.load("investment_xirr") or {}
+    d.setdefault("flows", {})
+    d.setdefault("snapshots", [])
+    return jsonify(d)
+
+@app.route("/api/investment-xirr", methods=["POST"])
+@login_required
+def api_investment_xirr_save():
+    body = request.get_json(force=True) or {}
+    cur = db.load("investment_xirr") or {"flows": {}, "snapshots": []}
+    if isinstance(body.get("flows"), dict):
+        cur["flows"] = body["flows"]
+    if isinstance(body.get("snapshots"), list):
+        cur["snapshots"] = body["snapshots"]
+    db.save("investment_xirr", cur)
+    return jsonify({"ok": True})
+
 @app.route("/api/asset-registry/reset", methods=["POST"])
 @login_required
 def api_asset_registry_reset():
@@ -2411,6 +2434,7 @@ def api_bulk_classify():
     SKIP_TYPES    = {"transfer", "income", "investment", "Transfer", "Income", "Investment"}
     SKIP_HEADINGS = {"Salary", "Interbank", "Home Loan", "Loan Repayment", "Tax",
                      "Financial Expense", "Insurance", "GCPL Share Sale", "Foreign Investment",
+                     "Financial Investment", "PF Liquidation", "Godrej Pet Care",
                      "Uspaar", "Art", "Property Investment"}
 
     ledger = _ml_load_json(LEDGER_PATH)

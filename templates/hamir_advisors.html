@@ -81,20 +81,20 @@ table.log { width:100%; border-collapse:collapse; min-width:880px; }
     <summary>Rates (click to view or change)</summary>
     <div class="rate-grid">
       <div class="rate-box"><b>EQT — day-rate bands (by hours worked that day)</b>
-        <label>up to 2h $<input type="number" step="any" data-rate="EQT.up_to_2h"></label>
-        <label>2–4h $<input type="number" step="any" data-rate="EQT.up_to_4h"></label>
-        <label>4–6h $<input type="number" step="any" data-rate="EQT.up_to_6h"></label>
-        <label>6–8h (and over) $<input type="number" step="any" data-rate="EQT.up_to_8h"></label>
+        <label>up to 2h ₹<input type="number" step="any" data-rate="EQT.up_to_2h"></label>
+        <label>2–4h ₹<input type="number" step="any" data-rate="EQT.up_to_4h"></label>
+        <label>4–6h ₹<input type="number" step="any" data-rate="EQT.up_to_6h"></label>
+        <label>6–8h (and over) ₹<input type="number" step="any" data-rate="EQT.up_to_8h"></label>
       </div>
       <div class="rate-box"><b>Advent — per hour</b>
-        <label>$ per hour <input type="number" step="any" data-rate="Advent.hourly"></label>
+        <label>₹ per hour <input type="number" step="any" data-rate="Advent.hourly"></label>
       </div>
     </div>
     <div class="hint">Changing a rate only affects new entries, or entries whose times or client you edit — past amounts stay as billed.</div>
   </details>
 
   <div class="toolbar">
-    <div class="ttl">Master billing log (USD)</div>
+    <div class="ttl">Master billing log (INR)</div>
     <button class="btn-add" id="addBtn" onclick="addEntry()" disabled>+ Add entry</button>
   </div>
 
@@ -112,7 +112,7 @@ table.log { width:100%; border-collapse:collapse; min-width:880px; }
 <script>
 let _entries = [], _rates = null, _loaded = false;
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const usd = v => '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2});
+const inr = v => '₹' + Number(v).toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 2});
 
 function todayISO() {
   const d = new Date();
@@ -181,9 +181,9 @@ function renderKpis() {
   const paid = _entries.reduce((s, e) => s + (e.paid ? (e.amount || 0) : 0), 0);
   const balance = billed - paid;
   document.getElementById('kpis').innerHTML = `
-    <div class="kpi"><div class="kpi-label">Total Billed</div><div class="kpi-val">${usd(billed)}</div></div>
-    <div class="kpi"><div class="kpi-label">Total Paid</div><div class="kpi-val green">${usd(paid)}</div></div>
-    <div class="kpi"><div class="kpi-label">Balance to be Paid</div><div class="kpi-val ${balance > 0 ? 'amber' : ''}">${usd(balance)}</div></div>`;
+    <div class="kpi"><div class="kpi-label">Total Billed</div><div class="kpi-val">${inr(billed)}</div></div>
+    <div class="kpi"><div class="kpi-label">Total Paid</div><div class="kpi-val green">${inr(paid)}</div></div>
+    <div class="kpi"><div class="kpi-label">Balance to be Paid</div><div class="kpi-val ${balance > 0 ? 'amber' : ''}">${inr(balance)}</div></div>`;
 }
 
 // ── rows ────────────────────────────────────────────────────────────────────
@@ -200,7 +200,7 @@ function render() {
             onchange="setF('${e.id}','hours',this.value)"></td>
       <td><select onchange="setF('${e.id}','client',this.value)">
         ${['EQT','Advent'].map(c => `<option${e.client === c ? ' selected' : ''}>${c}</option>`).join('')}</select></td>
-      <td class="r"><input type="number" step="any" class="amt" value="${e.amount != null ? e.amount : ''}" placeholder="$"
+      <td class="r"><input type="number" step="any" class="amt" value="${e.amount != null ? e.amount : ''}" placeholder="₹"
             onchange="setF('${e.id}','amount',this.value)">
         ${e.amount_auto === false ? `<span class="edited" title="Recalculate from the agreement" onclick="resetAmount('${e.id}')">edited · reset</span>` : ''}</td>
       <td><textarea rows="1" onchange="setF('${e.id}','work',this.value)" placeholder="Work done…">${esc(e.work)}</textarea></td>
