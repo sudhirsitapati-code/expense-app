@@ -327,6 +327,8 @@ def _tax_alloc_build(fy):
         if not rule:
             continue
         after = d.date() >= (vincent_start if rule == "vincent" else board_start)
+        if rule == "travel" and not after:
+            continue
         if rule == "hospitality":
             default = float(cfg["heading_pct"].get(heading, 0)) if after else 0.0
         elif rule == "travel":
