@@ -243,6 +243,7 @@ _BOARD_RULE_CLASS = {
     "driver": "Conveyance - driver for board duties",
     "travel": "Travel - board meetings",
     "hospitality": "Hospitality / entertainment (business share)",
+    "ai": "Professional tools & subscriptions - board work (AI assistants)",
 }
 
 
@@ -253,7 +254,7 @@ def _tax_alloc_config():
     cfg.setdefault("board_start", "2026-05-28")
     cfg.setdefault("vincent_start", "2026-06-01")
     cfg.setdefault("rule_pct", {})
-    for k, v in {"vincent": 100.0, "driver": 100.0, "travel": 100.0}.items():
+    for k, v in {"vincent": 100.0, "driver": 100.0, "travel": 100.0, "ai": 100.0}.items():
         cfg["rule_pct"].setdefault(k, v)
     cfg.setdefault("heading_pct", {})
     for k in ("Eating Out", "Entertainment"):
@@ -313,7 +314,9 @@ def _tax_alloc_build(fy):
         if typ != "expense":
             continue
         rule = None
-        if heading == "Staff Salary" and "vincent" in text:
+        if _re.search(r"anthropic|openai|chatgpt|claude\.ai", text):
+            rule = "ai"
+        elif heading == "Staff Salary" and "vincent" in text:
             rule = "vincent"
         elif heading == "Staff Salary" and drv.search(text):
             rule = "driver"
@@ -327,12 +330,12 @@ def _tax_alloc_build(fy):
         if rule == "hospitality":
             default = float(cfg["heading_pct"].get(heading, 0)) if after else 0.0
         elif rule == "travel":
-            default = float(cfg["rule_pct"]["travel"]) if (after and o.get("board_specific")) else 0.0
+            default = float(cfg["rule_pct"]["travel"]) if (after and o.get("board_specific", True)) else 0.0
         else:
             default = float(cfg["rule_pct"][rule]) if after else 0.0
         pct = float(o["pct"]) if "pct" in o else default
         board.append({**base, "rule": rule, "tax_class": o.get("tax_class") or _BOARD_RULE_CLASS[rule],
-                      "pct": pct, "default_pct": default, "board_specific": bool(o.get("board_specific")),
+                      "pct": pct, "default_pct": default, "board_specific": bool(o.get("board_specific", True)),
                       "after_board_start": after, "allocated": round(net * pct / 100.0, 2)})
     key = lambda r: (r["date"] if r["date"][:4].isdigit() and r["date"][4:5] == "-"
                      else r["date"][-4:] + "-" + r["date"][3:5] + "-" + r["date"][:2])

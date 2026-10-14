@@ -447,7 +447,8 @@ async function renderHamirTax(skipLoad) {
 
 const TA_RULES = {
   vincent:     {title: "Vincent's salary",                      help: "Agreed to be allocated to Asian Paints."},
-  travel:      {title: 'Board-specific travel',                 help: 'Tick the trips that were for board work (from the joining date). Only ticked rows are allocated.'},
+  travel:      {title: 'Board travel',                          help: 'All travel from the joining date is included. Untick any trip that was not for the board.'},
+  ai:          {title: 'AI tools (Anthropic, ChatGPT)',         help: 'All Anthropic and OpenAI bills from the joining date go to the board. Set a row to 0% to remove it.'},
   driver:      {title: "Driver's salary",                       help: 'Payee matches the driver name below and the entry is a Staff Salary.'},
   hospitality: {title: 'Eating out & entertainment (share)',    help: 'Allocated at the % set above for each heading; override any row.'}
 };
@@ -457,7 +458,7 @@ async function renderBoardTax(skipLoad) {
   const box = document.getElementById('taxViewBoard');
   if (!skipLoad) { box.innerHTML = '<div class="p-4 text-muted">Loading…</div>'; try { await taLoad(); } catch(e) { box.innerHTML = '<div class="p-4 text-danger">'+taEsc(e.message)+'</div>'; return; } }
   const b = _taData.board, c = _taData.config;
-  const order = ['vincent','travel','driver','hospitality'];
+  const order = ['vincent','travel','ai','driver','hospitality'];
   const sections = order.map(rule => {
     const rows = b.rows.filter(r => r.rule === rule);
     const tot = b.by_rule[rule] || {eligible:0, allocated:0, count:0};
@@ -475,7 +476,7 @@ async function renderBoardTax(skipLoad) {
           <td class="text-nowrap">${r.date}${r.after_board_start?'':' <span class="badge text-bg-light">pre-board</span>'}</td>
           <td>${taEsc(r.paid_to || r.desc.slice(0,28))}</td><td>${taEsc(r.ledger_heading)}</td>
           <td class="text-end">${taInr(r.amount)}</td>
-          ${rule==='travel'?`<td class="text-center"><input type="checkbox" ${r.board_specific?'checked':''} onchange="taOverride('${r.txn_id}',{board_specific:this.checked||null},'renderBoardTax')"></td>`:''}
+          ${rule==='travel'?`<td class="text-center"><input type="checkbox" ${r.board_specific?'checked':''} onchange="taOverride('${r.txn_id}',{board_specific:this.checked},'renderBoardTax')"></td>`:''}
           <td><input class="form-control form-control-sm" value="${taEsc(r.tax_class)}" onchange="taOverride('${r.txn_id}',{tax_class:this.value},'renderBoardTax')"></td>
           <td><input type="number" min="0" max="100" class="form-control form-control-sm text-end" value="${r.pct}" onchange="taOverride('${r.txn_id}',{pct:this.value},'renderBoardTax')"></td>
           <td class="text-end">${taInr(r.allocated)}</td>
@@ -498,6 +499,8 @@ async function renderBoardTax(skipLoad) {
         <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.rule_pct.vincent}" onchange="taCfg({rule_pct:{vincent:this.value}})"></div>
       <div class="col-auto"><label class="form-label mb-1 fw-semibold">Driver %</label>
         <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.rule_pct.driver}" onchange="taCfg({rule_pct:{driver:this.value}})"></div>
+      <div class="col-auto"><label class="form-label mb-1 fw-semibold">AI tools %</label>
+        <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.rule_pct.ai}" onchange="taCfg({rule_pct:{ai:this.value}})"></div>
       <div class="col-auto"><label class="form-label mb-1 fw-semibold">Board trip %</label>
         <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.rule_pct.travel}" onchange="taCfg({rule_pct:{travel:this.value}})"></div>
       <div class="col-auto"><label class="form-label mb-1 fw-semibold">Eating out %</label>
