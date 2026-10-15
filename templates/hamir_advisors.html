@@ -322,6 +322,7 @@ function showTab(name, el) {
 
 // ── invoices ────────────────────────────────────────────────────────────────
 const mon = p => { const [y, m] = p.split('-'); return new Date(+y, +m - 1, 1).toLocaleString('en-IN', {month: 'long', year: 'numeric'}); };
+const money = (i, v) => i.currency === 'USD' ? '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : inr(v);
 const dmy = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
 function ledgerToISO(s) { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s || ''); return m ? `${m[3]}-${m[2]}-${m[1]}` : (s || ''); }
 function invStatus(i) {
@@ -380,7 +381,7 @@ function renderInvoices() {
     return `<div class="inv"><div class="inv-h">
         <span class="inv-no">${esc(i.number)}</span><span>${esc(i.client)}</span><span style="color:#64748b">${mon(i.period)}</span>
         <span class="chip ${cls}">${label}</span>
-        <span style="margin-left:auto;font-weight:700">${inr(i.total)}</span>
+        <span style="margin-left:auto;font-weight:700">${money(i, i.total_c)}</span>
         <a class="btn" href="/api/hamir/invoices/${i.id}/docx">Word</a>
         <a class="btn" href="/hamir-advisors/invoice/${i.id}" target="_blank">Print</a>
         ${i.status === 'draft' ? `<button class="btn pri" onclick="invPost('${i.id}',{status:'issued'})">Mark issued</button>` : ''}
@@ -394,9 +395,10 @@ function renderInvoices() {
           <span class="fld" style="min-width:260px">Note on invoice<input type="text" value="${esc(i.notes)}" onchange="invPost('${i.id}',{notes:this.value})"></span>
         </div>
         <table><thead><tr><th>Date</th><th>Work</th><th class="r">Hours</th><th class="r">Amount</th></tr></thead><tbody>
-          ${i.lines.map(l => `<tr><td>${dmy(l.date)}</td><td>${esc(l.description)}</td><td class="r">${l.hours == null ? '' : l.hours}</td><td class="r">${inr(l.amount)}</td></tr>`).join('')}
-          <tr><td colspan="3" class="r"><b>Subtotal</b></td><td class="r"><b>${inr(i.subtotal)}</b></td></tr>
-          ${i.gst_pct ? `<tr><td colspan="3" class="r">GST ${i.gst_pct}%</td><td class="r">${inr(i.gst_amount)}</td></tr>` : ''}
+          ${i.lines.map(l => `<tr><td>${dmy(l.date)}</td><td>${esc(l.description)}</td><td class="r">${l.hours == null ? '' : l.hours}</td><td class="r">${money(i, l.amount_c)}</td></tr>`).join('')}
+          <tr><td colspan="3" class="r"><b>Subtotal</b></td><td class="r"><b>${money(i, i.subtotal_c)}</b></td></tr>
+          ${i.gst_pct ? `<tr><td colspan="3" class="r">GST ${i.gst_pct}%</td><td class="r">${money(i, i.gst_c)}</td></tr>` : ''}
+          ${i.currency === 'USD' ? `<tr><td colspan="4" style="color:#94a3b8;font-size:11px">Books value ${inr(i.subtotal)} at ₹${i.fx}/USD (export of services, no GST)</td></tr>` : ''}
         </tbody></table></div></div>`;
   }).join('');
 }
@@ -420,7 +422,7 @@ function renderTracker() {
          ✓ ${esc(c.date)} · ${inr(c.amount)} · ${esc(c.account)}</span>`).join('');
     return `<tr class="${i.paid.done ? 'paid' : ''}">
       <td><b>${esc(i.number)}</b><div style="font-size:11px;color:#94a3b8">${mon(i.period)}</div></td>
-      <td>${esc(i.client)}</td><td class="r">${inr(i.total)}</td><td class="r">${inr(i.expected_net)}</td>
+      <td>${esc(i.client)}</td><td class="r">${money(i, i.total_c)}</td><td class="r">${inr(i.expected_net)}${i.currency === 'USD' ? '<div style="font-size:10px;color:#94a3b8">approx, at ₹' + i.fx + '/USD</div>' : ''}</td>
       <td style="${overdue ? 'color:#dc2626;font-weight:600' : ''}">${dmy(i.due_date)}${overdue ? ' · overdue' : ''}</td>
       <td class="tick"><input type="checkbox" ${i.submitted.done ? 'checked' : ''}
            onchange="invPost('${i.id}',{submitted:{done:this.checked,date:this.checked?todayISO():''}})">
@@ -441,12 +443,15 @@ function renderProfile() {
     <div class="grid2">
       <div><b style="font-size:12px">${esc(L.name)}</b><br>
         ${f('Name', 'llp.name', L.name)}${f('Address', 'llp.address', L.address, 260)}<br>
-        ${f('PAN', 'llp.pan', L.pan)}${f('GSTIN', 'llp.gstin', L.gstin)}${f('Email', 'llp.email', L.email)}${f('Phone', 'llp.phone', L.phone)}<br>
-        ${f('Bank', 'llp.bank_name', L.bank_name)}${f('Account no.', 'llp.bank_account', L.bank_account)}${f('IFSC', 'llp.bank_ifsc', L.bank_ifsc)}${f('Branch', 'llp.bank_branch', L.bank_branch)}</div>
+        ${f('LLPIN', 'llp.llpin', L.llpin)}${f('PAN', 'llp.pan', L.pan)}${f('TAN', 'llp.tan', L.tan)}${f('GSTIN', 'llp.gstin', L.gstin)}${f('LUT no.', 'llp.lut', L.lut)}${f('Email', 'llp.email', L.email)}${f('Phone', 'llp.phone', L.phone)}<br>
+        ${f('Bank', 'llp.bank_name', L.bank_name)}${f('Account no.', 'llp.bank_account', L.bank_account)}${f('IFSC', 'llp.bank_ifsc', L.bank_ifsc)}${f('SWIFT', 'llp.swift', L.swift)}${f('Branch', 'llp.bank_branch', L.bank_branch)}</div>
       ${Object.keys(p.clients).map(c => { const C = p.clients[c]; return `<div><b style="font-size:12px">${esc(c)}</b><br>
         ${f('Legal name', 'clients.' + c + '.legal_name', C.legal_name, 220)}${f('Attention', 'clients.' + c + '.attention', C.attention)}<br>
-        ${f('Address', 'clients.' + c + '.address', C.address, 260)}${f('GSTIN', 'clients.' + c + '.gstin', C.gstin)}<br>
-        ${f('PO / reference', 'clients.' + c + '.po_ref', C.po_ref)}${f('Payment terms (days)', 'clients.' + c + '.terms_days', C.terms_days)}</div>`; }).join('')}
+        ${f('Registration no.', 'clients.' + c + '.reg_no', C.reg_no)}${f('Address', 'clients.' + c + '.address', C.address, 260)}${f('GSTIN', 'clients.' + c + '.gstin', C.gstin)}<br>
+        ${f('PO / reference', 'clients.' + c + '.po_ref', C.po_ref)}${f('Payment terms (days)', 'clients.' + c + '.terms_days', C.terms_days)}
+        ${f('Currency (INR/USD)', 'clients.' + c + '.currency', C.currency)}${f('INR per USD', 'clients.' + c + '.fx', C.fx)}<br>
+        ${f('GST % (blank = default)', 'clients.' + c + '.gst_pct', C.gst_pct)}${f('TDS % (blank = default)', 'clients.' + c + '.tds_pct', C.tds_pct)}
+        ${f('Invoice description', 'clients.' + c + '.service_description', C.service_description, 300)}</div>`; }).join('')}
     </div>
     <div style="margin-top:8px">
       ${f('GST % on invoices (0 if not registered)', 'gst_pct', p.gst_pct)}${f('Client TDS % (for expected receipt)', 'tds_pct', p.tds_pct)}

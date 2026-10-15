@@ -501,8 +501,11 @@ _HAMIR_INV_KEY = "hamir_invoices"
 _HAMIR_PROFILE_KEY = "hamir_invoice_profile"
 _HAMIR_PROFILE_DEFAULT = {
     "llp": {"name": "Hamir Advisors LLP", "address": "", "pan": "", "gstin": "", "email": "", "phone": "",
-            "bank_name": "ICICI Bank", "bank_account": "", "bank_ifsc": "", "bank_branch": ""},
-    "clients": {c: {"legal_name": "", "address": "", "gstin": "", "attention": "", "po_ref": "", "terms_days": 30}
+            "llpin": "", "tan": "", "lut": "",
+            "bank_name": "ICICI Bank", "bank_account": "", "bank_ifsc": "", "bank_branch": "", "swift": ""},
+    "clients": {c: {"legal_name": "", "reg_no": "", "address": "", "gstin": "", "attention": "", "po_ref": "",
+                    "terms_days": 30, "currency": "INR", "fx": 96.0, "tds_pct": "", "gst_pct": "",
+                    "service_description": ""}
                 for c in HAMIR_CLIENTS},
     "gst_pct": 0.0,
     "tds_pct": 10.0,
@@ -592,15 +595,26 @@ def _inv_enrich(inv, prof, taken_for_draft=None):
             if o["id"] != inv["id"]:
                 others.update(l["entry_id"] for l in o.get("lines", []))
         inv["lines"] = _inv_lines_for(inv["client"], inv["period"], others)
-    subtotal = round(sum(l["amount"] for l in inv.get("lines", [])), 2)
+    cl = prof["clients"].get(inv["client"], {})
+    cur = (cl.get("currency") or "INR").upper()
+    fx = float(cl.get("fx") or 96.0) if cur == "USD" else 1.0
+    subtotal = round(sum(l["amount"] for l in inv.get("lines", [])), 2)          # INR (books)
     gst_pct = float(inv.get("gst_pct") or 0)
     gst = round(subtotal * gst_pct / 100.0, 2)
     total = round(subtotal + gst, 2)
-    tds_pct = float(prof.get("tds_pct") or 0)
+    tds_raw = cl.get("tds_pct")
+    tds_pct = float(tds_raw) if str(tds_raw).strip() != "" else float(prof.get("tds_pct") or 0)
+    for l in inv.get("lines", []):
+        l["amount_c"] = round(l["amount"] / fx, 2)
+    sub_c = round(sum(l["amount_c"] for l in inv.get("lines", [])), 2)
+    gst_c = round(sub_c * gst_pct / 100.0, 2)
+    tot_c = round(sub_c + gst_c, 2)
     inv.update({"subtotal": subtotal, "gst_amount": gst, "total": total,
+                "currency": cur, "fx": fx, "subtotal_c": sub_c, "gst_c": gst_c, "total_c": tot_c,
                 "expected_net": round(total - subtotal * tds_pct / 100.0, 2),
                 "hours_total": round(sum(float(l.get("hours") or 0) for l in inv.get("lines", [])), 2),
-                "amount_words": _inr_words(total)})
+                "amount_words": _inr_words(tot_c),
+                "export": bool(cur == "USD" and not gst_pct)})
     return inv
 
 
@@ -621,7 +635,8 @@ def _inv_payment_candidates(inv):
         if not d or d < since:
             continue
         text = f"{t.get('paid_to') or ''} {t.get('raw_description') or ''}".lower()
-        amt_hit = any(abs(cr - x) <= max(50.0, x * 0.005) for x in targets if x)
+        tol = 0.05 if inv.get("currency") == "USD" else 0.005          # foreign receipts: FX and bank-charge variance
+        amt_hit = any(abs(cr - x) <= max(50.0, x * tol) for x in targets if x)
         name_hit = any(k in text for k in keys)
         if not (amt_hit or name_hit):
             continue
@@ -655,7 +670,9 @@ def _inv_create(client, period, store, auto=False):
     due = (nxt + timedelta(days=terms)).strftime("%Y-%m-%d")
     inv = {"id": "inv" + datetime.now().strftime("%Y%m%d%H%M%S%f")[:20], "number": _inv_next_number(issue, store),
            "client": client, "period": period, "issue_date": issue, "due_date": due, "status": "draft",
-           "gst_pct": float(prof.get("gst_pct") or 0), "notes": "", "auto": bool(auto), "lines": lines,
+           "gst_pct": (float(prof["clients"][client]["gst_pct"]) if str(prof["clients"][client].get("gst_pct", "")).strip() != ""
+                       else float(prof.get("gst_pct") or 0)),
+           "notes": "", "auto": bool(auto), "lines": lines,
            "submitted": {"done": False, "date": ""}, "paid": {"done": False, "date": "", "amount": None, "txn_id": ""},
            "created_at": datetime.now().isoformat()}
     store.append(inv)
@@ -798,7 +815,14 @@ def api_hamir_invoice_profile_save():
             if c in prof["clients"] and isinstance(vals, dict):
                 for k, v in vals.items():
                     if k in prof["clients"][c]:
-                        prof["clients"][c][k] = int(v or 30) if k == "terms_days" else str(v)[:300]
+                        if k == "terms_days":
+                            prof["clients"][c][k] = int(v or 30)
+                        elif k == "fx":
+                            prof["clients"][c][k] = float(v or 96.0)
+                        elif k == "currency":
+                            prof["clients"][c][k] = "USD" if str(v).upper() == "USD" else "INR"
+                        else:
+                            prof["clients"][c][k] = str(v)[:300]
     db.save(_HAMIR_PROFILE_KEY, prof)
     return jsonify({"ok": True})
 
@@ -838,7 +862,10 @@ def hamir_invoice_docx(inv_id):
     for sec in doc.sections:
         sec.left_margin = sec.right_margin = Inches(0.9)
     h = doc.add_paragraph(); r = h.add_run(llp["name"]); r.bold = True; r.font.size = Pt(16)
-    for line in (llp["address"], " | ".join(x for x in (f"PAN {llp['pan']}" if llp["pan"] else "", f"GSTIN {llp['gstin']}" if llp["gstin"] else "") if x),
+    for line in (llp["address"],
+                 " | ".join(x for x in (f"LLPIN {llp['llpin']}" if llp.get("llpin") else "", f"PAN {llp['pan']}" if llp["pan"] else "",
+                                        f"TAN {llp['tan']}" if llp.get("tan") else "",
+                                        f"GSTIN {llp['gstin']}" if llp["gstin"] else "") if x),
                  " | ".join(x for x in (llp["email"], llp["phone"]) if x)):
         if line:
             doc.add_paragraph(line).paragraph_format.space_after = Pt(0)
@@ -853,17 +880,19 @@ def hamir_invoice_docx(inv_id):
     b = doc.add_paragraph(); b.paragraph_format.space_before = Pt(12)
     r = b.add_run("Bill to"); r.bold = True
     doc.add_paragraph(cl.get("legal_name") or inv["client"]).paragraph_format.space_after = Pt(0)
-    for line in (cl.get("attention") and "Attn: " + cl["attention"], cl.get("address"), cl.get("gstin") and "GSTIN " + cl["gstin"]):
+    for line in (cl.get("reg_no") and "Reg. no. " + cl["reg_no"], cl.get("attention") and "Attn: " + cl["attention"],
+                 cl.get("address"), cl.get("gstin") and "GSTIN " + cl["gstin"]):
         if line:
             doc.add_paragraph(line).paragraph_format.space_after = Pt(0)
-    doc.add_paragraph().add_run(prof.get("service_description") or "").italic = True
+    doc.add_paragraph().add_run(cl.get("service_description") or prof.get("service_description") or "").italic = True
+    cur = inv["currency"]
     tb = doc.add_table(rows=1, cols=4); tb.style = "Light Grid Accent 1"
-    for i, hd in enumerate(("Date", "Description", "Hours", "Amount (INR)")):
+    for i, hd in enumerate(("Date", "Description", "Hours", f"Amount ({cur})")):
         tb.rows[0].cells[i].text = hd
     for l in inv["lines"]:
         c = tb.add_row().cells
         c[0].text = dmy(l["date"]); c[1].text = l["description"]
-        c[2].text = "" if l.get("hours") is None else f"{l['hours']:g}"; c[3].text = f"{l['amount']:,.2f}"
+        c[2].text = "" if l.get("hours") is None else f"{l['hours']:g}"; c[3].text = f"{l['amount_c']:,.2f}"
         c[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
     def total_row(label, val, bold=False):
         c = tb.add_row().cells
@@ -873,13 +902,18 @@ def hamir_invoice_docx(inv_id):
             for cc in (c[1], c[3]):
                 for rr in cc.paragraphs[0].runs:
                     rr.bold = True
-    total_row("Subtotal", f"{inv['subtotal']:,.2f}")
+    total_row("Subtotal", f"{inv['subtotal_c']:,.2f}")
     if inv["gst_pct"]:
-        total_row(f"GST @ {inv['gst_pct']:g}%", f"{inv['gst_amount']:,.2f}")
-    total_row("Total payable", f"{inv['total']:,.2f}", True)
-    doc.add_paragraph(f"Amount in words: Rupees {inv['amount_words']} only").paragraph_format.space_before = Pt(8)
+        total_row(f"GST @ {inv['gst_pct']:g}%", f"{inv['gst_c']:,.2f}")
+    total_row(f"Total payable ({cur})", f"{inv['total_c']:,.2f}", True)
+    words = f"US Dollars {inv['amount_words']} only" if cur == "USD" else f"Rupees {inv['amount_words']} only"
+    doc.add_paragraph(f"Amount in words: {words}").paragraph_format.space_before = Pt(8)
+    if inv.get("export"):
+        doc.add_paragraph("Export of services. Supplied under Letter of Undertaking" + (f" {llp['lut']}" if llp.get("lut") else "")
+                          + "; no IGST charged. Amounts exclusive of any foreign VAT.")
     bank = " | ".join(x for x in (llp["bank_name"], f"A/c {llp['bank_account']}" if llp["bank_account"] else "",
-                                  f"IFSC {llp['bank_ifsc']}" if llp["bank_ifsc"] else "", llp["bank_branch"]) if x)
+                                  f"IFSC {llp['bank_ifsc']}" if llp["bank_ifsc"] else "",
+                                  f"SWIFT {llp['swift']}" if llp.get("swift") else "", llp["bank_branch"]) if x)
     if bank:
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(10)
         p.add_run("Bank details: ").bold = True; p.add_run(f"{llp['name']} - {bank}")

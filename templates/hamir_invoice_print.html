@@ -28,7 +28,7 @@
   <h1>{{ prof.llp.name }}</h1>
   <div class="muted">
     {% if prof.llp.address %}{{ prof.llp.address }}<br>{% endif %}
-    {% if prof.llp.pan %}PAN {{ prof.llp.pan }}{% endif %}{% if prof.llp.pan and prof.llp.gstin %} &nbsp;|&nbsp; {% endif %}{% if prof.llp.gstin %}GSTIN {{ prof.llp.gstin }}{% endif %}
+    {% if prof.llp.llpin %}LLPIN {{ prof.llp.llpin }} &nbsp;|&nbsp; {% endif %}{% if prof.llp.pan %}PAN {{ prof.llp.pan }}{% endif %}{% if prof.llp.tan %} &nbsp;|&nbsp; TAN {{ prof.llp.tan }}{% endif %}{% if prof.llp.gstin %} &nbsp;|&nbsp; GSTIN {{ prof.llp.gstin }}{% endif %}
     {% if prof.llp.email or prof.llp.phone %}<br>{{ prof.llp.email }}{% if prof.llp.email and prof.llp.phone %} | {% endif %}{{ prof.llp.phone }}{% endif %}
   </div>
   <div class="title">{{ 'TAX INVOICE' if inv.gst_pct else 'INVOICE' }}</div>
@@ -40,26 +40,28 @@
     {% if client.po_ref %}<tr><td>Client reference / PO</td><td>{{ client.po_ref }}</td></tr>{% endif %}
   </table>
   <div class="box"><b>Bill to</b><br>{{ client.legal_name or inv.client }}
+    {% if client.reg_no %}<br>Reg. no. {{ client.reg_no }}{% endif %}
     {% if client.attention %}<br>Attn: {{ client.attention }}{% endif %}
     {% if client.address %}<br>{{ client.address }}{% endif %}
     {% if client.gstin %}<br>GSTIN {{ client.gstin }}{% endif %}</div>
-  <div class="box"><i>{{ prof.service_description }}</i></div>
+  <div class="box"><i>{{ client.service_description or prof.service_description }}</i></div>
   <table class="lines">
-    <thead><tr><th style="width:90px">Date</th><th>Description</th><th class="r" style="width:60px">Hours</th><th class="r" style="width:120px">Amount (INR)</th></tr></thead>
+    <thead><tr><th style="width:90px">Date</th><th>Description</th><th class="r" style="width:60px">Hours</th><th class="r" style="width:120px">Amount ({{ inv.currency }})</th></tr></thead>
     <tbody>
-      {% for l in inv.lines %}<tr><td>{{ l.date }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td class="r">{{ '{:,.2f}'.format(l.amount) }}</td></tr>
+      {% for l in inv.lines %}<tr><td>{{ l.date }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>
       {% else %}<tr><td colspan="4" class="muted">No entries.</td></tr>{% endfor %}
     </tbody>
   </table>
   <table class="tot" style="margin-top:8px;">
-    <tr><td></td><td class="r" style="width:160px">Subtotal</td><td class="r" style="width:120px">{{ '{:,.2f}'.format(inv.subtotal) }}</td></tr>
-    {% if inv.gst_pct %}<tr><td></td><td class="r">GST @ {{ inv.gst_pct }}%</td><td class="r">{{ '{:,.2f}'.format(inv.gst_amount) }}</td></tr>{% endif %}
-    <tr class="grand"><td></td><td class="r">Total payable</td><td class="r">{{ '{:,.2f}'.format(inv.total) }}</td></tr>
+    <tr><td></td><td class="r" style="width:160px">Subtotal</td><td class="r" style="width:120px">{{ '{:,.2f}'.format(inv.subtotal_c) }}</td></tr>
+    {% if inv.gst_pct %}<tr><td></td><td class="r">GST @ {{ inv.gst_pct }}%</td><td class="r">{{ '{:,.2f}'.format(inv.gst_c) }}</td></tr>{% endif %}
+    <tr class="grand"><td></td><td class="r">Total payable ({{ inv.currency }})</td><td class="r">{{ '{:,.2f}'.format(inv.total_c) }}</td></tr>
   </table>
-  <div class="box">Amount in words: <b>Rupees {{ inv.amount_words }} only</b></div>
+  <div class="box">Amount in words: <b>{{ 'US Dollars' if inv.currency == 'USD' else 'Rupees' }} {{ inv.amount_words }} only</b></div>
+  {% if inv.export %}<div class="box">Export of services. Supplied under Letter of Undertaking{% if prof.llp.lut %} {{ prof.llp.lut }}{% endif %}; no IGST charged.</div>{% endif %}
   {% if prof.llp.bank_account or prof.llp.bank_ifsc %}
   <div class="box"><b>Bank details</b><br>{{ prof.llp.name }} — {{ prof.llp.bank_name }}
-    {% if prof.llp.bank_account %}, A/c {{ prof.llp.bank_account }}{% endif %}{% if prof.llp.bank_ifsc %}, IFSC {{ prof.llp.bank_ifsc }}{% endif %}{% if prof.llp.bank_branch %}, {{ prof.llp.bank_branch }}{% endif %}</div>
+    {% if prof.llp.bank_account %}, A/c {{ prof.llp.bank_account }}{% endif %}{% if prof.llp.bank_ifsc %}, IFSC {{ prof.llp.bank_ifsc }}{% endif %}{% if prof.llp.swift %}, SWIFT {{ prof.llp.swift }}{% endif %}{% if prof.llp.bank_branch %}, {{ prof.llp.bank_branch }}{% endif %}</div>
   {% endif %}
   {% if inv.notes %}<div class="box">{{ inv.notes }}</div>{% endif %}
   <div class="box muted" style="margin-top:30px;">This is a computer-generated invoice.</div>
