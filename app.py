@@ -6,11 +6,11 @@ Flask app — all routes: WhatsApp webhook, HTML screens, JSON APIs.
 import json
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from flask import Flask, request, render_template, jsonify, session, redirect, url_for, send_from_directory
+from flask import Flask, request, render_template, jsonify, session, redirect, url_for, send_from_directory, send_file
 
 from src.ai_client import get_ai_client
 from src.approval_engine import ApprovalEngine, ExpenseRequest
@@ -494,6 +494,402 @@ def api_hamir_rates_save():
                     return jsonify({"error": f"invalid rate for {client} {k}"}), 400
     db.save("hamir_rates", rates)
     return jsonify({"ok": True, "rates": rates})
+
+
+# ── Hamir invoices: monthly invoice per client from the billing log, Word/print, payment tracking ─
+_HAMIR_INV_KEY = "hamir_invoices"
+_HAMIR_PROFILE_KEY = "hamir_invoice_profile"
+_HAMIR_PROFILE_DEFAULT = {
+    "llp": {"name": "Hamir Advisors LLP", "address": "", "pan": "", "gstin": "", "email": "", "phone": "",
+            "bank_name": "ICICI Bank", "bank_account": "", "bank_ifsc": "", "bank_branch": ""},
+    "clients": {c: {"legal_name": "", "address": "", "gstin": "", "attention": "", "po_ref": "", "terms_days": 30}
+                for c in HAMIR_CLIENTS},
+    "gst_pct": 0.0,
+    "tds_pct": 10.0,
+    "service_description": "Professional advisory services",
+}
+
+
+def _hamir_profile():
+    saved = db.load(_HAMIR_PROFILE_KEY)
+    prof = json.loads(json.dumps(_HAMIR_PROFILE_DEFAULT))
+    if isinstance(saved, dict):
+        for k in ("gst_pct", "tds_pct", "service_description"):
+            if k in saved:
+                prof[k] = saved[k]
+        if isinstance(saved.get("llp"), dict):
+            prof["llp"].update({k: v for k, v in saved["llp"].items() if k in prof["llp"]})
+        if isinstance(saved.get("clients"), dict):
+            for c, vals in saved["clients"].items():
+                if c in prof["clients"] and isinstance(vals, dict):
+                    prof["clients"][c].update({k: v for k, v in vals.items() if k in prof["clients"][c]})
+    return prof
+
+
+def _hamir_invoice_store():
+    inv = db.load(_HAMIR_INV_KEY)
+    return inv if isinstance(inv, list) else []
+
+
+def _inv_period_of(iso_date):
+    return (iso_date or "")[:7]
+
+
+def _inv_fy_label(iso_date):
+    try:
+        y, m = int(iso_date[:4]), int(iso_date[5:7])
+    except Exception:
+        return "0000-00"
+    start = y if m >= 4 else y - 1
+    return f"{start}-{str(start + 1)[2:]}"
+
+
+def _inv_lines_for(client, period, taken_ids):
+    out = []
+    for e in (db.load("hamir_billing_log") or []):
+        if not isinstance(e, dict) or e.get("client") != client:
+            continue
+        if _inv_period_of(e.get("date")) != period or e.get("id") in taken_ids:
+            continue
+        if e.get("amount") in (None, ""):
+            continue
+        out.append({"entry_id": e["id"], "date": e.get("date"), "description": e.get("work") or "Advisory session",
+                    "hours": e.get("hours"), "amount": round(float(e["amount"]), 2)})
+    out.sort(key=lambda l: l["date"] or "")
+    return out
+
+
+def _inr_words(n):
+    n = int(round(n))
+    if n == 0:
+        return "Zero"
+    ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",
+            "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
+    tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+
+    def two(x):
+        return ones[x] if x < 20 else tens[x // 10] + ("-" + ones[x % 10] if x % 10 else "")
+
+    def three(x):
+        return (ones[x // 100] + " Hundred" + (" " if x % 100 else "") if x >= 100 else "") + (two(x % 100) if x % 100 else "")
+    parts = []
+    for div, name in ((10000000, "Crore"), (100000, "Lakh"), (1000, "Thousand")):
+        q, n = divmod(n, div)
+        if q:
+            parts.append(two(q) if q < 100 else three(q))
+            parts[-1] += " " + name
+    if n:
+        parts.append(three(n))
+    return " ".join(parts)
+
+
+def _inv_enrich(inv, prof, taken_for_draft=None):
+    """Return the invoice with live totals; drafts re-read their lines from the billing log."""
+    inv = dict(inv)
+    if inv.get("status") == "draft":
+        others = set()
+        for o in _hamir_invoice_store():
+            if o["id"] != inv["id"]:
+                others.update(l["entry_id"] for l in o.get("lines", []))
+        inv["lines"] = _inv_lines_for(inv["client"], inv["period"], others)
+    subtotal = round(sum(l["amount"] for l in inv.get("lines", [])), 2)
+    gst_pct = float(inv.get("gst_pct") or 0)
+    gst = round(subtotal * gst_pct / 100.0, 2)
+    total = round(subtotal + gst, 2)
+    tds_pct = float(prof.get("tds_pct") or 0)
+    inv.update({"subtotal": subtotal, "gst_amount": gst, "total": total,
+                "expected_net": round(total - subtotal * tds_pct / 100.0, 2),
+                "hours_total": round(sum(float(l.get("hours") or 0) for l in inv.get("lines", [])), 2),
+                "amount_words": _inr_words(total)})
+    return inv
+
+
+def _inv_payment_candidates(inv):
+    from src.master_ledger import _parse_date as _pd
+    try:
+        since = datetime.strptime(inv.get("issue_date") or "", "%Y-%m-%d")
+    except Exception:
+        since = datetime(2000, 1, 1)
+    targets = {inv["total"], inv["expected_net"]}
+    keys = {"EQT": ["eqt"], "Advent": ["advent"]}.get(inv["client"], [inv["client"].lower()])
+    out = []
+    for t in db.load("master_ledger") or []:
+        cr = float(t.get("credit") or 0)
+        if cr < 1000 or t.get("account") == "cash":
+            continue
+        d = _pd(t.get("date", ""))
+        if not d or d < since:
+            continue
+        text = f"{t.get('paid_to') or ''} {t.get('raw_description') or ''}".lower()
+        amt_hit = any(abs(cr - x) <= max(50.0, x * 0.005) for x in targets if x)
+        name_hit = any(k in text for k in keys)
+        if not (amt_hit or name_hit):
+            continue
+        score = (2 if amt_hit else 0) + (1 if name_hit else 0) + (1 if t.get("account") in TAX_EXCLUDED_ACCOUNTS else 0)
+        out.append({"txn_id": t.get("txn_id"), "date": t.get("date"), "account": t.get("account"), "amount": cr,
+                    "description": (t.get("raw_description") or t.get("paid_to") or "")[:80].replace("\n", " "),
+                    "matched_on": ("amount" if amt_hit else "") + (" + name" if amt_hit and name_hit else ("name" if name_hit else "")),
+                    "score": score})
+    out.sort(key=lambda c: (-c["score"], c["date"]))
+    return out[:5]
+
+
+def _inv_next_number(issue_date, store):
+    fy = _inv_fy_label(issue_date)
+    n = 1 + sum(1 for i in store if i.get("number", "").startswith(f"HA/{fy}/"))
+    return f"HA/{fy}/{n:03d}"
+
+
+def _inv_create(client, period, store, auto=False):
+    taken = set()
+    for o in store:
+        taken.update(l["entry_id"] for l in o.get("lines", []))
+    lines = _inv_lines_for(client, period, taken)
+    if not lines:
+        return None
+    prof = _hamir_profile()
+    y, m = int(period[:4]), int(period[5:7])
+    nxt = datetime(y + (m == 12), (m % 12) + 1, 1)
+    issue = nxt.strftime("%Y-%m-%d")
+    terms = int(prof["clients"][client].get("terms_days") or 30)
+    due = (nxt + timedelta(days=terms)).strftime("%Y-%m-%d")
+    inv = {"id": "inv" + datetime.now().strftime("%Y%m%d%H%M%S%f")[:20], "number": _inv_next_number(issue, store),
+           "client": client, "period": period, "issue_date": issue, "due_date": due, "status": "draft",
+           "gst_pct": float(prof.get("gst_pct") or 0), "notes": "", "auto": bool(auto), "lines": lines,
+           "submitted": {"done": False, "date": ""}, "paid": {"done": False, "date": "", "amount": None, "txn_id": ""},
+           "created_at": datetime.now().isoformat()}
+    store.append(inv)
+    return inv
+
+
+def _inv_sync_entry_paid(inv, paid):
+    log = db.load("hamir_billing_log") or []
+    ids = {l["entry_id"] for l in inv.get("lines", [])}
+    changed = False
+    for e in log:
+        if isinstance(e, dict) and e.get("id") in ids and bool(e.get("paid")) != bool(paid):
+            e["paid"] = bool(paid)
+            changed = True
+    if changed:
+        db.save("hamir_billing_log", log)
+
+
+@app.route("/api/hamir/invoices", methods=["GET"])
+@login_required
+def api_hamir_invoices_get():
+    if session.get("user") != HAMIR_OWNER:
+        return jsonify({"error": "forbidden"}), 403
+    today = datetime.now()
+    prev = (today.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    store = _hamir_invoice_store()
+    created = []
+    for c in HAMIR_CLIENTS:
+        if not any(i["client"] == c and i["period"] == prev for i in store):
+            inv = _inv_create(c, prev, store, auto=True)
+            if inv:
+                created.append(inv["number"])
+    if created:
+        db.save(_HAMIR_INV_KEY, store)
+    prof = _hamir_profile()
+    out = []
+    for i in store:
+        e = _inv_enrich(i, prof)
+        if e["status"] != "draft" and not e["paid"]["done"]:
+            e["payment_candidates"] = _inv_payment_candidates(e)
+        out.append(e)
+    out.sort(key=lambda x: (x["period"], x["number"]), reverse=True)
+    # entries not on any invoice, by client and month (for "prepare invoices")
+    taken = set()
+    for o in store:
+        taken.update(l["entry_id"] for l in o.get("lines", []))
+    unbilled = {}
+    for e in db.load("hamir_billing_log") or []:
+        if isinstance(e, dict) and e.get("id") not in taken and e.get("amount") not in (None, ""):
+            k = f"{e.get('client')}|{_inv_period_of(e.get('date'))}"
+            u = unbilled.setdefault(k, {"client": e.get("client"), "period": _inv_period_of(e.get("date")), "count": 0, "amount": 0.0})
+            u["count"] += 1
+            u["amount"] = round(u["amount"] + float(e["amount"]), 2)
+    return jsonify({"invoices": out, "profile": prof, "previous_period": prev, "auto_created": created,
+                    "unbilled": sorted(unbilled.values(), key=lambda u: u["period"], reverse=True)})
+
+
+@app.route("/api/hamir/invoices", methods=["POST"])
+@login_required
+def api_hamir_invoices_post():
+    if session.get("user") != HAMIR_OWNER:
+        return jsonify({"error": "forbidden"}), 403
+    body = request.get_json(force=True) or {}
+    if body.get("action") != "generate":
+        return jsonify({"error": "unknown action"}), 400
+    client, period = body.get("client"), str(body.get("period") or "")
+    if client not in HAMIR_CLIENTS or len(period) != 7:
+        return jsonify({"error": "client and period (YYYY-MM) required"}), 400
+    store = _hamir_invoice_store()
+    inv = _inv_create(client, period, store)
+    if not inv:
+        return jsonify({"error": "no unbilled entries for that client and month"}), 400
+    db.save(_HAMIR_INV_KEY, store)
+    return jsonify({"ok": True, "id": inv["id"], "number": inv["number"]})
+
+
+@app.route("/api/hamir/invoices/<inv_id>", methods=["POST"])
+@login_required
+def api_hamir_invoice_update(inv_id):
+    if session.get("user") != HAMIR_OWNER:
+        return jsonify({"error": "forbidden"}), 403
+    body = request.get_json(force=True) or {}
+    store = _hamir_invoice_store()
+    inv = next((i for i in store if i["id"] == inv_id), None)
+    if not inv:
+        return jsonify({"error": "not found"}), 404
+    prof = _hamir_profile()
+    if body.get("action") == "delete":
+        _inv_sync_entry_paid(inv, False)
+        store = [i for i in store if i["id"] != inv_id]
+        db.save(_HAMIR_INV_KEY, store)
+        return jsonify({"ok": True})
+    for k in ("issue_date", "due_date"):
+        if k in body:
+            inv[k] = str(body[k])[:10]
+    if "notes" in body:
+        inv["notes"] = str(body["notes"])[:1000]
+    if "gst_pct" in body:
+        inv["gst_pct"] = max(0.0, min(100.0, float(body["gst_pct"] or 0)))
+    if "status" in body and body["status"] in ("draft", "issued"):
+        if body["status"] == "issued" and inv["status"] == "draft":
+            snap = _inv_enrich(inv, prof)           # freeze the lines as they stand today
+            inv["lines"] = snap["lines"]
+        inv["status"] = body["status"]
+    if isinstance(body.get("submitted"), dict):
+        inv["submitted"] = {"done": bool(body["submitted"].get("done")), "date": str(body["submitted"].get("date") or "")[:10]}
+        if inv["submitted"]["done"] and inv["status"] == "draft":
+            inv["lines"] = _inv_enrich(inv, prof)["lines"]; inv["status"] = "issued"
+    if isinstance(body.get("paid"), dict):
+        p = body["paid"]
+        done = bool(p.get("done"))
+        amt = p.get("amount")
+        inv["paid"] = {"done": done, "date": str(p.get("date") or "")[:10],
+                       "amount": (None if amt in (None, "") else round(float(amt), 2)), "txn_id": str(p.get("txn_id") or "")[:40]}
+        if done and inv["status"] == "draft":
+            inv["lines"] = _inv_enrich(inv, prof)["lines"]; inv["status"] = "issued"
+        _inv_sync_entry_paid(inv, done)
+    db.save(_HAMIR_INV_KEY, store)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/hamir/invoice-profile", methods=["POST"])
+@login_required
+def api_hamir_invoice_profile_save():
+    if session.get("user") != HAMIR_OWNER:
+        return jsonify({"error": "forbidden"}), 403
+    body = request.get_json(force=True) or {}
+    prof = _hamir_profile()
+    for k in ("gst_pct", "tds_pct"):
+        if k in body:
+            prof[k] = max(0.0, min(100.0, float(body[k] or 0)))
+    if "service_description" in body:
+        prof["service_description"] = str(body["service_description"])[:200]
+    if isinstance(body.get("llp"), dict):
+        for k, v in body["llp"].items():
+            if k in prof["llp"]:
+                prof["llp"][k] = str(v)[:300]
+    if isinstance(body.get("clients"), dict):
+        for c, vals in body["clients"].items():
+            if c in prof["clients"] and isinstance(vals, dict):
+                for k, v in vals.items():
+                    if k in prof["clients"][c]:
+                        prof["clients"][c][k] = int(v or 30) if k == "terms_days" else str(v)[:300]
+    db.save(_HAMIR_PROFILE_KEY, prof)
+    return jsonify({"ok": True})
+
+
+def _inv_get_enriched(inv_id):
+    inv = next((i for i in _hamir_invoice_store() if i["id"] == inv_id), None)
+    return (_inv_enrich(inv, _hamir_profile()), _hamir_profile()) if inv else (None, None)
+
+
+@app.route("/hamir-advisors/invoice/<inv_id>")
+@login_required
+def hamir_invoice_print(inv_id):
+    if session.get("user") != HAMIR_OWNER:
+        return redirect(url_for("home"))
+    inv, prof = _inv_get_enriched(inv_id)
+    if not inv:
+        return "Invoice not found", 404
+    return render_template("hamir_invoice_print.html", inv=inv, prof=prof, client=prof["clients"][inv["client"]])
+
+
+@app.route("/api/hamir/invoices/<inv_id>/docx")
+@login_required
+def hamir_invoice_docx(inv_id):
+    if session.get("user") != HAMIR_OWNER:
+        return jsonify({"error": "forbidden"}), 403
+    inv, prof = _inv_get_enriched(inv_id)
+    if not inv:
+        return jsonify({"error": "not found"}), 404
+    from io import BytesIO
+    from docx import Document
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    llp, cl = prof["llp"], prof["clients"][inv["client"]]
+    fmt = lambda v: f"Rs {v:,.2f}"
+    dmy = lambda s: (datetime.strptime(s, "%Y-%m-%d").strftime("%d %b %Y") if s else "")
+    doc = Document()
+    for sec in doc.sections:
+        sec.left_margin = sec.right_margin = Inches(0.9)
+    h = doc.add_paragraph(); r = h.add_run(llp["name"]); r.bold = True; r.font.size = Pt(16)
+    for line in (llp["address"], " | ".join(x for x in (f"PAN {llp['pan']}" if llp["pan"] else "", f"GSTIN {llp['gstin']}" if llp["gstin"] else "") if x),
+                 " | ".join(x for x in (llp["email"], llp["phone"]) if x)):
+        if line:
+            doc.add_paragraph(line).paragraph_format.space_after = Pt(0)
+    t = doc.add_paragraph(); t.paragraph_format.space_before = Pt(14)
+    r = t.add_run("TAX INVOICE" if inv["gst_pct"] else "INVOICE"); r.bold = True; r.font.size = Pt(14)
+    meta = doc.add_table(rows=0, cols=2)
+    for k, v in (("Invoice no.", inv["number"]), ("Invoice date", dmy(inv["issue_date"])), ("Due date", dmy(inv["due_date"])),
+                 ("Period", datetime.strptime(inv["period"] + "-01", "%Y-%m-%d").strftime("%B %Y")),
+                 ("Client reference / PO", cl.get("po_ref") or "")):
+        if v:
+            row = meta.add_row().cells; row[0].text = k; row[1].text = str(v)
+    b = doc.add_paragraph(); b.paragraph_format.space_before = Pt(12)
+    r = b.add_run("Bill to"); r.bold = True
+    doc.add_paragraph(cl.get("legal_name") or inv["client"]).paragraph_format.space_after = Pt(0)
+    for line in (cl.get("attention") and "Attn: " + cl["attention"], cl.get("address"), cl.get("gstin") and "GSTIN " + cl["gstin"]):
+        if line:
+            doc.add_paragraph(line).paragraph_format.space_after = Pt(0)
+    doc.add_paragraph().add_run(prof.get("service_description") or "").italic = True
+    tb = doc.add_table(rows=1, cols=4); tb.style = "Light Grid Accent 1"
+    for i, hd in enumerate(("Date", "Description", "Hours", "Amount (INR)")):
+        tb.rows[0].cells[i].text = hd
+    for l in inv["lines"]:
+        c = tb.add_row().cells
+        c[0].text = dmy(l["date"]); c[1].text = l["description"]
+        c[2].text = "" if l.get("hours") is None else f"{l['hours']:g}"; c[3].text = f"{l['amount']:,.2f}"
+        c[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    def total_row(label, val, bold=False):
+        c = tb.add_row().cells
+        c[1].text = label; c[3].text = val
+        c[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        if bold:
+            for cc in (c[1], c[3]):
+                for rr in cc.paragraphs[0].runs:
+                    rr.bold = True
+    total_row("Subtotal", f"{inv['subtotal']:,.2f}")
+    if inv["gst_pct"]:
+        total_row(f"GST @ {inv['gst_pct']:g}%", f"{inv['gst_amount']:,.2f}")
+    total_row("Total payable", f"{inv['total']:,.2f}", True)
+    doc.add_paragraph(f"Amount in words: Rupees {inv['amount_words']} only").paragraph_format.space_before = Pt(8)
+    bank = " | ".join(x for x in (llp["bank_name"], f"A/c {llp['bank_account']}" if llp["bank_account"] else "",
+                                  f"IFSC {llp['bank_ifsc']}" if llp["bank_ifsc"] else "", llp["bank_branch"]) if x)
+    if bank:
+        p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(10)
+        p.add_run("Bank details: ").bold = True; p.add_run(f"{llp['name']} - {bank}")
+    if inv.get("notes"):
+        doc.add_paragraph(inv["notes"])
+    doc.add_paragraph("This is a computer-generated invoice.").paragraph_format.space_before = Pt(14)
+    buf = BytesIO(); doc.save(buf); buf.seek(0)
+    safe = inv["number"].replace("/", "-")
+    return send_file(buf, as_attachment=True, download_name=f"Invoice_{safe}_{inv['client']}.docx",
+                     mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 
 # ── Portfolio allocation (shown at the top of Assets & Liabilities Detail) ──────

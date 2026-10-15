@@ -56,6 +56,23 @@ table.log { width:100%; border-collapse:collapse; min-width:880px; }
 .del { background:none; border:none; color:#cbd5e1; font-size:15px; padding:4px 6px; cursor:pointer; }
 .del:hover { color:#dc2626; }
 .empty { padding:34px; text-align:center; color:#94a3b8; }
+.ready { background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:12px 16px; margin-bottom:14px; font-size:13px; color:#1e3a8a; }
+.ready .go { margin-left:10px; }
+.btn { font-size:12px; border:1px solid #cbd5e1; background:#fff; color:#334155; padding:4px 11px; border-radius:6px; cursor:pointer; text-decoration:none; display:inline-block; }
+.btn:hover { background:#f1f5f9; } .btn.pri { background:#1e3a5f; color:#fff; border-color:#1e3a5f; } .btn.red { color:#dc2626; border-color:#fecaca; }
+.inv { background:#fff; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:10px; }
+.inv-h { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; padding:10px 14px; }
+.inv-no { font-weight:700; } .chip { font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 8px; border-radius:10px; }
+.chip.draft { background:#f1f5f9; color:#475569; } .chip.issued { background:#dbeafe; color:#1d4ed8; } .chip.sent { background:#fef3c7; color:#b45309; }
+.chip.paid { background:#dcfce7; color:#15803d; } .chip.overdue { background:#fee2e2; color:#b91c1c; }
+.inv-b { border-top:1px solid #f1f5f9; padding:10px 14px; font-size:12.5px; }
+.inv-b table { width:100%; } .inv-b td, .inv-b th { padding:3px 6px; border-bottom:.5px solid #f1f5f9; } .inv-b th { font-size:10px; color:#94a3b8; text-transform:uppercase; text-align:left; }
+.inv-b .r { text-align:right; font-variant-numeric:tabular-nums; }
+.fld { display:inline-flex; flex-direction:column; gap:2px; font-size:11px; color:#64748b; margin-right:12px; }
+.fld input, .fld textarea { border:1px solid #e2e8f0; border-radius:4px; padding:3px 6px; font-size:12px; font-family:inherit; }
+.grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; }
+.sugg { display:inline-block; background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; border-radius:8px; padding:4px 9px; font-size:11.5px; margin:2px 6px 2px 0; cursor:pointer; }
+.sugg:hover { background:#dcfce7; }
 </style>
 </head>
 <body>
@@ -70,10 +87,38 @@ table.log { width:100%; border-collapse:collapse; min-width:880px; }
 </div>
 
 <div class="fs-tabs">
-  <div class="fs-tab active">Master Billing Log</div>
+  <div class="fs-tab active" onclick="showTab('log', this)">Master Billing Log</div>
+  <div class="fs-tab" onclick="showTab('inv', this)">Invoices</div>
+  <div class="fs-tab" onclick="showTab('trk', this)">Sent &amp; Paid</div>
 </div>
 
-<div class="tab-panel">
+<div class="tab-panel" id="tab-inv" style="display:none;">
+  <div id="inv-ready"></div>
+  <div class="toolbar">
+    <div class="ttl">Invoices</div>
+    <div>
+      <input type="month" id="inv-month" style="border:1px solid #e2e8f0;border-radius:4px;padding:3px 6px;font-size:12px;">
+      <button class="btn pri" onclick="prepareMonth()">Prepare invoices for this month</button>
+    </div>
+  </div>
+  <div id="inv-list"></div>
+  <details class="rates" style="margin-top:16px;" id="inv-profile">
+    <summary>Invoice details — your LLP, clients, GST (set once)</summary>
+    <div id="inv-profile-body" style="margin-top:10px;"></div>
+  </details>
+</div>
+
+<div class="tab-panel" id="tab-trk" style="display:none;">
+  <div class="kpi-row" id="trk-kpis" style="grid-template-columns:repeat(4,1fr);"></div>
+  <div class="toolbar"><div class="ttl">Submitted to client · money received</div></div>
+  <div class="log-wrap"><table class="log" style="min-width:980px;">
+    <thead><tr><th>Invoice</th><th>Client</th><th class="r">Total</th><th class="r">Expected in bank*</th><th>Due</th>
+      <th style="text-align:center">Submitted</th><th style="text-align:center">Money received</th><th>Bank match (ICICI)</th></tr></thead>
+    <tbody id="trk-rows"></tbody></table></div>
+  <div style="font-size:11px;color:#94a3b8;margin-top:6px;">* After the client's TDS at the rate in Invoice details. Bank matches look at ICICI credits after the invoice date, by amount (invoice total or net of TDS) and by the client's name. Click a match to confirm it.</div>
+</div>
+
+<div class="tab-panel" id="tab-log">
 
   <div class="kpi-row" id="kpis"></div>
 
@@ -264,6 +309,161 @@ function addEntry() {
 function delEntry(id) {
   if (!confirm('Delete this entry?')) return;
   _entries = _entries.filter(x => x.id !== id); save(); render();
+}
+
+// ── tabs ────────────────────────────────────────────────────────────────────
+let _inv = null;
+function showTab(name, el) {
+  document.querySelectorAll('.fs-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  ['log','inv','trk'].forEach(n => document.getElementById('tab-' + n).style.display = (n === name ? '' : 'none'));
+  if (name !== 'log') loadInvoices();
+}
+
+// ── invoices ────────────────────────────────────────────────────────────────
+const mon = p => { const [y, m] = p.split('-'); return new Date(+y, +m - 1, 1).toLocaleString('en-IN', {month: 'long', year: 'numeric'}); };
+const dmy = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+function ledgerToISO(s) { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s || ''); return m ? `${m[3]}-${m[2]}-${m[1]}` : (s || ''); }
+function invStatus(i) {
+  if (i.paid.done) return ['paid', 'Paid'];
+  if (i.status === 'draft') return ['draft', 'Draft'];
+  const overdue = i.due_date && i.due_date < todayISO();
+  if (overdue) return ['overdue', 'Overdue'];
+  return i.submitted.done ? ['sent', 'Sent'] : ['issued', 'Issued'];
+}
+async function loadInvoices() {
+  const r = await fetch('/api/hamir/invoices');
+  if (!r.ok) { alert('Could not load invoices (' + r.status + ')'); return; }
+  _inv = await r.json();
+  if (!document.getElementById('inv-month').value) document.getElementById('inv-month').value = _inv.previous_period;
+  renderInvoices(); renderTracker(); renderProfile();
+}
+async function invPost(id, body) {
+  const r = await fetch('/api/hamir/invoices/' + id, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (!r.ok) { alert('Could not save (' + r.status + ')'); return false; }
+  await loadInvoices();
+  const d = await (await fetch('/api/hamir/billing')).json();     // paid ticks may have changed on the log
+  _entries = d.entries || []; render();
+  return true;
+}
+async function prepareMonth() {
+  const period = document.getElementById('inv-month').value;
+  if (!period) return alert('Pick a month first.');
+  const todo = (_inv.unbilled || []).filter(u => u.period === period);
+  if (!todo.length) return alert('No unbilled entries for ' + mon(period) + '.');
+  for (const u of todo) {
+    await fetch('/api/hamir/invoices', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'generate', client: u.client, period})});
+  }
+  loadInvoices();
+}
+async function generateOne(client, period) {
+  await fetch('/api/hamir/invoices', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'generate', client, period})});
+  loadInvoices();
+}
+function renderInvoices() {
+  const prev = _inv.previous_period;
+  const readyNew = (_inv.unbilled || []).filter(u => u.period === prev);
+  const drafts = _inv.invoices.filter(i => i.period === prev && i.status === 'draft');
+  let banner = '';
+  if (drafts.length || readyNew.length) {
+    banner = `<div class="ready"><b>${mon(prev)} invoices are ready.</b> ` +
+      drafts.map(i => `${esc(i.client)}: ${i.lines.length} entries, ${inr(i.total)} <span style="color:#64748b">(${esc(i.number)})</span>`).join(' · ') +
+      readyNew.map(u => ` · ${esc(u.client)}: ${u.count} new entries, ${inr(u.amount)} <button class="btn go" onclick="generateOne('${esc(u.client)}','${u.period}')">Prepare</button>`).join('') +
+      `<div style="font-size:11px;margin-top:4px;color:#475569;">Prepared automatically from your billing log from the 1st of each month. Check, mark issued, then download or print.</div></div>`;
+  } else if (!_inv.invoices.length) {
+    banner = `<div class="ready">Nothing to invoice yet. Invoices are prepared from the billing log on the 1st of each month, or pick a month and click <b>Prepare</b>.</div>`;
+  }
+  document.getElementById('inv-ready').innerHTML = banner;
+  if (!_inv.invoices.length) { document.getElementById('inv-list').innerHTML = ''; return; }
+  document.getElementById('inv-list').innerHTML = _inv.invoices.map(i => {
+    const [cls, label] = invStatus(i);
+    return `<div class="inv"><div class="inv-h">
+        <span class="inv-no">${esc(i.number)}</span><span>${esc(i.client)}</span><span style="color:#64748b">${mon(i.period)}</span>
+        <span class="chip ${cls}">${label}</span>
+        <span style="margin-left:auto;font-weight:700">${inr(i.total)}</span>
+        <a class="btn" href="/api/hamir/invoices/${i.id}/docx">Word</a>
+        <a class="btn" href="/hamir-advisors/invoice/${i.id}" target="_blank">Print</a>
+        ${i.status === 'draft' ? `<button class="btn pri" onclick="invPost('${i.id}',{status:'issued'})">Mark issued</button>` : ''}
+        <button class="btn red" title="Delete" onclick="if(confirm('Delete ${esc(i.number)}? Its entries go back to unbilled.')) invPost('${i.id}',{action:'delete'})">✕</button>
+      </div>
+      <div class="inv-b">
+        <div style="margin-bottom:8px">
+          <span class="fld">Invoice date<input type="date" value="${i.issue_date}" onchange="invPost('${i.id}',{issue_date:this.value})"></span>
+          <span class="fld">Due date<input type="date" value="${i.due_date}" onchange="invPost('${i.id}',{due_date:this.value})"></span>
+          <span class="fld">GST %<input type="number" step="any" style="width:70px" value="${i.gst_pct}" onchange="invPost('${i.id}',{gst_pct:this.value})"></span>
+          <span class="fld" style="min-width:260px">Note on invoice<input type="text" value="${esc(i.notes)}" onchange="invPost('${i.id}',{notes:this.value})"></span>
+        </div>
+        <table><thead><tr><th>Date</th><th>Work</th><th class="r">Hours</th><th class="r">Amount</th></tr></thead><tbody>
+          ${i.lines.map(l => `<tr><td>${dmy(l.date)}</td><td>${esc(l.description)}</td><td class="r">${l.hours == null ? '' : l.hours}</td><td class="r">${inr(l.amount)}</td></tr>`).join('')}
+          <tr><td colspan="3" class="r"><b>Subtotal</b></td><td class="r"><b>${inr(i.subtotal)}</b></td></tr>
+          ${i.gst_pct ? `<tr><td colspan="3" class="r">GST ${i.gst_pct}%</td><td class="r">${inr(i.gst_amount)}</td></tr>` : ''}
+        </tbody></table></div></div>`;
+  }).join('');
+}
+
+// ── sent & paid tracker ─────────────────────────────────────────────────────
+function renderTracker() {
+  const list = _inv.invoices.filter(i => i.status !== 'draft' || i.submitted.done || i.paid.done);
+  const sum = f => list.filter(f).reduce((s, i) => s + i.total, 0);
+  const t = todayISO();
+  document.getElementById('trk-kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-label">Invoiced</div><div class="kpi-val">${inr(sum(() => true))}</div></div>
+    <div class="kpi"><div class="kpi-label">Not yet submitted</div><div class="kpi-val amber">${inr(sum(i => !i.submitted.done && !i.paid.done))}</div></div>
+    <div class="kpi"><div class="kpi-label">Outstanding</div><div class="kpi-val amber">${inr(sum(i => !i.paid.done))}</div></div>
+    <div class="kpi"><div class="kpi-label">Overdue</div><div class="kpi-val" style="color:#dc2626">${inr(sum(i => !i.paid.done && i.due_date && i.due_date < t))}</div></div>`;
+  if (!list.length) { document.getElementById('trk-rows').innerHTML = `<tr><td colspan="8" class="empty">No issued invoices yet. Mark an invoice issued on the Invoices tab and it appears here.</td></tr>`; return; }
+  document.getElementById('trk-rows').innerHTML = list.map(i => {
+    const overdue = !i.paid.done && i.due_date && i.due_date < t;
+    const cands = (i.payment_candidates || []).map(c =>
+      `<span class="sugg" title="${esc(c.description)} · matched on ${esc(c.matched_on)}"
+         onclick="invPost('${i.id}',{paid:{done:true,date:'${ledgerToISO(c.date)}',amount:${c.amount},txn_id:'${c.txn_id}'}})">
+         ✓ ${esc(c.date)} · ${inr(c.amount)} · ${esc(c.account)}</span>`).join('');
+    return `<tr class="${i.paid.done ? 'paid' : ''}">
+      <td><b>${esc(i.number)}</b><div style="font-size:11px;color:#94a3b8">${mon(i.period)}</div></td>
+      <td>${esc(i.client)}</td><td class="r">${inr(i.total)}</td><td class="r">${inr(i.expected_net)}</td>
+      <td style="${overdue ? 'color:#dc2626;font-weight:600' : ''}">${dmy(i.due_date)}${overdue ? ' · overdue' : ''}</td>
+      <td class="tick"><input type="checkbox" ${i.submitted.done ? 'checked' : ''}
+           onchange="invPost('${i.id}',{submitted:{done:this.checked,date:this.checked?todayISO():''}})">
+        <div style="font-size:10px;color:#94a3b8">${i.submitted.done ? dmy(i.submitted.date) : ''}</div></td>
+      <td class="tick"><input type="checkbox" ${i.paid.done ? 'checked' : ''}
+           onchange="invPost('${i.id}',{paid:{done:this.checked,date:this.checked?todayISO():'',amount:this.checked?${i.expected_net}:null,txn_id:''}})">
+        <div style="font-size:10px;color:#94a3b8">${i.paid.done ? dmy(i.paid.date) + (i.paid.amount != null ? ' · ' + inr(i.paid.amount) : '') : ''}</div></td>
+      <td>${i.paid.done ? (i.paid.txn_id ? '<span style="font-size:11px;color:#15803d">matched to bank credit</span>' : '<span style="font-size:11px;color:#94a3b8">ticked manually</span>') :
+          (cands || '<span style="font-size:11px;color:#cbd5e1">no matching credit yet</span>')}</td></tr>`;
+  }).join('');
+}
+
+// ── invoice details (LLP, clients, GST) ─────────────────────────────────────
+function renderProfile() {
+  const p = _inv.profile, L = p.llp;
+  const f = (label, path, val, w) => `<span class="fld" style="${w ? 'min-width:' + w + 'px' : ''}">${label}<input value="${esc(val)}" data-p="${path}"></span>`;
+  document.getElementById('inv-profile-body').innerHTML = `
+    <div class="grid2">
+      <div><b style="font-size:12px">${esc(L.name)}</b><br>
+        ${f('Name', 'llp.name', L.name)}${f('Address', 'llp.address', L.address, 260)}<br>
+        ${f('PAN', 'llp.pan', L.pan)}${f('GSTIN', 'llp.gstin', L.gstin)}${f('Email', 'llp.email', L.email)}${f('Phone', 'llp.phone', L.phone)}<br>
+        ${f('Bank', 'llp.bank_name', L.bank_name)}${f('Account no.', 'llp.bank_account', L.bank_account)}${f('IFSC', 'llp.bank_ifsc', L.bank_ifsc)}${f('Branch', 'llp.bank_branch', L.bank_branch)}</div>
+      ${Object.keys(p.clients).map(c => { const C = p.clients[c]; return `<div><b style="font-size:12px">${esc(c)}</b><br>
+        ${f('Legal name', 'clients.' + c + '.legal_name', C.legal_name, 220)}${f('Attention', 'clients.' + c + '.attention', C.attention)}<br>
+        ${f('Address', 'clients.' + c + '.address', C.address, 260)}${f('GSTIN', 'clients.' + c + '.gstin', C.gstin)}<br>
+        ${f('PO / reference', 'clients.' + c + '.po_ref', C.po_ref)}${f('Payment terms (days)', 'clients.' + c + '.terms_days', C.terms_days)}</div>`; }).join('')}
+    </div>
+    <div style="margin-top:8px">
+      ${f('GST % on invoices (0 if not registered)', 'gst_pct', p.gst_pct)}${f('Client TDS % (for expected receipt)', 'tds_pct', p.tds_pct)}
+      ${f('Service description', 'service_description', p.service_description, 300)}
+      <button class="btn pri" onclick="saveProfile()">Save details</button>
+    </div>`;
+}
+async function saveProfile() {
+  const body = {llp: {}, clients: {}};
+  document.querySelectorAll('#inv-profile-body [data-p]').forEach(i => {
+    const parts = i.dataset.p.split('.');
+    if (parts[0] === 'llp') body.llp[parts[1]] = i.value;
+    else if (parts[0] === 'clients') { (body.clients[parts[1]] = body.clients[parts[1]] || {})[parts[2]] = i.value; }
+    else body[parts[0]] = i.value;
+  });
+  const r = await fetch('/api/hamir/invoice-profile', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (r.ok) { await loadInvoices(); alert('Saved.'); } else alert('Could not save (' + r.status + ')');
 }
 
 load();
