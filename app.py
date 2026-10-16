@@ -502,10 +502,12 @@ _HAMIR_PROFILE_KEY = "hamir_invoice_profile"
 _HAMIR_PROFILE_DEFAULT = {
     "llp": {"name": "Hamir Advisors LLP", "address": "", "pan": "", "gstin": "", "email": "", "phone": "",
             "llpin": "", "tan": "", "lut": "",
-            "bank_name": "ICICI Bank", "bank_account": "", "bank_ifsc": "", "bank_branch": "", "swift": ""},
+            "bank_name": "ICICI Bank", "bank_account": "", "bank_ifsc": "", "bank_branch": "", "swift": "",
+            "advisor_name": "Sudhir Sitapati", "country": "India"},
     "clients": {c: {"legal_name": "", "reg_no": "", "address": "", "gstin": "", "attention": "", "po_ref": "",
                     "terms_days": 30, "currency": "INR", "fx": 96.0, "tds_pct": "", "gst_pct": "",
-                    "service_description": ""}
+                    "service_description": "", "template": "standard", "vat_no": "", "invoice_email": "",
+                    "reference_person": "", "project": "", "day_rate": ""}
                 for c in HAMIR_CLIENTS},
     "gst_pct": 0.0,
     "tds_pct": 10.0,
@@ -615,6 +617,17 @@ def _inv_enrich(inv, prof, taken_for_draft=None):
                 "hours_total": round(sum(float(l.get("hours") or 0) for l in inv.get("lines", [])), 2),
                 "amount_words": _inr_words(tot_c),
                 "export": bool(cur == "USD" and not gst_pct)})
+    dates = sorted(l["date"] for l in inv.get("lines", []) if l.get("date"))
+    try:
+        day_rate = float(cl.get("day_rate") or 0)
+    except Exception:
+        day_rate = 0.0
+    inv.update({"template": cl.get("template") or "standard",
+                "project": inv.get("project") or cl.get("project") or "",
+                "reference": inv.get("reference") or cl.get("reference_person") or "",
+                "day_rate": day_rate,
+                "service_days": round(sub_c / day_rate, 2) if day_rate else None,
+                "period_from": dates[0] if dates else "", "period_to": dates[-1] if dates else ""})
     return inv
 
 
@@ -770,6 +783,9 @@ def api_hamir_invoice_update(inv_id):
             inv[k] = str(body[k])[:10]
     if "notes" in body:
         inv["notes"] = str(body["notes"])[:1000]
+    for k in ("project", "reference"):
+        if k in body:
+            inv[k] = str(body[k])[:200]
     if "gst_pct" in body:
         inv["gst_pct"] = max(0.0, min(100.0, float(body["gst_pct"] or 0)))
     if "status" in body and body["status"] in ("draft", "issued"):
@@ -840,7 +856,99 @@ def hamir_invoice_print(inv_id):
     inv, prof = _inv_get_enriched(inv_id)
     if not inv:
         return "Invoice not found", 404
-    return render_template("hamir_invoice_print.html", inv=inv, prof=prof, client=prof["clients"][inv["client"]])
+    tpl = "hamir_invoice_print_eqt.html" if inv.get("template") == "eqt" else "hamir_invoice_print.html"
+    return render_template(tpl, inv=inv, prof=prof, client=prof["clients"][inv["client"]])
+
+
+def _inv_docx_eqt(inv, prof):
+    """Word invoice laid out like EQT's 'Advisor Invoice Template' (see EQT invoicing instructions)."""
+    from io import BytesIO
+    from docx import Document
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    llp, cl = prof["llp"], prof["clients"][inv["client"]]
+    dmy = lambda s: (datetime.strptime(s, "%Y-%m-%d").strftime("%d %B %Y") if s else "")
+    doc = Document()
+    for sec in doc.sections:
+        sec.left_margin = sec.right_margin = Inches(0.9)
+    st = doc.styles["Normal"]; st.font.name = "Arial"; st.font.size = Pt(10)
+
+    def kv(table, k, v, bold_v=False):
+        row = table.add_row().cells
+        row[0].text = k
+        row[1].text = str(v or "")
+        if bold_v:
+            for r in row[1].paragraphs[0].runs:
+                r.bold = True
+    t = doc.add_table(rows=0, cols=2)
+    kv(t, "Name of EQT Advisor:", llp.get("advisor_name"))
+    kv(t, "Company Name:", llp["name"])
+    kv(t, "VAT/Tax ID No. (if company):", llp.get("gstin") or ("PAN " + llp["pan"] if llp.get("pan") else ""))
+    kv(t, "Registration No.:", ("LLPIN " + llp["llpin"]) if llp.get("llpin") else "")
+    kv(t, "Address:", llp.get("address"))
+    kv(t, "Country:", llp.get("country") or "India")
+    kv(t, "Email / Phone:", " / ".join(x for x in (llp.get("email"), llp.get("phone")) if x))
+    h = doc.add_paragraph(); h.paragraph_format.space_before = Pt(14)
+    r = h.add_run("INVOICE"); r.bold = True; r.font.size = Pt(18)
+    t2 = doc.add_table(rows=0, cols=2)
+    kv(t2, "EQT AB", "")
+    kv(t2, "FE 918-4 Scancloud", "Invoice Number: " + inv["number"])
+    kv(t2, "831 90 ÖSTERSUND, SWEDEN", "Invoice Date: " + dmy(inv["issue_date"]))
+    kv(t2, "(" + (cl.get("invoice_email") or "eqt.advisorinvoices@eqtpartners.com") + ")",
+       f"Terms of payment: {cl.get('terms_days') or 30} days")
+    kv(t2, "VAT Number: " + (cl.get("vat_no") or ""), "")
+    doc.add_paragraph()
+    p = doc.add_paragraph(); p.add_run("EQT reference name: ").bold = True; p.add_run(inv.get("reference") or "")
+    p = doc.add_paragraph(); p.add_run("CONSULTING IN EQT PROJECT: ").bold = True; p.add_run(inv.get("project") or "")
+    p = doc.add_paragraph(); p.add_run("Services have been performed during the following period: ").bold = True
+    p.add_run(f"{dmy(inv['period_from'])} to {dmy(inv['period_to'])}" if inv.get("period_from") else "")
+    doc.add_paragraph()
+    cur = inv["currency"]
+    f = doc.add_table(rows=1, cols=4); f.style = "Light Grid Accent 1"
+    for i, hd in enumerate(("Description", "Days", f"Applicable rate per day ({cur})", f"Amount ({cur})")):
+        f.rows[0].cells[i].text = hd
+    c = f.add_row().cells
+    c[0].text = "Advisory fee for full days of"
+    c[1].text = "" if inv.get("service_days") is None else f"{inv['service_days']:g}"
+    c[2].text = f"{inv['day_rate']:,.2f}" if inv.get("day_rate") else ""
+    c[3].text = f"{inv['subtotal_c']:,.2f}"
+    c = f.add_row().cells
+    c[0].text = "Out of pocket expenses"; c[3].text = "0.00"
+    c = f.add_row().cells
+    c[0].text = f"Total ({cur})"; c[3].text = f"{inv['total_c']:,.2f}"
+    for rr in f.rows[-1].cells:
+        for r_ in rr.paragraphs[0].runs:
+            r_.bold = True
+    for row in f.rows:
+        row.cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(8)
+    p.add_run("Currency: ").bold = True; p.add_run(cur)
+    doc.add_paragraph("Reverse charge liability for VAT (art 44 of the EU VAT Directive)")
+    p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(8)
+    p.add_run("Please transfer to the following bank account:").bold = True
+    t3 = doc.add_table(rows=0, cols=2)
+    kv(t3, "IBAN/Bank account no.:", llp.get("bank_account"))
+    kv(t3, "Bank Account holder's name:", llp["name"])
+    kv(t3, "Bank:", " ".join(x for x in (llp.get("bank_name"), llp.get("bank_branch")) if x))
+    kv(t3, "SWIFT/BIC:", llp.get("swift"))
+    kv(t3, "Routing number (if applicable):", "")
+    kv(t3, "IFSC:", llp.get("bank_ifsc"))
+    if inv.get("notes"):
+        doc.add_paragraph(inv["notes"])
+    doc.add_page_break()
+    sp = doc.add_paragraph(); r = sp.add_run("Specification of services"); r.bold = True; r.font.size = Pt(12)
+    tb = doc.add_table(rows=1, cols=4); tb.style = "Light Grid Accent 1"
+    for i, hd in enumerate(("Date", "Description", "Hours", f"Amount ({cur})")):
+        tb.rows[0].cells[i].text = hd
+    for l in inv["lines"]:
+        c = tb.add_row().cells
+        c[0].text = dmy(l["date"]); c[1].text = l["description"]
+        c[2].text = "" if l.get("hours") is None else f"{l['hours']:g}"; c[3].text = f"{l['amount_c']:,.2f}"
+        c[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    buf = BytesIO(); doc.save(buf); buf.seek(0)
+    safe = inv["number"].replace("/", "-")
+    return send_file(buf, as_attachment=True, download_name=f"Invoice_{safe}_{inv['client']}.docx",
+                     mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 
 @app.route("/api/hamir/invoices/<inv_id>/docx")
@@ -858,6 +966,8 @@ def hamir_invoice_docx(inv_id):
     llp, cl = prof["llp"], prof["clients"][inv["client"]]
     fmt = lambda v: f"Rs {v:,.2f}"
     dmy = lambda s: (datetime.strptime(s, "%Y-%m-%d").strftime("%d %b %Y") if s else "")
+    if inv.get("template") == "eqt":
+        return _inv_docx_eqt(inv, prof)
     doc = Document()
     for sec in doc.sections:
         sec.left_margin = sec.right_margin = Inches(0.9)

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Invoice {{ inv.number }}</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; color:#111; margin:0; background:#f1f5f9; }
+  .bar { background:#1e293b; padding:10px 20px; display:flex; gap:10px; align-items:center; }
+  .bar button, .bar a { background:#3b82f6; color:#fff; border:none; padding:6px 14px; border-radius:6px; font-size:13px; text-decoration:none; cursor:pointer; }
+  .bar a.alt { background:#475569; }
+  .page { background:#fff; width:210mm; min-height:297mm; margin:18px auto; padding:16mm 16mm; box-sizing:border-box; box-shadow:0 1px 6px rgba(0,0,0,.15); font-size:12.5px; line-height:1.55; }
+  .page.spec { page-break-before:always; }
+  h1 { font-size:26px; margin:22px 0 10px; letter-spacing:1px; }
+  table { width:100%; border-collapse:collapse; }
+  table.kv td { padding:1px 0; vertical-align:top; } table.kv td:first-child { width:260px; font-weight:700; }
+  table.two td { width:50%; vertical-align:top; padding:0; }
+  table.fee { margin-top:14px; } table.fee th { text-align:left; font-size:11px; border-bottom:1.5px solid #111; padding:6px 6px; }
+  table.fee td { padding:6px; border-bottom:.5px solid #ccc; }
+  .r { text-align:right; font-variant-numeric:tabular-nums; }
+  .tot td { font-weight:700; border-top:1.5px solid #111; border-bottom:none; }
+  .sect { margin-top:14px; }
+  @media print { body { background:#fff; } .bar { display:none; } .page { margin:0; box-shadow:none; width:auto; min-height:0; padding:0; } }
+</style></head><body>
+<div class="bar">
+  <button onclick="window.print()">Print / Save as PDF</button>
+  <a class="alt" href="/api/hamir/invoices/{{ inv.id }}/docx">Download Word</a>
+  <a class="alt" href="/hamir-advisors">← Back</a>
+  <span style="color:#94a3b8;font-size:12px;margin-left:auto;">{{ 'DRAFT — figures update until you mark it issued' if inv.status == 'draft' else 'Issued' }} · EQT format · send as one PDF</span>
+</div>
+<div class="page">
+  <table class="kv">
+    <tr><td>Name of EQT Advisor:</td><td>{{ prof.llp.advisor_name }}</td></tr>
+    <tr><td>Company Name:</td><td>{{ prof.llp.name }}</td></tr>
+    <tr><td>VAT/Tax ID No. (if company):</td><td>{% if prof.llp.gstin %}GSTIN {{ prof.llp.gstin }}{% elif prof.llp.pan %}PAN {{ prof.llp.pan }}{% endif %}</td></tr>
+    <tr><td>Registration No.:</td><td>{% if prof.llp.llpin %}LLPIN {{ prof.llp.llpin }}{% endif %}</td></tr>
+    <tr><td>Address:</td><td>{{ prof.llp.address }}</td></tr>
+    <tr><td>Country:</td><td>{{ prof.llp.country or 'India' }}</td></tr>
+    <tr><td>Email / Phone:</td><td>{{ prof.llp.email }}{% if prof.llp.email and prof.llp.phone %} / {% endif %}{{ prof.llp.phone }}</td></tr>
+  </table>
+
+  <h1>INVOICE</h1>
+  <table class="two"><tr>
+    <td><b>EQT AB</b><br>FE 918-4 Scancloud<br>831 90 ÖSTERSUND<br>SWEDEN<br>({{ client.invoice_email or 'eqt.advisorinvoices@eqtpartners.com' }})<br><br>VAT Number: {{ client.vat_no }}</td>
+    <td><b>Invoice Number:</b> {{ inv.number }}<br><b>Invoice Date:</b> {{ inv.issue_date }}<br>Terms of payment: {{ client.terms_days or 30 }} days</td>
+  </tr></table>
+
+  <div class="sect"><b>EQT reference name:</b> {{ inv.reference }}</div>
+  <div><b>CONSULTING IN EQT PROJECT:</b> {{ inv.project }}</div>
+  <div><b>Services have been performed during the following period:</b> {{ inv.period_from }}{% if inv.period_to and inv.period_to != inv.period_from %} to {{ inv.period_to }}{% endif %}</div>
+
+  <table class="fee">
+    <thead><tr><th>Description</th><th class="r">Days</th><th class="r">Applicable rate per day ({{ inv.currency }})</th><th class="r">Amount ({{ inv.currency }})</th></tr></thead>
+    <tbody>
+      <tr><td>Advisory fee for full days of</td><td class="r">{{ '' if inv.service_days is none else ('%g' % inv.service_days) }}</td><td class="r">{{ '{:,.2f}'.format(inv.day_rate) if inv.day_rate else '' }}</td><td class="r">{{ '{:,.2f}'.format(inv.subtotal_c) }}</td></tr>
+      <tr><td>Out of pocket expenses</td><td></td><td></td><td class="r">0.00</td></tr>
+      <tr class="tot"><td colspan="3">Total</td><td class="r">{{ '{:,.2f}'.format(inv.total_c) }}</td></tr>
+    </tbody>
+  </table>
+  <div class="sect"><b>Currency:</b> {{ inv.currency }}</div>
+  <div class="sect">Reverse charge liability for VAT (art 44 of the EU VAT Directive)</div>
+
+  <div class="sect"><b>Please transfer to the following bank account:</b></div>
+  <table class="kv">
+    <tr><td>IBAN/Bank account no.:</td><td>{{ prof.llp.bank_account }}</td></tr>
+    <tr><td>Bank Account holder's name:</td><td>{{ prof.llp.name }}</td></tr>
+    <tr><td>Bank:</td><td>{{ prof.llp.bank_name }}{% if prof.llp.bank_branch %}, {{ prof.llp.bank_branch }}{% endif %}</td></tr>
+    <tr><td>SWIFT/BIC:</td><td>{{ prof.llp.swift }}</td></tr>
+    <tr><td>Routing number (if applicable):</td><td></td></tr>
+    <tr><td>IFSC:</td><td>{{ prof.llp.bank_ifsc }}</td></tr>
+  </table>
+  {% if inv.notes %}<div class="sect">{{ inv.notes }}</div>{% endif %}
+</div>
+
+<div class="page spec">
+  <b style="font-size:15px">Specification of services — Invoice {{ inv.number }}</b>
+  <table class="fee">
+    <thead><tr><th style="width:110px">Date</th><th>Description</th><th class="r" style="width:60px">Hours</th><th class="r" style="width:110px">Amount ({{ inv.currency }})</th></tr></thead>
+    <tbody>
+      {% for l in inv.lines %}<tr><td>{{ l.date }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>{% endfor %}
+      <tr class="tot"><td colspan="3">Total</td><td class="r">{{ '{:,.2f}'.format(inv.subtotal_c) }}</td></tr>
+    </tbody>
+  </table>
+</div>
+</body></html>
