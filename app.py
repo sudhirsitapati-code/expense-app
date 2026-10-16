@@ -559,7 +559,8 @@ def _inv_lines_for(client, period, taken_ids):
         if e.get("amount") in (None, ""):
             continue
         out.append({"entry_id": e["id"], "date": e.get("date"), "description": e.get("work") or "Advisory session",
-                    "hours": e.get("hours"), "amount": round(float(e["amount"]), 2)})
+                    "hours": e.get("hours"), "amount": round(float(e["amount"]), 2),
+                    "start": e.get("start") or "", "end": e.get("end") or "", "auto": e.get("amount_auto") is not False})
     out.sort(key=lambda l: l["date"] or "")
     return out
 
@@ -622,6 +623,36 @@ def _inv_enrich(inv, prof, taken_for_draft=None):
         day_rate = float(cl.get("day_rate") or 0)
     except Exception:
         day_rate = 0.0
+    rates = _hamir_rates().get(inv["client"], {})
+    for l in inv.get("lines", []):
+        l["time"] = f"{l['start']}–{l['end']}" if l.get("start") and l.get("end") else ""
+        h = l.get("hours")
+        calc = None
+        if h is not None and "up_to_2h" in rates:
+            calc = rates["up_to_2h" if h <= 2 else "up_to_4h" if h <= 4 else "up_to_6h" if h <= 6 else "up_to_8h"]
+        elif h is not None and "hourly" in rates:
+            calc = round(h * float(rates["hourly"]), 2)
+        if calc is None or abs(float(calc) - l["amount"]) > 1:
+            l["basis"] = "Amount as agreed"
+        elif "up_to_2h" in rates:
+            cap = 2 if h <= 2 else 4 if h <= 4 else 6 if h <= 6 else 8
+            frac = l["amount_c"] / day_rate if day_rate else cap / 8
+            l["basis"] = f"{h:g} h falls in the up-to-{cap} h band = {frac:g} day" + (f" × {cur} {day_rate:,.0f}" if day_rate else "")
+        elif "hourly" in rates:
+            l["basis"] = f"{h:g} h × Rs {float(rates['hourly']):,.0f} per hour"
+        else:
+            l["basis"] = ""
+    if "up_to_2h" in rates and day_rate:
+        steps = ", ".join(f"up to {c} h = {rates[k] / fx / day_rate:g} day ({cur} {rates[k] / fx:,.0f})"
+                          for c, k in ((2, "up_to_2h"), (4, "up_to_4h"), (6, "up_to_6h"), (8, "up_to_8h")))
+        method = (f"Fees are charged against the agreed rate of {cur} {day_rate:,.0f} per service day. Time worked on a day is "
+                  f"recorded from start to end of each session and billed pro rata in part-day steps: {steps}.")
+    elif "hourly" in rates:
+        method = (f"Time worked is recorded from start to end of each session and billed hourly at Rs {float(rates['hourly']):,.0f} "
+                  f"(Rs {float(rates['hourly']) * 8:,.0f} per 8-hour day, pro rata).")
+    else:
+        method = ""
+    inv["annex_method"] = method
     inv.update({"template": cl.get("template") or "standard",
                 "project": inv.get("project") or cl.get("project") or "",
                 "reference": inv.get("reference") or cl.get("reference_person") or "",
@@ -858,7 +889,45 @@ def hamir_invoice_print(inv_id):
     if not inv:
         return "Invoice not found", 404
     tpl = "hamir_invoice_print_eqt.html" if inv.get("template") == "eqt" else "hamir_invoice_print.html"
-    return render_template(tpl, inv=inv, prof=prof, client=prof["clients"][inv["client"]])
+    return render_template(tpl, inv=inv, prof=prof, client=prof["clients"][inv["client"]], letterhead=_hamir_letterhead_path() is not None)
+
+
+def _hamir_letterhead_path():
+    pth = os.path.join(app.root_path, "static", "hamir_letterhead.png")
+    return pth if os.path.exists(pth) else None
+
+
+def _docx_annexure(doc, inv, cur, dmy):
+    """Annexure page: time spent and how each amount was calculated."""
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    doc.add_page_break()
+    sp = doc.add_paragraph(); r = sp.add_run(f"Annexure - time spent and basis of calculation ({inv['number']})"); r.bold = True; r.font.size = Pt(12)
+    if inv.get("annex_method"):
+        doc.add_paragraph(inv["annex_method"])
+    tb = doc.add_table(rows=1, cols=6); tb.style = "Light Grid Accent 1"
+    for i, hd in enumerate(("Date", "Time", "Work", "Hours", "Basis", f"Amount ({cur})")):
+        tb.rows[0].cells[i].text = hd
+    for l in inv["lines"]:
+        c = tb.add_row().cells
+        c[0].text = dmy(l["date"]); c[1].text = l.get("time", ""); c[2].text = l["description"]
+        c[3].text = "" if l.get("hours") is None else f"{l['hours']:g}"; c[4].text = l.get("basis", ""); c[5].text = f"{l['amount_c']:,.2f}"
+        c[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    c = tb.add_row().cells
+    c[2].text = "Total"; c[3].text = f"{inv['hours_total']:g}"; c[5].text = f"{inv['subtotal_c']:,.2f}"
+    c[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    for cc in c:
+        for rr in cc.paragraphs[0].runs:
+            rr.bold = True
+
+
+def _docx_letterhead(doc):
+    pth = _hamir_letterhead_path()
+    if pth:
+        from docx.shared import Inches
+        sec = doc.sections[0]
+        hp = sec.header.paragraphs[0]
+        hp.add_run().add_picture(pth, width=sec.page_width - sec.left_margin - sec.right_margin)
 
 
 def _inv_docx_eqt(inv, prof):
@@ -873,6 +942,7 @@ def _inv_docx_eqt(inv, prof):
     for sec in doc.sections:
         sec.left_margin = sec.right_margin = Inches(0.9)
     st = doc.styles["Normal"]; st.font.name = "Arial"; st.font.size = Pt(10)
+    _docx_letterhead(doc)
 
     def kv(table, k, v, bold_v=False):
         row = table.add_row().cells
@@ -936,16 +1006,7 @@ def _inv_docx_eqt(inv, prof):
     kv(t3, "IFSC:", llp.get("bank_ifsc"))
     if inv.get("notes"):
         doc.add_paragraph(inv["notes"])
-    doc.add_page_break()
-    sp = doc.add_paragraph(); r = sp.add_run("Specification of services"); r.bold = True; r.font.size = Pt(12)
-    tb = doc.add_table(rows=1, cols=4); tb.style = "Light Grid Accent 1"
-    for i, hd in enumerate(("Date", "Description", "Hours", f"Amount ({cur})")):
-        tb.rows[0].cells[i].text = hd
-    for l in inv["lines"]:
-        c = tb.add_row().cells
-        c[0].text = dmy(l["date"]); c[1].text = l["description"]
-        c[2].text = "" if l.get("hours") is None else f"{l['hours']:g}"; c[3].text = f"{l['amount_c']:,.2f}"
-        c[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    _docx_annexure(doc, inv, cur, dmy)
     buf = BytesIO(); doc.save(buf); buf.seek(0)
     safe = inv["number"].replace("/", "-")
     return send_file(buf, as_attachment=True, download_name=f"Invoice_{safe}_{inv['client']}.docx",
@@ -972,6 +1033,7 @@ def hamir_invoice_docx(inv_id):
     doc = Document()
     for sec in doc.sections:
         sec.left_margin = sec.right_margin = Inches(0.9)
+    _docx_letterhead(doc)
     h = doc.add_paragraph(); r = h.add_run(llp["name"]); r.bold = True; r.font.size = Pt(16)
     for line in (llp["address"],
                  " | ".join(x for x in (f"LLPIN {llp['llpin']}" if llp.get("llpin") else "", f"PAN {llp['pan']}" if llp["pan"] else "",
@@ -1031,6 +1093,7 @@ def hamir_invoice_docx(inv_id):
     if inv.get("notes"):
         doc.add_paragraph(inv["notes"])
     doc.add_paragraph("This is a computer-generated invoice.").paragraph_format.space_before = Pt(14)
+    _docx_annexure(doc, inv, cur, dmy)
     buf = BytesIO(); doc.save(buf); buf.seek(0)
     safe = inv["number"].replace("/", "-")
     return send_file(buf, as_attachment=True, download_name=f"Invoice_{safe}_{inv['client']}.docx",

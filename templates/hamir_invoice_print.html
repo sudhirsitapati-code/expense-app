@@ -25,7 +25,8 @@
   <span style="color:#94a3b8;font-size:12px;margin-left:auto;">{{ 'DRAFT — figures update until you mark it issued' if inv.status == 'draft' else 'Issued' }}</span>
 </div>
 <div class="page">
-  <h1>{{ prof.llp.name }}</h1>
+  {% include "_hamir_letterhead.html" %}
+  {% if not letterhead %}<h1>{{ prof.llp.name }}</h1>{% endif %}
   <div class="muted">
     {% if prof.llp.address %}{{ prof.llp.address }}<br>{% endif %}
     {% if prof.llp.llpin %}LLPIN {{ prof.llp.llpin }} &nbsp;|&nbsp; {% endif %}{% if prof.llp.pan %}PAN {{ prof.llp.pan }}{% endif %}{% if prof.llp.tan %} &nbsp;|&nbsp; TAN {{ prof.llp.tan }}{% endif %}{% if prof.llp.gstin %} &nbsp;|&nbsp; GSTIN {{ prof.llp.gstin }}{% endif %}
@@ -65,5 +66,17 @@
   {% endif %}
   {% if inv.notes %}<div class="box">{{ inv.notes }}</div>{% endif %}
   <div class="box muted" style="margin-top:30px;">This is a computer-generated invoice.</div>
+</div>
+<div class="page" style="page-break-before:always">
+  {% include "_hamir_letterhead.html" %}
+  <b style="font-size:15px">Annexure — time spent and basis of calculation · Invoice {{ inv.number }}</b>
+  {% if inv.annex_method %}<p style="margin:8px 0 0;font-size:13px">{{ inv.annex_method }}</p>{% endif %}
+  <table class="lines">
+    <thead><tr><th style="width:84px">Date</th><th style="width:92px">Time</th><th>Work</th><th class="r" style="width:50px">Hours</th><th>Basis</th><th class="r" style="width:110px">Amount ({{ inv.currency }})</th></tr></thead>
+    <tbody>
+      {% for l in inv.lines %}<tr><td>{{ l.date }}</td><td>{{ l.time }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td>{{ l.basis }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>{% endfor %}
+      <tr><td colspan="3"><b>Total</b></td><td class="r"><b>{{ inv.hours_total }}</b></td><td></td><td class="r"><b>{{ '{:,.2f}'.format(inv.subtotal_c) }}</b></td></tr>
+    </tbody>
+  </table>
 </div>
 </body></html>

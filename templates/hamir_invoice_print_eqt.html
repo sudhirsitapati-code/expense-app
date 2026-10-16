@@ -27,6 +27,7 @@
   <span style="color:#94a3b8;font-size:12px;margin-left:auto;">{{ 'DRAFT — figures update until you mark it issued' if inv.status == 'draft' else 'Issued' }} · EQT format · send as one PDF</span>
 </div>
 <div class="page">
+  {% include "_hamir_letterhead.html" %}
   <table class="kv">
     <tr><td>Name of EQT Advisor:</td><td>{{ prof.llp.advisor_name }}</td></tr>
     <tr><td>Company Name:</td><td>{{ prof.llp.name }}</td></tr>
@@ -71,12 +72,14 @@
 </div>
 
 <div class="page spec">
-  <b style="font-size:15px">Specification of services — Invoice {{ inv.number }}</b>
+  {% include "_hamir_letterhead.html" %}
+  <b style="font-size:15px">Annexure — time spent and basis of calculation · Invoice {{ inv.number }}</b>
+  {% if inv.annex_method %}<p style="margin:8px 0 0">{{ inv.annex_method }}</p>{% endif %}
   <table class="fee">
-    <thead><tr><th style="width:110px">Date</th><th>Description</th><th class="r" style="width:60px">Hours</th><th class="r" style="width:110px">Amount ({{ inv.currency }})</th></tr></thead>
+    <thead><tr><th style="width:84px">Date</th><th style="width:92px">Time</th><th>Work</th><th class="r" style="width:46px">Hours</th><th>Basis</th><th class="r" style="width:90px">Amount ({{ inv.currency }})</th></tr></thead>
     <tbody>
-      {% for l in inv.lines %}<tr><td>{{ l.date }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>{% endfor %}
-      <tr class="tot"><td colspan="3">Total</td><td class="r">{{ '{:,.2f}'.format(inv.subtotal_c) }}</td></tr>
+      {% for l in inv.lines %}<tr><td>{{ l.date }}</td><td>{{ l.time }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td>{{ l.basis }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>{% endfor %}
+      <tr class="tot"><td colspan="3">Total</td><td class="r">{{ inv.hours_total }}</td><td></td><td class="r">{{ '{:,.2f}'.format(inv.subtotal_c) }}</td></tr>
     </tbody>
   </table>
 </div>

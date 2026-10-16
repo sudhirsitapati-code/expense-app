@@ -1,0 +1,2 @@
+{# Drop the Hamir letterhead image at static/hamir_letterhead.png (full-width banner) and it prints at the top of every invoice page. #}
+{% if letterhead %}<img src="{{ url_for('static', filename='hamir_letterhead.png') }}" alt="{{ prof.llp.name }}" style="width:100%;display:block;margin:0 0 14px;">{% endif %}
