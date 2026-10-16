@@ -503,7 +503,7 @@ _HAMIR_PROFILE_DEFAULT = {
     "llp": {"name": "Hamir Advisors LLP", "address": "", "pan": "", "gstin": "", "email": "", "phone": "",
             "llpin": "", "tan": "", "lut": "",
             "bank_name": "ICICI Bank", "bank_account": "", "bank_ifsc": "", "bank_branch": "", "swift": "",
-            "advisor_name": "Sudhir Sitapati", "country": "India"},
+            "advisor_name": "Sudhir Sitapati", "country": "India", "gst_from": ""},
     "clients": {c: {"legal_name": "", "reg_no": "", "address": "", "gstin": "", "attention": "", "po_ref": "",
                     "terms_days": 30, "currency": "INR", "fx": 96.0, "tds_pct": "", "gst_pct": "",
                     "service_description": "", "template": "standard", "vat_no": "", "invoice_email": "",
@@ -683,7 +683,8 @@ def _inv_create(client, period, store, auto=False):
     due = (nxt + timedelta(days=terms)).strftime("%Y-%m-%d")
     inv = {"id": "inv" + datetime.now().strftime("%Y%m%d%H%M%S%f")[:20], "number": _inv_next_number(issue, store),
            "client": client, "period": period, "issue_date": issue, "due_date": due, "status": "draft",
-           "gst_pct": (float(prof["clients"][client]["gst_pct"]) if str(prof["clients"][client].get("gst_pct", "")).strip() != ""
+           "gst_pct": (0.0 if (not prof["llp"].get("gstin") or issue < (prof["llp"].get("gst_from") or "0000"))
+                       else float(prof["clients"][client]["gst_pct"]) if str(prof["clients"][client].get("gst_pct", "")).strip() != ""
                        else float(prof.get("gst_pct") or 0)),
            "notes": "", "auto": bool(auto), "lines": lines,
            "submitted": {"done": False, "date": ""}, "paid": {"done": False, "date": "", "amount": None, "txn_id": ""},

@@ -446,7 +446,7 @@ function renderProfile() {
       <div><b style="font-size:12px">${esc(L.name)}</b><br>
         ${f('Name', 'llp.name', L.name)}${f('Address', 'llp.address', L.address, 260)}<br>
         ${f('LLPIN', 'llp.llpin', L.llpin)}${f('PAN', 'llp.pan', L.pan)}${f('TAN', 'llp.tan', L.tan)}${f('GSTIN', 'llp.gstin', L.gstin)}${f('LUT no.', 'llp.lut', L.lut)}${f('Email', 'llp.email', L.email)}${f('Phone', 'llp.phone', L.phone)}<br>
-        ${f('Bank', 'llp.bank_name', L.bank_name)}${f('Account no.', 'llp.bank_account', L.bank_account)}${f('IFSC', 'llp.bank_ifsc', L.bank_ifsc)}${f('SWIFT', 'llp.swift', L.swift)}${f('Advisor name', 'llp.advisor_name', L.advisor_name)}${f('Branch', 'llp.bank_branch', L.bank_branch)}</div>
+        ${f('Bank', 'llp.bank_name', L.bank_name)}${f('Account no.', 'llp.bank_account', L.bank_account)}${f('IFSC', 'llp.bank_ifsc', L.bank_ifsc)}${f('SWIFT', 'llp.swift', L.swift)}${f('Advisor name', 'llp.advisor_name', L.advisor_name)}${f('GST registered from (YYYY-MM-DD)', 'llp.gst_from', L.gst_from)}${f('Branch', 'llp.bank_branch', L.bank_branch)}</div>
       ${Object.keys(p.clients).map(c => { const C = p.clients[c]; return `<div><b style="font-size:12px">${esc(c)}</b><br>
         ${f('Legal name', 'clients.' + c + '.legal_name', C.legal_name, 220)}${f('Attention', 'clients.' + c + '.attention', C.attention)}<br>
         ${f('Registration no.', 'clients.' + c + '.reg_no', C.reg_no)}${f('Address', 'clients.' + c + '.address', C.address, 260)}${f('GSTIN', 'clients.' + c + '.gstin', C.gstin)}<br>
