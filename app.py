@@ -1034,8 +1034,10 @@ def hamir_invoice_docx(inv_id):
     for sec in doc.sections:
         sec.left_margin = sec.right_margin = Inches(0.9)
     _docx_letterhead(doc)
-    h = doc.add_paragraph(); r = h.add_run(llp["name"]); r.bold = True; r.font.size = Pt(16)
-    for line in (llp["address"],
+    has_lh = _hamir_letterhead_path() is not None
+    if not has_lh:
+        h = doc.add_paragraph(); r = h.add_run(llp["name"]); r.bold = True; r.font.size = Pt(16)
+    for line in () if has_lh else (llp["address"],
                  " | ".join(x for x in (f"LLPIN {llp['llpin']}" if llp.get("llpin") else "", f"PAN {llp['pan']}" if llp["pan"] else "",
                                         f"TAN {llp['tan']}" if llp.get("tan") else "",
                                         f"GSTIN {llp['gstin']}" if llp["gstin"] else "") if x),

@@ -27,11 +27,13 @@
 <div class="page">
   {% include "_hamir_letterhead.html" %}
   {% if not letterhead %}<h1>{{ prof.llp.name }}</h1>{% endif %}
+  {% if not letterhead %}
   <div class="muted">
     {% if prof.llp.address %}{{ prof.llp.address }}<br>{% endif %}
     {% if prof.llp.llpin %}LLPIN {{ prof.llp.llpin }} &nbsp;|&nbsp; {% endif %}{% if prof.llp.pan %}PAN {{ prof.llp.pan }}{% endif %}{% if prof.llp.tan %} &nbsp;|&nbsp; TAN {{ prof.llp.tan }}{% endif %}{% if prof.llp.gstin %} &nbsp;|&nbsp; GSTIN {{ prof.llp.gstin }}{% endif %}
     {% if prof.llp.email or prof.llp.phone %}<br>{{ prof.llp.email }}{% if prof.llp.email and prof.llp.phone %} | {% endif %}{{ prof.llp.phone }}{% endif %}
   </div>
+  {% endif %}
   <div class="title">{{ 'TAX INVOICE' if inv.gst_pct else 'INVOICE' }}</div>
   <table class="meta">
     <tr><td>Invoice no.</td><td><b>{{ inv.number }}</b></td></tr>
