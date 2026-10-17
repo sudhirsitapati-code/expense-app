@@ -313,6 +313,10 @@ function delEntry(id) {
 
 // ── tabs ────────────────────────────────────────────────────────────────────
 let _inv = null;
+const _view = {};
+function viewOpen(i) { return _view[i.id] !== undefined ? _view[i.id] : i.status === 'draft'; }
+function toggleView(id) { const i = _inv.invoices.find(x => x.id === id); _view[id] = !viewOpen(i); renderInvoices(); }
+function fitFrame(f) { try { f.style.height = (f.contentDocument.documentElement.scrollHeight + 8) + 'px'; } catch (e) {} }
 function showTab(name, el) {
   document.querySelectorAll('.fs-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
@@ -382,6 +386,7 @@ function renderInvoices() {
         <span class="inv-no">${esc(i.number)}</span><span>${esc(i.client)}</span><span style="color:#64748b">${mon(i.period)}</span>
         <span class="chip ${cls}">${label}</span>
         <span style="margin-left:auto;font-weight:700">${money(i, i.total_c)}</span>
+        <button class="btn" onclick="toggleView('${i.id}')">${viewOpen(i) ? 'Hide invoice' : 'View invoice'}</button>
         <a class="btn" href="/api/hamir/invoices/${i.id}/docx">Word</a>
         <a class="btn" href="/hamir-advisors/invoice/${i.id}" target="_blank">Print</a>
         ${i.status === 'draft' ? `<button class="btn pri" onclick="invPost('${i.id}',{status:'issued'})">Mark issued</button>` : ''}
@@ -400,8 +405,10 @@ function renderInvoices() {
           ${i.lines.map(l => `<tr><td>${dmy(l.date)}</td><td>${esc(l.description)}</td><td class="r">${l.hours == null ? '' : l.hours}</td><td class="r">${money(i, l.amount_c)}</td></tr>`).join('')}
           <tr><td colspan="3" class="r"><b>Subtotal</b></td><td class="r"><b>${money(i, i.subtotal_c)}</b></td></tr>
           ${i.gst_pct ? `<tr><td colspan="3" class="r">GST ${i.gst_pct}%</td><td class="r">${money(i, i.gst_c)}</td></tr>` : ''}
-          ${i.currency === 'USD' ? `<tr><td colspan="4" style="color:#94a3b8;font-size:11px">Books value ${inr(i.subtotal)} at ₹${i.fx}/USD (export of services, no GST)</td></tr>` : ''}
-        </tbody></table></div></div>`;
+          ${i.currency === 'USD' ? `<tr><td colspan="4" style="color:#94a3b8;font-size:11px">Books value ${inr(i.subtotal)} at ₹${i.fx}/USD ${i.gst_pct ? '' : '(export of services, no GST)'}</td></tr>` : ''}
+        </tbody></table>
+        ${viewOpen(i) ? `<iframe src="/hamir-advisors/invoice/${i.id}?embed=1&t=${Date.now()}" onload="fitFrame(this)" style="width:100%;height:1100px;border:1px solid #e2e8f0;border-radius:6px;margin-top:12px;background:#fff"></iframe>` : ''}
+        </div></div>`;
   }).join('');
 }
 
@@ -455,7 +462,7 @@ function renderProfile() {
         ${f('GST % (blank = default)', 'clients.' + c + '.gst_pct', C.gst_pct)}${f('TDS % (blank = default)', 'clients.' + c + '.tds_pct', C.tds_pct)}
         ${f('Invoice description', 'clients.' + c + '.service_description', C.service_description, 300)}<br>
         ${f('Format (standard / eqt)', 'clients.' + c + '.template', C.template)}${f('Their VAT no.', 'clients.' + c + '.vat_no', C.vat_no)}${f('Send invoices to', 'clients.' + c + '.invoice_email', C.invoice_email, 240)}
-        ${f('Reference person', 'clients.' + c + '.reference_person', C.reference_person)}${f('Default project', 'clients.' + c + '.project', C.project)}${f('Day rate', 'clients.' + c + '.day_rate', C.day_rate)}</div>`; }).join('')}
+        ${f('Reference person', 'clients.' + c + '.reference_person', C.reference_person)}${f('Default project', 'clients.' + c + '.project', C.project)}${f('Day rate', 'clients.' + c + '.day_rate', C.day_rate)}${f('FX rate date', 'clients.' + c + '.fx_date', C.fx_date)}</div>`; }).join('')}
     </div>
     <div style="margin-top:8px">
       ${f('GST % on invoices (0 if not registered)', 'gst_pct', p.gst_pct)}${f('Client TDS % (for expected receipt)', 'tds_pct', p.tds_pct)}

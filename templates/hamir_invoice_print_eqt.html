@@ -19,7 +19,7 @@
   .tot td { font-weight:700; border-top:1.5px solid #111; border-bottom:none; }
   .sect { margin-top:14px; }
   @media print { body { background:#fff; } .bar { display:none; } .page { margin:0; box-shadow:none; width:auto; min-height:0; padding:0; } }
-</style></head><body>
+</style>{% if embed %}<style>.bar{display:none} body{background:#fff} .page{margin:0 auto 14px;box-shadow:0 0 0 1px #e2e8f0}</style>{% endif %}</head><body>
 <div class="bar">
   <button onclick="window.print()">Print / Save as PDF</button>
   <a class="alt" href="/api/hamir/invoices/{{ inv.id }}/docx">Download Word</a>
@@ -53,10 +53,13 @@
     <tbody>
       <tr><td>Advisory fee for full days of</td><td class="r">{{ '' if inv.service_days is none else ('%g' % inv.service_days) }}</td><td class="r">{{ '{:,.2f}'.format(inv.day_rate) if inv.day_rate else '' }}</td><td class="r">{{ '{:,.2f}'.format(inv.subtotal_c) }}</td></tr>
       <tr><td>Out of pocket expenses</td><td></td><td></td><td class="r">0.00</td></tr>
+      {% if inv.gst_pct %}<tr><td>{{ inv.gst_label }} @ {{ '%g' % inv.gst_pct }}%</td><td></td><td></td><td class="r">{{ '{:,.2f}'.format(inv.gst_c) }}</td></tr>{% endif %}
       <tr class="tot"><td colspan="3">Total</td><td class="r">{{ '{:,.2f}'.format(inv.total_c) }}</td></tr>
     </tbody>
   </table>
   <div class="sect"><b>Currency:</b> {{ inv.currency }}</div>
+  {% if inv.currency != 'INR' %}<div class="sect" style="border:1px solid #cbd5e1;padding:8px 10px;border-radius:4px;"><b>Indian rupee equivalent</b> — converted at Rs {{ '{:,.2f}'.format(inv.fx) }} per {{ inv.currency }}{% if inv.fx_date %} (rate of {{ inv.fx_date }}){% endif %}<br>
+    Fee Rs {{ '{:,.2f}'.format(inv.subtotal) }}{% if inv.gst_pct %} &nbsp;+&nbsp; {{ inv.gst_label }} @ {{ '%g' % inv.gst_pct }}% Rs {{ '{:,.2f}'.format(inv.gst_amount) }}{% endif %} &nbsp;=&nbsp; <b>Total Rs {{ '{:,.2f}'.format(inv.total) }}</b></div>{% endif %}
   <div class="sect">Reverse charge liability for VAT (art 44 of the EU VAT Directive)</div>
 
   <div class="sect"><b>Please transfer to the following bank account:</b></div>

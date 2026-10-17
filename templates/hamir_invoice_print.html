@@ -17,7 +17,7 @@
   .r { text-align:right; font-variant-numeric:tabular-nums; } .tot td { border:none; padding:3px 6px; font-size:13px; } .grand td { font-weight:700; font-size:15px; border-top:1.5px solid #111; }
   .box { margin-top:18px; font-size:13px; }
   @media print { body { background:#fff; } .bar { display:none; } .page { margin:0; box-shadow:none; width:auto; min-height:0; padding:0; } }
-</style></head><body>
+</style>{% if embed %}<style>.bar{display:none} body{background:#fff} .page{margin:0 auto 14px;box-shadow:0 0 0 1px #e2e8f0}</style>{% endif %}</head><body>
 <div class="bar">
   <button onclick="window.print()">Print</button>
   <a class="alt" href="/api/hamir/invoices/{{ inv.id }}/docx">Download Word</a>
@@ -57,10 +57,11 @@
   </table>
   <table class="tot" style="margin-top:8px;">
     <tr><td></td><td class="r" style="width:160px">Subtotal</td><td class="r" style="width:120px">{{ '{:,.2f}'.format(inv.subtotal_c) }}</td></tr>
-    {% if inv.gst_pct %}<tr><td></td><td class="r">GST @ {{ inv.gst_pct }}%</td><td class="r">{{ '{:,.2f}'.format(inv.gst_c) }}</td></tr>{% endif %}
+    {% if inv.gst_pct %}<tr><td></td><td class="r">{{ inv.gst_label }} @ {{ inv.gst_pct }}%</td><td class="r">{{ '{:,.2f}'.format(inv.gst_c) }}</td></tr>{% endif %}
     <tr class="grand"><td></td><td class="r">Total payable ({{ inv.currency }})</td><td class="r">{{ '{:,.2f}'.format(inv.total_c) }}</td></tr>
   </table>
   <div class="box">Amount in words: <b>{{ 'US Dollars' if inv.currency == 'USD' else 'Rupees' }} {{ inv.amount_words }} only</b></div>
+  {% if inv.currency != 'INR' %}<div class="box"><b>Indian rupee equivalent</b> at Rs {{ '{:,.2f}'.format(inv.fx) }} per {{ inv.currency }}{% if inv.fx_date %} ({{ inv.fx_date }}){% endif %}: fee Rs {{ '{:,.2f}'.format(inv.subtotal) }}{% if inv.gst_pct %} + {{ inv.gst_label }} Rs {{ '{:,.2f}'.format(inv.gst_amount) }}{% endif %} = <b>Rs {{ '{:,.2f}'.format(inv.total) }}</b></div>{% endif %}
   {% if inv.export %}<div class="box">Export of services. Supplied under Letter of Undertaking{% if prof.llp.lut %} {{ prof.llp.lut }}{% endif %}; no IGST charged.</div>{% endif %}
   {% if prof.llp.bank_account or prof.llp.bank_ifsc %}
   <div class="box"><b>Bank details</b><br>{{ prof.llp.name }} — {{ prof.llp.bank_name }}

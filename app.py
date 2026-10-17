@@ -507,7 +507,7 @@ _HAMIR_PROFILE_DEFAULT = {
     "clients": {c: {"legal_name": "", "reg_no": "", "address": "", "gstin": "", "attention": "", "po_ref": "",
                     "terms_days": 30, "currency": "INR", "fx": 96.0, "tds_pct": "", "gst_pct": "",
                     "service_description": "", "template": "standard", "vat_no": "", "invoice_email": "",
-                    "reference_person": "", "project": "", "day_rate": ""}
+                    "reference_person": "", "project": "", "day_rate": "", "fx_date": ""}
                 for c in HAMIR_CLIENTS},
     "gst_pct": 0.0,
     "tds_pct": 10.0,
@@ -653,6 +653,8 @@ def _inv_enrich(inv, prof, taken_for_draft=None):
     else:
         method = ""
     inv["annex_method"] = method
+    inv["fx_date"] = cl.get("fx_date") or ""
+    inv["gst_label"] = "IGST" if (cur == "USD" and gst_pct) else "GST"
     inv.update({"template": cl.get("template") or "standard",
                 "project": inv.get("project") or cl.get("project") or "",
                 "reference": inv.get("reference") or cl.get("reference_person") or "",
@@ -889,7 +891,8 @@ def hamir_invoice_print(inv_id):
     if not inv:
         return "Invoice not found", 404
     tpl = "hamir_invoice_print_eqt.html" if inv.get("template") == "eqt" else "hamir_invoice_print.html"
-    return render_template(tpl, inv=inv, prof=prof, client=prof["clients"][inv["client"]], letterhead=_hamir_letterhead_path() is not None)
+    return render_template(tpl, inv=inv, prof=prof, client=prof["clients"][inv["client"]], letterhead=_hamir_letterhead_path() is not None,
+                           embed=request.args.get("embed") == "1")
 
 
 def _hamir_letterhead_path():
@@ -985,6 +988,9 @@ def _inv_docx_eqt(inv, prof):
     c[3].text = f"{inv['subtotal_c']:,.2f}"
     c = f.add_row().cells
     c[0].text = "Out of pocket expenses"; c[3].text = "0.00"
+    if inv["gst_pct"]:
+        c = f.add_row().cells
+        c[0].text = f"{inv['gst_label']} @ {inv['gst_pct']:g}%"; c[3].text = f"{inv['gst_c']:,.2f}"
     c = f.add_row().cells
     c[0].text = f"Total ({cur})"; c[3].text = f"{inv['total_c']:,.2f}"
     for rr in f.rows[-1].cells:
@@ -994,6 +1000,13 @@ def _inv_docx_eqt(inv, prof):
         row.cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(8)
     p.add_run("Currency: ").bold = True; p.add_run(cur)
+    if cur != "INR":
+        fxd = f" (rate of {dmy(inv['fx_date'])})" if inv.get("fx_date") else ""
+        pr = doc.add_paragraph(); pr.paragraph_format.space_before = Pt(6)
+        pr.add_run("Indian rupee equivalent: ").bold = True
+        pr.add_run(f"converted at Rs {inv['fx']:,.2f} per {cur}{fxd}. Fee Rs {inv['subtotal']:,.2f}"
+                   + (f"; {inv['gst_label']} @ {inv['gst_pct']:g}% Rs {inv['gst_amount']:,.2f}" if inv["gst_pct"] else "")
+                   + f"; total Rs {inv['total']:,.2f}.")
     doc.add_paragraph("Reverse charge liability for VAT (art 44 of the EU VAT Directive)")
     p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(8)
     p.add_run("Please transfer to the following bank account:").bold = True
