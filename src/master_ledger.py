@@ -1541,6 +1541,22 @@ def _ensure_cash_in(ledger: list, txn: dict) -> None:
     })
 
 
+def atm_merge_fix(ledger: list, entry: dict) -> bool:
+    """After a prov entry is merged into an SBI statement line: an ATM withdrawal is always a transfer
+    to the cash wallet (heading Cash, with a paired cash-in entry), never an expense. The spend is
+    recorded later against the cash account. Keeps the prov's description in remarks."""
+    if "ATM WDL" not in (entry.get("raw_description") or "").upper():
+        return False
+    if (entry.get("account") or "").upper() != "SBI-4852" or float(entry.get("debit") or 0) <= 0:
+        return False
+    entry["type"] = "transfer"
+    entry["heading"] = "Cash"
+    entry["paid_to"] = "ATM Withdrawal"
+    entry["uncertain"] = False
+    _ensure_cash_in(ledger, entry)
+    return True
+
+
 def _remove_cash_in(ledger: list, txn_id: str) -> None:
     """Remove paired cash-in entry when SBI entry is reclassified away from transfer/Cash."""
     cashin_id = f"cashin_{txn_id}"

@@ -3563,6 +3563,8 @@ def api_ledger_merge():
 
     # Remove the dropped (prov) entry
     ledger = [t for t in ledger if t.get("txn_id") != drop_id]
+    from src.master_ledger import atm_merge_fix
+    atm_merge_fix(ledger, keep)          # ATM withdrawal => transfer to cash, never an expense
     db.save("master_ledger", ledger)
     return jsonify({"ok": True, "kept": keep_id, "dropped": drop_id})
 
@@ -3624,6 +3626,8 @@ def api_auto_merge_prov():
                 t["uncertain_fields"] = []
                 t["confidence"]       = "merged"
                 t["merged_prov_id"]   = prov["txn_id"]
+                from src.master_ledger import atm_merge_fix
+                atm_merge_fix(ledger, t)          # ATM withdrawal => transfer to cash, never an expense
                 break
         drop_ids.add(prov["txn_id"])
 
