@@ -1962,8 +1962,20 @@ async function saveEdit() {
     method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(updates)
   });
   editModal.hide();
-  loadLedger();
+  // Reload the figures but stay exactly where you were: same tab, same filters, same scroll position
+  const wrap = document.getElementById('ledgerBody')?.closest('.table-wrap');
+  const wrapTop = wrap ? wrap.scrollTop : 0, pageTop = window.scrollY;
+  await loadLedger();
+  if (wrap) wrap.scrollTop = wrapTop;
+  window.scrollTo(0, pageTop);
 }
+
+// Enter saves the edit (it used to do nothing, so you had to click Save)
+document.getElementById('editModal').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
+    e.preventDefault(); saveEdit();
+  }
+});
 
 async function autoMergeProv() {
   if (!confirm('Auto-merge all SBI-Prov entries that have a matching SBI statement entry (same amount ±₹5, date ±3 days)?\n\nProv entries will be deleted; their paid_to/heading/type copied into the statement entry.')) return;
