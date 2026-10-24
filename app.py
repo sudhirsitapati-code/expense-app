@@ -2705,7 +2705,9 @@ def _approval_to_ledger_entry(e: dict) -> dict:
     """Convert an approval log entry into a master ledger transaction."""
     import hashlib
     from src.master_ledger import _fy_info, _parse_date, classify_transaction
-    paid_at = e.get("confirmed_at") or e.get("response_timestamp") or e.get("timestamp","")
+    # The expense date is the one chosen on the form (stored as `timestamp`). confirmed_at is only when it was
+    # marked paid, so it must not decide the ledger date or backdated cash entries land in the wrong month.
+    paid_at = e.get("timestamp") or e.get("confirmed_at") or e.get("response_timestamp") or ""
     date_str = paid_at[:10]
     dt = _parse_date(date_str) or datetime.now()
     fy = _fy_info(dt)
