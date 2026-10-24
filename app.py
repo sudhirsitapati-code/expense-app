@@ -2712,7 +2712,9 @@ def _approval_to_ledger_entry(e: dict) -> dict:
     dt = _parse_date(date_str) or datetime.now()
     fy = _fy_info(dt)
     amount = float(e.get("approved_amount") or e.get("amount") or 0)
-    raw = f"{date_str}|approval|{e.get('vendor','')}|{amount:.2f}"
+    # request_id keeps two same-day, same-payee, same-amount entries distinct (they used to collapse into one and
+    # the later one was silently dropped from the ledger)
+    raw = f"{date_str}|approval|{e.get('vendor','')}|{amount:.2f}|{e.get('request_id','')}"
     txn_id = hashlib.sha1(raw.encode()).hexdigest()[:16]
 
     _CANONICAL_HEADINGS = {
