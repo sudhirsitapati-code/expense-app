@@ -18,7 +18,7 @@
   .r { text-align:right; font-variant-numeric:tabular-nums; }
   .tot td { font-weight:700; border-top:1.5px solid #111; border-bottom:none; }
   .sect { margin-top:14px; }
-  @media print { body { background:#fff; } .bar { display:none; } .page { margin:0; box-shadow:none; width:auto; min-height:0; padding:0; } }
+  @media print { body { background:#fff; } .bar { display:none; } .page { margin:0; box-shadow:none; width:auto; min-height:0; padding:0; font-size:11.5px; line-height:1.4; } h1 { margin:12px 0 6px; } .sect { margin-top:9px; } }
 </style>{% if embed %}<style>.bar{display:none} body{background:#fff} .page{margin:0 auto 14px;box-shadow:0 0 0 1px #e2e8f0}</style>{% endif %}</head><body>
 <div class="bar">
   <button onclick="window.print()">Print / Save as PDF</button>
@@ -41,12 +41,12 @@
   <h1>INVOICE</h1>
   <table class="two"><tr>
     <td><b>EQT AB</b><br>FE 918-4 Scancloud<br>831 90 ÖSTERSUND<br>SWEDEN<br>({{ client.invoice_email or 'eqt.advisorinvoices@eqtpartners.com' }})<br><br>VAT Number: {{ client.vat_no }}</td>
-    <td><b>Invoice Number:</b> {{ inv.number }}<br><b>Invoice Date:</b> {{ inv.issue_date }}<br>Terms of payment: {{ client.terms_days or 30 }} days</td>
+    <td><b>Invoice Number:</b> {{ inv.number }}<br><b>Invoice Date:</b> {{ inv.issue_date|dmy }}<br>Terms of payment: {{ client.terms_days or 30 }} days</td>
   </tr></table>
 
   <div class="sect"><b>EQT reference name:</b> {{ inv.reference }}</div>
   <div><b>CONSULTING IN EQT PROJECT:</b> {{ inv.project }}</div>
-  <div><b>Services have been performed during the following period:</b> {{ inv.period_from }}{% if inv.period_to and inv.period_to != inv.period_from %} to {{ inv.period_to }}{% endif %}</div>
+  <div><b>Services have been performed during the following period:</b> {{ inv.period_from|dmy }}{% if inv.period_to and inv.period_to != inv.period_from %} to {{ inv.period_to|dmy }}{% endif %}</div>
 
   <table class="fee">
     <thead><tr><th>Description</th><th class="r">Days</th><th class="r">Applicable rate per day ({{ inv.currency }})</th><th class="r">Amount ({{ inv.currency }})</th></tr></thead>
@@ -58,7 +58,7 @@
     </tbody>
   </table>
   <div class="sect"><b>Currency:</b> {{ inv.currency }}</div>
-  {% if inv.currency != 'INR' %}<div class="sect" style="border:1px solid #cbd5e1;padding:8px 10px;border-radius:4px;"><b>Indian rupee equivalent</b> — converted at Rs {{ '{:,.2f}'.format(inv.fx) }} per {{ inv.currency }}{% if inv.fx_date %} (rate of {{ inv.fx_date }}){% endif %}<br>
+  {% if inv.currency != 'INR' %}<div class="sect" style="border:1px solid #cbd5e1;padding:8px 10px;border-radius:4px;"><b>Indian rupee equivalent</b> — converted at Rs {{ '{:,.2f}'.format(inv.fx) }} per {{ inv.currency }}{% if inv.fx_date %} (rate of {{ inv.fx_date|dmy }}){% endif %}<br>
     Fee Rs {{ '{:,.2f}'.format(inv.subtotal) }}{% if inv.gst_pct %} &nbsp;+&nbsp; {{ inv.gst_label }} @ {{ '%g' % inv.gst_pct }}% Rs {{ '{:,.2f}'.format(inv.gst_amount) }}{% endif %} &nbsp;=&nbsp; <b>Total Rs {{ '{:,.2f}'.format(inv.total) }}</b></div>{% endif %}
   <div class="sect">Reverse charge liability for VAT (art 44 of the EU VAT Directive)</div>
 
@@ -81,7 +81,7 @@
   <table class="fee">
     <thead><tr><th style="width:84px">Date</th><th style="width:92px">Time</th><th>Work</th><th class="r" style="width:46px">Hours</th><th>Basis</th><th class="r" style="width:90px">Amount ({{ inv.currency }})</th></tr></thead>
     <tbody>
-      {% for l in inv.lines %}<tr><td>{{ l.date }}</td><td>{{ l.time }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td>{{ l.basis }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>{% endfor %}
+      {% for l in inv.lines %}<tr><td>{{ l.date|dmy }}</td><td>{{ l.time }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td>{{ l.basis }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>{% endfor %}
       <tr class="tot"><td colspan="3">Total</td><td class="r">{{ inv.hours_total }}</td><td></td><td class="r">{{ '{:,.2f}'.format(inv.subtotal_c) }}</td></tr>
     </tbody>
   </table>

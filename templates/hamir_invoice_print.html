@@ -37,9 +37,9 @@
   <div class="title">{{ 'TAX INVOICE' if inv.gst_pct else 'INVOICE' }}</div>
   <table class="meta">
     <tr><td>Invoice no.</td><td><b>{{ inv.number }}</b></td></tr>
-    <tr><td>Invoice date</td><td>{{ inv.issue_date }}</td></tr>
-    <tr><td>Due date</td><td>{{ inv.due_date }}</td></tr>
-    <tr><td>Period</td><td>{{ inv.period }}</td></tr>
+    <tr><td>Invoice date</td><td>{{ inv.issue_date|dmy }}</td></tr>
+    <tr><td>Due date</td><td>{{ inv.due_date|dmy }}</td></tr>
+    <tr><td>Period</td><td>{{ (inv.period ~ '-01')|dmy|replace('01 ','') }}</td></tr>
     {% if client.po_ref %}<tr><td>Client reference / PO</td><td>{{ client.po_ref }}</td></tr>{% endif %}
   </table>
   <div class="box"><b>Bill to</b><br>{{ client.legal_name or inv.client }}
@@ -48,16 +48,17 @@
     {% if client.address %}<br>{{ client.address }}{% endif %}
     {% if client.gstin %}<br>GSTIN {{ client.gstin }}{% endif %}</div>
   <div class="box"><i>{{ client.service_description or prof.service_description }}</i></div>
+  {% if inv.gst_pct %}<div class="box muted">SAC {{ prof.llp.sac or '998311' }} (management consulting services) &nbsp;|&nbsp; Place of supply: Maharashtra (27)</div>{% endif %}
   <table class="lines">
     <thead><tr><th style="width:90px">Date</th><th>Description</th><th class="r" style="width:60px">Hours</th><th class="r" style="width:120px">Amount ({{ inv.currency }})</th></tr></thead>
     <tbody>
-      {% for l in inv.lines %}<tr><td>{{ l.date }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>
+      {% for l in inv.lines %}<tr><td>{{ l.date|dmy }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>
       {% else %}<tr><td colspan="4" class="muted">No entries.</td></tr>{% endfor %}
     </tbody>
   </table>
   <table class="tot" style="margin-top:8px;">
     <tr><td></td><td class="r" style="width:160px">Subtotal</td><td class="r" style="width:120px">{{ '{:,.2f}'.format(inv.subtotal_c) }}</td></tr>
-    {% if inv.gst_pct %}<tr><td></td><td class="r">{{ inv.gst_label }} @ {{ inv.gst_pct }}%</td><td class="r">{{ '{:,.2f}'.format(inv.gst_c) }}</td></tr>{% endif %}
+    {% if inv.gst_pct %}{% if inv.gst_label == 'GST' %}<tr><td></td><td class="r">CGST @ {{ '%g' % (inv.gst_pct/2) }}%</td><td class="r">{{ '{:,.2f}'.format(inv.gst_c/2) }}</td></tr><tr><td></td><td class="r">SGST @ {{ '%g' % (inv.gst_pct/2) }}%</td><td class="r">{{ '{:,.2f}'.format(inv.gst_c - (inv.gst_c/2)|round(2)) }}</td></tr>{% else %}<tr><td></td><td class="r">{{ inv.gst_label }} @ {{ inv.gst_pct }}%</td><td class="r">{{ '{:,.2f}'.format(inv.gst_c) }}</td></tr>{% endif %}{% endif %}
     <tr class="grand"><td></td><td class="r">Total payable ({{ inv.currency }})</td><td class="r">{{ '{:,.2f}'.format(inv.total_c) }}</td></tr>
   </table>
   <div class="box">Amount in words: <b>{{ 'US Dollars' if inv.currency == 'USD' else 'Rupees' }} {{ inv.amount_words }} only</b></div>
@@ -77,7 +78,7 @@
   <table class="lines">
     <thead><tr><th style="width:84px">Date</th><th style="width:92px">Time</th><th>Work</th><th class="r" style="width:50px">Hours</th><th>Basis</th><th class="r" style="width:110px">Amount ({{ inv.currency }})</th></tr></thead>
     <tbody>
-      {% for l in inv.lines %}<tr><td>{{ l.date }}</td><td>{{ l.time }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td>{{ l.basis }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>{% endfor %}
+      {% for l in inv.lines %}<tr><td>{{ l.date|dmy }}</td><td>{{ l.time }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td>{{ l.basis }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>{% endfor %}
       <tr><td colspan="3"><b>Total</b></td><td class="r"><b>{{ inv.hours_total }}</b></td><td></td><td class="r"><b>{{ '{:,.2f}'.format(inv.subtotal_c) }}</b></td></tr>
     </tbody>
   </table>

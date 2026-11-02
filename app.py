@@ -503,7 +503,7 @@ _HAMIR_PROFILE_DEFAULT = {
     "llp": {"name": "Hamir Advisors LLP", "address": "", "pan": "", "gstin": "", "email": "", "phone": "",
             "llpin": "", "tan": "", "lut": "",
             "bank_name": "ICICI Bank", "bank_account": "", "bank_ifsc": "", "bank_branch": "", "swift": "",
-            "advisor_name": "Sudhir Sitapati", "country": "India", "gst_from": ""},
+            "advisor_name": "Sudhir Sitapati", "country": "India", "gst_from": "", "sac": "998311"},
     "clients": {c: {"legal_name": "", "reg_no": "", "address": "", "gstin": "", "attention": "", "po_ref": "",
                     "terms_days": 30, "currency": "INR", "fx": 96.0, "tds_pct": "", "gst_pct": "",
                     "service_description": "", "template": "standard", "vat_no": "", "invoice_email": "",
@@ -882,6 +882,14 @@ def _inv_get_enriched(inv_id):
     return (_inv_enrich(inv, _hamir_profile()), _hamir_profile()) if inv else (None, None)
 
 
+@app.template_filter("dmy")
+def _dmy_filter(v):
+    try:
+        return datetime.strptime(str(v)[:10], "%Y-%m-%d").strftime("%d %b %Y")
+    except Exception:
+        return v or ""
+
+
 @app.route("/hamir-advisors/invoice/<inv_id>")
 @login_required
 def hamir_invoice_print(inv_id):
@@ -1073,6 +1081,8 @@ def hamir_invoice_docx(inv_id):
         if line:
             doc.add_paragraph(line).paragraph_format.space_after = Pt(0)
     doc.add_paragraph().add_run(cl.get("service_description") or prof.get("service_description") or "").italic = True
+    if inv["gst_pct"]:
+        doc.add_paragraph(f"SAC {llp.get('sac') or '998311'} (management consulting services)  |  Place of supply: Maharashtra (27)")
     cur = inv["currency"]
     tb = doc.add_table(rows=1, cols=4); tb.style = "Light Grid Accent 1"
     for i, hd in enumerate(("Date", "Description", "Hours", f"Amount ({cur})")):
@@ -1092,7 +1102,12 @@ def hamir_invoice_docx(inv_id):
                     rr.bold = True
     total_row("Subtotal", f"{inv['subtotal_c']:,.2f}")
     if inv["gst_pct"]:
-        total_row(f"GST @ {inv['gst_pct']:g}%", f"{inv['gst_c']:,.2f}")
+        if inv["gst_label"] == "GST":          # Maharashtra to Maharashtra: CGST + SGST, half each
+            half = inv["gst_pct"] / 2
+            total_row(f"CGST @ {half:g}%", f"{inv['gst_c'] / 2:,.2f}")
+            total_row(f"SGST @ {half:g}%", f"{inv['gst_c'] - round(inv['gst_c'] / 2, 2):,.2f}")
+        else:
+            total_row(f"{inv['gst_label']} @ {inv['gst_pct']:g}%", f"{inv['gst_c']:,.2f}")
     total_row(f"Total payable ({cur})", f"{inv['total_c']:,.2f}", True)
     words = f"US Dollars {inv['amount_words']} only" if cur == "USD" else f"Rupees {inv['amount_words']} only"
     doc.add_paragraph(f"Amount in words: {words}").paragraph_format.space_before = Pt(8)
