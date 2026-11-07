@@ -36,7 +36,7 @@ body { background:#f8f9fa; font-size:14px; }
   <a class="tax-tab"        href="#" data-view="computation" onclick="switchView('computation');return false;">Tax Computation</a>
   <a class="tax-tab"        href="#" data-view="esop"        onclick="switchView('esop');return false;">ESOP Holdings</a>
   <a class="tax-tab"        href="#" data-view="hamir"       onclick="switchView('hamir');return false;">Hamir (tax view)</a>
-  <a class="tax-tab"        href="#" data-view="board"       onclick="switchView('board');return false;">Sudhir expenses (Asian Paints)</a>
+  <a class="tax-tab"        href="#" data-view="board"       onclick="switchView('board');return false;">Sudhir expenses (boards)</a>
   <a class="tax-tab"        href="#" data-view="checklist"   onclick="switchView('checklist');return false;">Documents &amp; Alerts</a>
   <div class="ms-auto d-flex align-items-center gap-2 py-1">
     <label style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin:0;">FY</label>
@@ -446,7 +446,7 @@ async function renderHamirTax(skipLoad) {
 }
 
 const TA_RULES = {
-  vincent:     {title: "Vincent's salary",                      help: "Agreed to be allocated to Asian Paints."},
+  vincent:     {title: "Vincent's salary",                      help: "Allocated to the boards (Asian Paints and Meesho share it from the date set above)."},
   travel:      {title: 'Board travel',                          help: 'All travel from the joining date is included. Untick any trip that was not for the board.'},
   ai:          {title: 'AI tools (Anthropic, ChatGPT)',         help: 'All Anthropic and OpenAI bills from the joining date go to the board. Set a row to 0% to remove it.'},
   driver:      {title: "Driver's salary",                       help: 'Payee matches the driver name below and the entry is a Staff Salary.'},
@@ -471,7 +471,7 @@ async function renderBoardTax(skipLoad) {
       <div class="table-responsive"><table class="table table-sm table-hover mb-0" style="font-size:12.5px;min-width:880px;">
         <thead class="table-light"><tr><th>Date</th><th>Paid to</th><th>What it actually is</th><th class="text-end">Amount</th>
           ${rule==='travel'?'<th class="text-center">Board trip?</th>':''}
-          <th style="min-width:210px;">Tax classification</th><th style="width:70px;" class="text-end">%</th><th class="text-end">Allocated</th><th>Note</th></tr></thead>
+          <th style="min-width:210px;">Tax classification</th><th style="width:70px;" class="text-end">%</th><th class="text-end">Allocated</th><th class="text-end">Asian Paints</th><th class="text-end">Meesho</th><th>Note</th></tr></thead>
         <tbody>${rows.length ? rows.map(r => `<tr class="${r.after_board_start?'':'text-muted'}">
           <td class="text-nowrap">${r.date}${r.after_board_start?'':' <span class="badge text-bg-light">pre-board</span>'}</td>
           <td>${taEsc(r.paid_to || r.desc.slice(0,28))}</td><td>${taEsc(r.ledger_heading)}</td>
@@ -480,12 +480,13 @@ async function renderBoardTax(skipLoad) {
           <td><input class="form-control form-control-sm" value="${taEsc(r.tax_class)}" onchange="taOverride('${r.txn_id}',{tax_class:this.value},'renderBoardTax')"></td>
           <td><input type="number" min="0" max="100" class="form-control form-control-sm text-end" value="${r.pct}" onchange="taOverride('${r.txn_id}',{pct:this.value},'renderBoardTax')"></td>
           <td class="text-end">${taInr(r.allocated)}</td>
+          <td class="text-end">${taInr(r.by_board['Asian Paints'])}</td><td class="text-end">${taInr(r.by_board['Meesho'])}</td>
           <td><input class="form-control form-control-sm" value="${taEsc(r.note)}" placeholder="basis / evidence" onchange="taOverride('${r.txn_id}',{note:this.value},'renderBoardTax')"></td></tr>`).join('')
-          : `<tr><td colspan="9" class="text-muted p-2">${rule==='driver'?'Nothing to allocate: the driver is not being paid a salary yet. If that changes, record it as Staff Salary to the driver name below and it will appear here.':'Nothing in this period.'}</td></tr>`}</tbody></table></div></div>`;
+          : `<tr><td colspan="11" class="text-muted p-2">${rule==='driver'?'Nothing to allocate: the driver is not being paid a salary yet. If that changes, record it as Staff Salary to the driver name below and it will appear here.':'Nothing in this period.'}</td></tr>`}</tbody></table></div></div>`;
   }).join('');
   box.innerHTML = `
   <div class="d-flex align-items-center gap-2 mb-2">
-    <h6 class="mb-0 fw-bold">Sudhir expenses — allocated to Asian Paints board income</h6> ${taFySelect("_taFy=this.value;renderBoardTax()")}
+    <h6 class="mb-0 fw-bold">Sudhir expenses — allocated to Asian Paints and Meesho board income</h6> ${taFySelect("_taFy=this.value;renderBoardTax()")}
   </div>
   <div class="text-muted mb-3" style="font-size:12px;">Rules are yours; the ledger is untouched. Each row shows what it really is plus the proposed tax classification and the % that can go to the board.
     The CA decides what is finally claimed.</div>
@@ -507,13 +508,21 @@ async function renderBoardTax(skipLoad) {
         <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.heading_pct['Eating Out']}" onchange="taCfg({heading_pct:{'Eating Out':this.value}})"></div>
       <div class="col-auto"><label class="form-label mb-1 fw-semibold">Entertainment %</label>
         <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.heading_pct['Entertainment']}" onchange="taCfg({heading_pct:{'Entertainment':this.value}})"></div>
+      <div class="col-auto"><label class="form-label mb-1 fw-semibold">Shared between boards from</label>
+        <input type="date" class="form-control form-control-sm" value="${c.split_from}" onchange="taCfg({split_from:this.value})"></div>
+      <div class="col-auto"><label class="form-label mb-1 fw-semibold">Asian Paints %</label>
+        <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.board_split['Asian Paints']}" onchange="taCfg({board_split:{'Asian Paints':this.value}})"></div>
+      <div class="col-auto"><label class="form-label mb-1 fw-semibold">Meesho %</label>
+        <input type="number" min="0" max="100" class="form-control form-control-sm" style="width:80px;" value="${c.board_split['Meesho']}" onchange="taCfg({board_split:{Meesho:this.value}})"></div>
       <div class="col"><label class="form-label mb-1 fw-semibold">Driver name match</label>
         <input class="form-control form-control-sm" value="${taEsc(c.driver_regex)}" onchange="taCfg({driver_regex:this.value})"></div>
     </div>
   </div>
   <div class="row g-2 mb-4">
     <div class="col-auto"><div class="border rounded px-3 py-2"><div class="text-muted" style="font-size:11px;">ELIGIBLE SPEND</div><div class="fw-bold">${taInr(b.eligible_total)}</div></div></div>
-    <div class="col-auto"><div class="border rounded px-3 py-2"><div class="text-muted" style="font-size:11px;">ALLOCATED TO ASIAN PAINTS</div><div class="fw-bold text-success">${taInr(b.total)}</div></div></div>
+    <div class="col-auto"><div class="border rounded px-3 py-2"><div class="text-muted" style="font-size:11px;">ALLOCATED IN TOTAL</div><div class="fw-bold text-success">${taInr(b.total)}</div></div></div>
+    <div class="col-auto"><div class="border rounded px-3 py-2"><div class="text-muted" style="font-size:11px;">TO ASIAN PAINTS</div><div class="fw-bold">${taInr(b.by_board['Asian Paints'])}</div></div></div>
+    <div class="col-auto"><div class="border rounded px-3 py-2"><div class="text-muted" style="font-size:11px;">TO MEESHO</div><div class="fw-bold">${taInr(b.by_board['Meesho'])}</div></div></div>
     <div class="col-auto"><div class="border rounded px-3 py-2"><div class="text-muted" style="font-size:11px;">STAYS PERSONAL</div><div class="fw-bold">${taInr(b.eligible_total - b.total)}</div></div></div>
   </div>
   ${sections}`;

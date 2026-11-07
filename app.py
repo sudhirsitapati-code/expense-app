@@ -262,6 +262,11 @@ def _tax_alloc_config():
     cfg.setdefault("driver_regex", "shiloch|shiloj|shilaj|shilajit")
     cfg.setdefault("travel_headings", ["Holiday", "Car Expense"])
     cfg.setdefault("overrides", {})
+    # Sudhir is now on two boards: board expenses are shared between them from split_from (before that, Asian Paints only)
+    cfg.setdefault("split_from", "2026-10-01")
+    cfg.setdefault("board_split", {})
+    for k, v in {"Asian Paints": 50.0, "Meesho": 50.0}.items():
+        cfg["board_split"].setdefault(k, v)
     return cfg
 
 
@@ -284,6 +289,14 @@ def _tax_alloc_build(fy):
         vincent_start = _date(2026, 6, 1)
     drv = _re.compile(cfg["driver_regex"] or "$^", _re.I)
     ov = cfg["overrides"]
+    try:
+        split_from = _date.fromisoformat(cfg["split_from"])
+    except Exception:
+        split_from = _date(2026, 10, 1)
+    _bs = {b: max(0.0, float(v)) for b, v in cfg["board_split"].items()}
+    _tot = sum(_bs.values()) or 1.0
+    split_shares = {b: v / _tot for b, v in _bs.items()}
+    solo_shares = {b: (1.0 if b == "Asian Paints" else 0.0) for b in split_shares}
     hamir, board = [], []
     for t in db.load("master_ledger") or []:
         d = _pd(t.get("date", ""))
@@ -336,9 +349,15 @@ def _tax_alloc_build(fy):
         else:
             default = float(cfg["rule_pct"][rule]) if after else 0.0
         pct = float(o["pct"]) if "pct" in o else default
+        allocated = round(net * pct / 100.0, 2)
+        shares = split_shares if d.date() >= split_from else solo_shares
+        by_board, first = {}, True
+        for b, sh in shares.items():
+            by_board[b] = round(allocated * sh, 2)
+        by_board["Asian Paints"] = round(allocated - sum(v for k, v in by_board.items() if k != "Asian Paints"), 2)
         board.append({**base, "rule": rule, "tax_class": o.get("tax_class") or _BOARD_RULE_CLASS[rule],
                       "pct": pct, "default_pct": default, "board_specific": bool(o.get("board_specific", True)),
-                      "after_board_start": after, "allocated": round(net * pct / 100.0, 2)})
+                      "after_board_start": after, "allocated": allocated, "by_board": by_board})
     key = lambda r: (r["date"] if r["date"][:4].isdigit() and r["date"][4:5] == "-"
                      else r["date"][-4:] + "-" + r["date"][3:5] + "-" + r["date"][:2])
     hamir.sort(key=key); board.sort(key=key)
@@ -351,10 +370,12 @@ def _tax_alloc_build(fy):
         e["eligible"] = round(e["eligible"] + r["amount"], 2)
         e["allocated"] = round(e["allocated"] + r["allocated"], 2)
         e["count"] += 1
-    return {"fy": fy, "config": {k: cfg[k] for k in ("board_start", "vincent_start", "rule_pct", "heading_pct", "driver_regex", "travel_headings")},
+    by_board_total = {b: round(sum(r["by_board"].get(b, 0) for r in board), 2) for b in split_shares}
+    return {"fy": fy, "config": {k: cfg[k] for k in ("board_start", "vincent_start", "rule_pct", "heading_pct", "driver_regex", "travel_headings", "split_from", "board_split")},
             "hamir": {"rows": hamir, "total": round(sum(r["allocated"] for r in hamir), 2), "by_class": by_class,
                       "paid_total": round(sum(r["amount"] for r in hamir), 2)},
             "board": {"rows": board, "total": round(sum(r["allocated"] for r in board), 2), "by_rule": by_rule,
+                      "by_board": by_board_total,
                       "eligible_total": round(sum(r["amount"] for r in board), 2)}}
 
 
@@ -373,9 +394,9 @@ def api_tax_allocation_save():
     body = request.get_json(force=True) or {}
     cfg = _tax_alloc_config()
     for k, v in (body.get("config") or {}).items():
-        if k in ("board_start", "vincent_start", "driver_regex"):
+        if k in ("board_start", "vincent_start", "driver_regex", "split_from"):
             cfg[k] = str(v)
-        elif k in ("rule_pct", "heading_pct") and isinstance(v, dict):
+        elif k in ("rule_pct", "heading_pct", "board_split") and isinstance(v, dict):
             for kk, vv in v.items():
                 cfg[k][kk] = max(0.0, min(100.0, float(vv)))
     for tid, patch in (body.get("overrides") or {}).items():
