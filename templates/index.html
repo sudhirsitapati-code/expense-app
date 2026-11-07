@@ -139,6 +139,7 @@
         <select class="form-select form-select-sm" name="type" id="submitType" onchange="refreshSubmitHeadings(this.value)" required>
           <option value="expense">Expense</option>
           <option value="official">Official</option>
+          <option value="transfer">Transfer (ATM cash withdrawal)</option>
         </select>
       </div>
       <div class="col">
@@ -1922,6 +1923,7 @@ function refreshSubmitHeadings(type) {
   const sel = document.getElementById('submitHeading');
   const list = HEADINGS_BY_TYPE[type] || HEADINGS_BY_TYPE['expense'];
   sel.innerHTML = list.map(h => `<option value="${h}">${h}</option>`).join('');
+  if (type === 'transfer') sel.value = 'Cash';   // an ATM withdrawal is a transfer to Cash
 }
 
 function refreshEditHeadings(type, current) {

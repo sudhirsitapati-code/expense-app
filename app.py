@@ -2624,7 +2624,7 @@ def api_submit_expense():
                 payment_method=data.get("payment_method", "upi"),
                 is_post_facto=data.get("is_post_facto", False),
                 heading=data.get("heading") or data.get("category", ""),
-                expense_type=data.get("expense_type", "expense"),
+                expense_type=data.get("expense_type") or data.get("type") or "expense",
                 timestamp=_timestamp or "",
             )
         except (KeyError, ValueError) as e:
@@ -2754,8 +2754,14 @@ def _approval_to_ledger_entry(e: dict) -> dict:
                else cat if cat in _CANONICAL_HEADINGS
                else APP_TO_HEADING.get(cat, "Misc"))
 
+    # Transfer = cash withdrawn from SBI (ATM). It lands in SBI-4852prov as a transfer to Cash and is matched
+    # to the bank's ATM line later; the spend is recorded separately against the cash account.
+    _is_transfer = (e.get("expense_type") or "").lower() == "transfer"
+    if _is_transfer:
+        heading = explicit_heading if explicit_heading in ("Cash", "Interbank") else "Cash"
+
     _pm = (e.get("payment_method") or "cash").lower()
-    _is_sbi = _pm in ("sbi", "sbi-4852", "sbi4852", "sbi3152", "sbi-3152", "sbi-3142", "sbi3142")
+    _is_sbi = _is_transfer or _pm in ("sbi", "sbi-4852", "sbi4852", "sbi3152", "sbi-3152", "sbi-3142", "sbi3142")
     _acct   = "SBI-4852prov" if _is_sbi else "cash"
     _bank   = "SBI"          if _is_sbi else "approval"
 
@@ -2769,10 +2775,10 @@ def _approval_to_ledger_entry(e: dict) -> dict:
         "account_type":    _pm,
         "bank":            _bank,
         "raw_description": e.get("description",""),
-        "paid_to":         e.get("vendor",""),
+        "paid_to":         e.get("vendor","") or ("ATM Withdrawal" if _is_transfer else ""),
         "debit":           amount,
         "credit":          0,
-        "type":            "expense",
+        "type":            "transfer" if _is_transfer else "expense",
         "heading":         heading,
         "remarks":         f"Approved by Sudhir. Ref: {e.get('request_id','')}",
         "uncertain":       False,
@@ -2795,7 +2801,7 @@ def _sync_approvals_to_ledger():
     so they appear in the ledger before the statement arrives.
     Cash/other entries are only added once confirmed_paid=True.
     """
-    from src.master_ledger import load_ledger
+    from src.master_ledger import load_ledger, _ensure_cash_in
     log    = db.load("approval_log")
     ledger = db.load("master_ledger")
     existing_ids = {t["txn_id"] for t in ledger}
@@ -2811,7 +2817,8 @@ def _sync_approvals_to_ledger():
         if e.get("ledger_synced"):
             continue
         pm = (e.get("payment_method") or "cash").lower()
-        is_sbi = pm in ("sbi", "sbi-4852", "sbi4852", "sbi3152", "sbi-3152", "sbi-3142", "sbi3142")
+        is_sbi = pm in ("sbi", "sbi-4852", "sbi4852", "sbi3152", "sbi-3152", "sbi-3142", "sbi3142") \
+            or (e.get("expense_type") or "").lower() == "transfer"
         # All approved entries sync immediately (SBI as prov, others as cash)
         # Only skip if it's an old-style cash entry with no confirmed_paid
         if not is_sbi and pm == "cash" and not e.get("confirmed_paid"):
@@ -2822,6 +2829,8 @@ def _sync_approvals_to_ledger():
             log_changed = True
             continue
         ledger.append(txn)
+        if txn.get("type") == "transfer" and txn.get("heading") == "Cash":
+            _ensure_cash_in(ledger, txn)      # the withdrawn cash is in the cash register straight away
         existing_ids.add(txn["txn_id"])
         e["ledger_synced"] = True
         log_changed = True
@@ -2852,6 +2861,9 @@ def api_mark_paid():
         txn = _approval_to_ledger_entry(entry)
         if not any(t["txn_id"] == txn["txn_id"] for t in ledger):
             ledger.insert(0, txn)
+            if txn.get("type") == "transfer" and txn.get("heading") == "Cash":
+                from src.master_ledger import _ensure_cash_in
+                _ensure_cash_in(ledger, txn)
             _assign_missing_seq(ledger)
             db.save("master_ledger", ledger)
         entry["ledger_synced"] = True
@@ -3582,7 +3594,8 @@ def api_ledger_merge():
 
     # Remove the dropped (prov) entry
     ledger = [t for t in ledger if t.get("txn_id") != drop_id]
-    from src.master_ledger import atm_merge_fix
+    from src.master_ledger import atm_merge_fix, _remove_cash_in
+    _remove_cash_in(ledger, drop_id)     # prov-stage cash-in; the statement line gets its own below
     atm_merge_fix(ledger, keep)          # ATM withdrawal => transfer to cash, never an expense
     db.save("master_ledger", ledger)
     return jsonify({"ok": True, "kept": keep_id, "dropped": drop_id})
@@ -3619,12 +3632,18 @@ def api_auto_merge_prov():
             continue
         pd = _parse_date(p.get("date", ""))
         pa = p.get("debit") or p.get("credit") or 0
+        is_transfer = (p.get("type") or "").lower() == "transfer"
         for s in sbi_stmt:
             if s["txn_id"] in used_stmt:
                 continue
             sd = _parse_date(s.get("date", ""))
             sa = s.get("debit") or s.get("credit") or 0
-            if pd and sd and abs((pd - sd).days) <= 3 and abs(pa - sa) <= 5:
+            if is_transfer:
+                # ATM withdrawal: the bank line is the cash plus a fee (about Rs 27) at other banks' ATMs
+                amount_ok = "ATM WDL" in (s.get("raw_description") or "").upper() and pa - 5 <= sa <= pa + 60
+            else:
+                amount_ok = abs(pa - sa) <= 5
+            if pd and sd and abs((pd - sd).days) <= 3 and amount_ok:
                 pairs.append((p, s))
                 used_prov.add(p["txn_id"])
                 used_stmt.add(s["txn_id"])
@@ -3645,7 +3664,8 @@ def api_auto_merge_prov():
                 t["uncertain_fields"] = []
                 t["confidence"]       = "merged"
                 t["merged_prov_id"]   = prov["txn_id"]
-                from src.master_ledger import atm_merge_fix
+                from src.master_ledger import atm_merge_fix, _remove_cash_in
+                _remove_cash_in(ledger, prov["txn_id"])   # prov-stage cash-in; the statement line gets its own
                 atm_merge_fix(ledger, t)          # ATM withdrawal => transfer to cash, never an expense
                 break
         drop_ids.add(prov["txn_id"])
@@ -3941,6 +3961,8 @@ def _merge_approval_to_sbi_internal() -> dict:
     # Build all candidate (score, appr, sbi) pairs then assign optimally
     candidates = []
     for appr in approval_entries:
+        if (appr.get("type") or "").lower() == "transfer":
+            continue                          # ATM transfers are matched by auto-merge-prov, not here
         pm = (appr.get("account_type") or appr.get("payment_method") or "").lower()
         log_amt = float(appr.get("debit") or appr.get("amount") or 0)
         if log_amt == 0:
