@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from flask import Flask, request, render_template, jsonify, session, redirect, url_for, send_from_directory, send_file
+from flask import Flask, request, render_template, jsonify, session, redirect, url_for, send_from_directory, send_file, Response
 
 from src.ai_client import get_ai_client
 from src.approval_engine import ApprovalEngine, ExpenseRequest
@@ -937,6 +937,100 @@ def api_hamir_invoice_update(inv_id):
     return jsonify({"ok": True})
 
 
+# ── receipts for recharged expenses (EQT needs them inside the one invoice PDF) ───────────────
+_HAMIR_RECEIPT_KEY = "hamir_receipts"
+
+
+def _hamir_receipt_store():
+    s = db.load(_HAMIR_RECEIPT_KEY)
+    return s if isinstance(s, dict) else {}
+
+
+def _receipt_pages(data: bytes, filename: str):
+    """Turn an uploaded photo or PDF into a list of compressed JPEG pages (base64) so it prints in the invoice PDF."""
+    import base64, io
+    from PIL import Image
+    pages = []
+    if data[:4] == b"%PDF":
+        import pypdfium2 as pdfium
+        pdf = pdfium.PdfDocument(data)
+        for i in range(min(len(pdf), 4)):
+            pages.append(pdf[i].render(scale=1.6).to_pil().convert("RGB"))
+    else:
+        im = Image.open(io.BytesIO(data))
+        try:
+            from PIL import ImageOps
+            im = ImageOps.exif_transpose(im)
+        except Exception:
+            pass
+        pages.append(im.convert("RGB"))
+    out = []
+    for im in pages:
+        im.thumbnail((1500, 1500))
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=78, optimize=True)
+        out.append(base64.b64encode(buf.getvalue()).decode())
+    return out
+
+
+def _receipts_for(expenses):
+    """{txn_id: [{id, name, pages: [data URIs]}]} for the expenses on an invoice, ready to print."""
+    st = _hamir_receipt_store()
+    return {e["txn_id"]: [{"id": r["id"], "name": r["name"], "pages": ["data:image/jpeg;base64," + b for b in r["pages"]]}
+                          for r in st.get(e["txn_id"], [])] for e in expenses}
+
+
+@app.route("/api/hamir/expenses/<txn_id>/receipt", methods=["POST"])
+@login_required
+def api_hamir_receipt_upload(txn_id):
+    if session.get("user") != HAMIR_OWNER:
+        return jsonify({"error": "forbidden"}), 403
+    if not any(r["txn_id"] == txn_id for r in _hamir_expense_rows()):
+        return jsonify({"error": "expense not found"}), 404
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "no file"}), 400
+    data = f.read()
+    if len(data) > 12 * 1024 * 1024:
+        return jsonify({"error": "file is over 12 MB"}), 400
+    try:
+        pages = _receipt_pages(data, f.filename or "receipt")
+    except Exception as ex:
+        return jsonify({"error": f"could not read that file as a photo or PDF ({ex})"}), 400
+    st = _hamir_receipt_store()
+    lst = st.setdefault(txn_id, [])
+    if len(lst) >= 5:
+        return jsonify({"error": "5 receipts is the limit for one expense"}), 400
+    lst.append({"id": "r" + datetime.now().strftime("%Y%m%d%H%M%S%f")[:18], "name": (f.filename or "receipt")[:80], "pages": pages})
+    db.save(_HAMIR_RECEIPT_KEY, st)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/hamir/expenses/<txn_id>/receipt/<rid>", methods=["DELETE"])
+@login_required
+def api_hamir_receipt_delete(txn_id, rid):
+    if session.get("user") != HAMIR_OWNER:
+        return jsonify({"error": "forbidden"}), 403
+    st = _hamir_receipt_store()
+    st[txn_id] = [r for r in st.get(txn_id, []) if r["id"] != rid]
+    if not st[txn_id]:
+        st.pop(txn_id)
+    db.save(_HAMIR_RECEIPT_KEY, st)
+    return jsonify({"ok": True})
+
+
+@app.route("/hamir-advisors/receipt/<txn_id>/<rid>/<int:page>")
+@login_required
+def hamir_receipt_image(txn_id, rid, page):
+    if session.get("user") != HAMIR_OWNER:
+        return "forbidden", 403
+    import base64
+    r = next((x for x in _hamir_receipt_store().get(txn_id, []) if x["id"] == rid), None)
+    if not r or page >= len(r["pages"]):
+        return "not found", 404
+    return Response(base64.b64decode(r["pages"][page]), mimetype="image/jpeg")
+
+
 def _hamir_expense_status(row, tag, store):
     """Where a ticked expense ends up: a frozen invoice, a live draft, or the next invoice that is not created yet."""
     if not tag:
@@ -959,6 +1053,7 @@ def api_hamir_expenses_get():
     months = sorted({r["date"][:7] for r in rows_all}, reverse=True)
     month = request.args.get("month") or (months[0] if months else datetime.now().strftime("%Y-%m"))
     rc = _hamir_recharge_store()
+    rcpt = _hamir_receipt_store()
     store = _hamir_invoice_store()
     prof = _hamir_profile()
     rows = []
@@ -968,6 +1063,7 @@ def api_hamir_expenses_get():
         tg = rc["tags"].get(r["txn_id"])
         rows.append({**r, "client": (tg or {}).get("client", ""), "type": (tg or {}).get("type") or _HAMIR_EXP_DEFAULT_TYPE.get(r["heading"], "Other"),
                      "note": (tg or {}).get("note", ""), "status": _hamir_expense_status(r, tg, store),
+                     "receipts": [{"id": x["id"], "name": x["name"], "pages": len(x["pages"])} for x in rcpt.get(r["txn_id"], [])],
                      "locked": _hamir_expense_status(r, tg, store).startswith("On invoice")})
     cl = prof["clients"]["EQT"]
     rate, rdate = _hamir_month_fx(rc, month, cl)
@@ -1035,7 +1131,8 @@ def hamir_expense_spec_preview(client):
     inv = {"number": "next " + client + " invoice (preview)", "currency": cur, "project": cl.get("project") or client,
            "expenses": exps, "exp_c": round(sum(e["amount_c"] for e in exps), 2), "exp_inr": round(sum(e["amount"] for e in exps), 2),
            "client": client}
-    return render_template("hamir_expense_spec.html", inv=inv, prof=prof, client=cl, letterhead=_hamir_letterhead_path() is not None)
+    return render_template("hamir_expense_spec.html", inv=inv, prof=prof, client=cl, letterhead=_hamir_letterhead_path() is not None,
+                           receipts=_receipts_for(exps))
 
 
 @app.route("/api/hamir/invoice-profile", methods=["POST"])
@@ -1094,7 +1191,7 @@ def hamir_invoice_print(inv_id):
         return "Invoice not found", 404
     tpl = "hamir_invoice_print_eqt.html" if inv.get("template") == "eqt" else "hamir_invoice_print.html"
     return render_template(tpl, inv=inv, prof=prof, client=prof["clients"][inv["client"]], letterhead=_hamir_letterhead_path() is not None,
-                           embed=request.args.get("embed") == "1")
+                           embed=request.args.get("embed") == "1", receipts=_receipts_for(inv["expenses"]))
 
 
 def _hamir_letterhead_path():
@@ -1147,6 +1244,15 @@ def _docx_expense_spec(doc, inv, cur, dmy):
     for cc in c:
         for rr in cc.paragraphs[0].runs:
             rr.bold = True
+    import base64, io
+    from docx.shared import Inches
+    rcp = _hamir_receipt_store()
+    for e in inv["expenses"]:
+        for rec in rcp.get(e["txn_id"], []):
+            for pg in rec["pages"]:
+                doc.add_page_break()
+                doc.add_paragraph(f"Receipt: {dmy(e['date'])} - {e['type']} - {e['comment']} (Rs {e['amount']:,.2f})").runs[0].bold = True
+                doc.add_picture(io.BytesIO(base64.b64decode(pg)), width=Inches(5.8))
 
 
 def _docx_letterhead(doc):

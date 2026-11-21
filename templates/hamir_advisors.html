@@ -122,8 +122,8 @@ table.log { width:100%; border-collapse:collapse; min-width:880px; }
       <button class="btn" onclick="saveExpFx()">Save rate</button> <span id="exp-fxnote" style="color:#94a3b8;"></span></div>
   </div>
   <div class="kpi-row" id="exp-kpis" style="grid-template-columns:repeat(2,1fr);"></div>
-  <div class="log-wrap"><table class="log" style="min-width:980px;">
-    <thead><tr><th style="width:84px">Date</th><th>Paid to</th><th>Ledger heading</th><th class="r">Amount (Rs)</th><th style="width:96px">Type</th><th style="width:150px">Debit to</th><th>Comment on invoice</th><th>Status</th></tr></thead>
+  <div class="log-wrap"><table class="log" style="min-width:1120px;">
+    <thead><tr><th style="width:84px">Date</th><th>Paid to</th><th>Ledger heading</th><th class="r">Amount (Rs)</th><th style="width:96px">Type</th><th style="width:150px">Debit to</th><th>Comment on invoice</th><th style="width:170px">Receipt</th><th>Status</th></tr></thead>
     <tbody id="exp-rows"></tbody></table></div>
   <div style="font-size:11px;color:#94a3b8;margin-top:6px;">Only expenses paid from the Hamir bank account are listed. Once an invoice is marked issued its expenses are frozen on it and can no longer be changed here.</div>
 </div>
@@ -372,12 +372,28 @@ function renderExpenses() {
     <td>${r.locked ? esc(r.client) : `<label style="margin-right:8px;white-space:nowrap"><input type="radio" name="c${r.txn_id}" ${!r.client ? 'checked' : ''} onclick="tagExp('${r.txn_id}', {client: ''})"> none</label>` +
          d.clients.map(c => `<label style="margin-right:8px;white-space:nowrap"><input type="radio" name="c${r.txn_id}" ${r.client === c ? 'checked' : ''} onclick="tagExp('${r.txn_id}', {client: '${c}'})"> ${c}</label>`).join('')}</td>
     <td><input ${r.client && !r.locked ? '' : 'disabled'} value="${esc(r.note)}" placeholder="${esc(r.paid_to)}" style="width:100%;border:1px solid #e2e8f0;border-radius:4px;padding:2px 6px;" onchange="tagExp('${r.txn_id}', {note: this.value})"></td>
+    <td style="font-size:11.5px;">${r.receipts.map(x => `<div><a href="/hamir-advisors/receipt/${r.txn_id}/${x.id}/0" target="_blank">${esc(x.name.length > 22 ? x.name.slice(0, 20) + '…' : x.name)}</a>${x.pages > 1 ? ' (' + x.pages + 'p)' : ''}${r.locked ? '' : ` <a href="#" style="color:#dc2626" onclick="delReceipt('${r.txn_id}','${x.id}');return false;">✕</a>`}</div>`).join('')}
+      ${r.locked ? '' : `<label class="btn" style="font-size:11px;padding:2px 8px;cursor:pointer;display:inline-block;margin-top:2px;">+ Add receipt<input type="file" accept="image/*,application/pdf" style="display:none" onchange="addReceipt('${r.txn_id}', this)"></label>`}
+      ${r.client && !r.receipts.length ? '<div style="color:#dc2626;font-size:11px;">⚠ no receipt yet</div>' : ''}</td>
     <td style="font-size:11.5px;color:#475569;">${esc(r.status)}</td></tr>`).join('')
-    : '<tr><td colspan="8" class="empty">No expenses from the Hamir account in this month.</td></tr>';
+    : '<tr><td colspan="9" class="empty">No expenses from the Hamir account in this month.</td></tr>';
 }
 async function tagExp(txnId, patch) {
   const r = await fetch('/api/hamir/expenses', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({txn_id: txnId, ...patch})});
   if (!r.ok) { const j = await r.json().catch(() => ({})); alert(j.error || 'Could not save'); }
+  loadExpenses(_exp.month);
+}
+async function addReceipt(txnId, inp) {
+  const f = inp.files[0]; if (!f) return;
+  const fd = new FormData(); fd.append('file', f);
+  inp.parentElement.firstChild.textContent = 'Uploading…';
+  const r = await fetch('/api/hamir/expenses/' + txnId + '/receipt', {method: 'POST', body: fd});
+  if (!r.ok) { const j = await r.json().catch(() => ({})); alert(j.error || 'Upload failed'); }
+  loadExpenses(_exp.month);
+}
+async function delReceipt(txnId, rid) {
+  if (!confirm('Remove this receipt?')) return;
+  await fetch('/api/hamir/expenses/' + txnId + '/receipt/' + rid, {method: 'DELETE'});
   loadExpenses(_exp.month);
 }
 async function saveExpFx() {

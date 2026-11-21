@@ -13,3 +13,9 @@
   </tbody>
 </table>
 <p style="margin:10px 0 0;font-size:11px;color:#475569">Receipts for these expenses follow this page.</p>
+{% for e in inv.expenses %}{% for r in (receipts or {}).get(e.txn_id, []) %}{% for pg in r.pages %}
+<div style="page-break-before:always;padding-top:6mm">
+  <b>Receipt — {{ e.date|dmy }} · {{ e.type }} · {{ e.comment }} (INR {{ '{:,.2f}'.format(e.amount) }})</b><br>
+  <img src="{{ pg }}" style="max-width:100%;max-height:235mm;margin-top:8px;border:1px solid #e2e8f0">
+</div>
+{% endfor %}{% endfor %}{% endfor %}
