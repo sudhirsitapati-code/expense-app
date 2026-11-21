@@ -1,0 +1,15 @@
+<b style="font-size:15px">Expense details — appendix to invoice {{ inv.number }} for out-of-pocket expenses</b>
+<p style="margin:6px 0 0;font-size:12px">Project: {{ inv.project }}{% if inv.reference %} · Reference: {{ inv.reference }}{% endif %}. Amounts incurred in Indian rupees are converted into {{ inv.currency }} at the rate and date shown on each line.</p>
+<style>.xspec{width:100%;border-collapse:collapse;margin-top:10px}.xspec th{text-align:left;font-size:11px;border-bottom:1.5px solid #111;padding:6px}.xspec td{padding:6px;border-bottom:.5px solid #ccc;vertical-align:top}.xspec .r{text-align:right;font-variant-numeric:tabular-nums}.xspec .tot td{font-weight:700;border-top:1.5px solid #111;border-bottom:none}</style>
+<table class="xspec">
+  <thead><tr><th style="width:80px">Date</th><th>Project</th><th style="width:80px">Type of expense</th><th>Comment</th><th class="r" style="width:96px">Currency of expense</th><th class="r" style="width:96px">FX rate</th><th class="r" style="width:96px">Amount ({{ inv.currency }})</th></tr></thead>
+  <tbody>
+    {% for e in inv.expenses %}<tr><td>{{ e.date|dmy }}</td><td>{{ inv.project }}</td><td>{{ e.type }}</td><td>{{ e.comment }}</td>
+      <td class="r">{{ e.currency }} {{ '{:,.2f}'.format(e.amount) }}</td>
+      <td class="r">{% if inv.currency != 'INR' %}{{ '{:,.2f}'.format(e.fx) }}{% if e.fx_date %}<br><span style="font-size:10px;color:#64748b">{{ e.fx_date|dmy }}</span>{% endif %}{% endif %}</td>
+      <td class="r">{{ '{:,.2f}'.format(e.amount_c) }}</td></tr>
+    {% else %}<tr><td colspan="7" style="color:#64748b;padding:10px 6px">No expenses ticked yet. Tick "EQT" or "Advent" against an expense on the Expenses tab.</td></tr>{% endfor %}
+    <tr class="tot"><td colspan="4">Total amount</td><td class="r">INR {{ '{:,.2f}'.format(inv.exp_inr) }}</td><td></td><td class="r">{{ inv.currency }} {{ '{:,.2f}'.format(inv.exp_c) }}</td></tr>
+  </tbody>
+</table>
+<p style="margin:10px 0 0;font-size:11px;color:#475569">Receipts for these expenses follow this page.</p>

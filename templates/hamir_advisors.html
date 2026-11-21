@@ -90,6 +90,7 @@ table.log { width:100%; border-collapse:collapse; min-width:880px; }
   <div class="fs-tab active" onclick="showTab('log', this)">Master Billing Log</div>
   <div class="fs-tab" onclick="showTab('inv', this)">Invoices</div>
   <div class="fs-tab" onclick="showTab('trk', this)">Sent &amp; Paid</div>
+  <div class="fs-tab" onclick="showTab('exp', this)">Expenses</div>
 </div>
 
 <div class="tab-panel" id="tab-inv" style="display:none;">
@@ -106,6 +107,25 @@ table.log { width:100%; border-collapse:collapse; min-width:880px; }
     <summary>Invoice details — your LLP, clients, GST (set once)</summary>
     <div id="inv-profile-body" style="margin-top:10px;"></div>
   </details>
+</div>
+
+<div class="tab-panel" id="tab-exp" style="display:none;">
+  <div class="toolbar">
+    <div class="ttl">Hamir expenses · debit to a client</div>
+    <div><select id="exp-month" onchange="loadExpenses(this.value)" style="border:1px solid #e2e8f0;border-radius:4px;padding:3px 6px;font-size:12px;"></select></div>
+  </div>
+  <div class="rates" style="margin-bottom:12px;">
+    <div style="font-size:12px;color:#475569;">Tick <b>EQT</b> or <b>Advent</b> against an expense and it is added to that client's next invoice as an out-of-pocket expense, with a receipt-ready specification page.
+      Expenses in rupees are converted into the invoice currency (EQT: US dollars) at the month-end rate below.</div>
+    <div style="margin-top:8px;font-size:12px;">Month-end rate: Rs <input id="exp-fx" type="number" step="0.01" style="width:80px;text-align:right;border:1px solid #e2e8f0;border-radius:4px;padding:2px 6px;"> per USD
+      &nbsp; dated <input id="exp-fxdate" type="date" style="border:1px solid #e2e8f0;border-radius:4px;padding:2px 6px;">
+      <button class="btn" onclick="saveExpFx()">Save rate</button> <span id="exp-fxnote" style="color:#94a3b8;"></span></div>
+  </div>
+  <div class="kpi-row" id="exp-kpis" style="grid-template-columns:repeat(2,1fr);"></div>
+  <div class="log-wrap"><table class="log" style="min-width:980px;">
+    <thead><tr><th style="width:84px">Date</th><th>Paid to</th><th>Ledger heading</th><th class="r">Amount (Rs)</th><th style="width:96px">Type</th><th style="width:150px">Debit to</th><th>Comment on invoice</th><th>Status</th></tr></thead>
+    <tbody id="exp-rows"></tbody></table></div>
+  <div style="font-size:11px;color:#94a3b8;margin-top:6px;">Only expenses paid from the Hamir bank account are listed. Once an invoice is marked issued its expenses are frozen on it and can no longer be changed here.</div>
 </div>
 
 <div class="tab-panel" id="tab-trk" style="display:none;">
@@ -320,8 +340,50 @@ function fitFrame(f) { try { f.style.height = (f.contentDocument.documentElement
 function showTab(name, el) {
   document.querySelectorAll('.fs-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  ['log','inv','trk'].forEach(n => document.getElementById('tab-' + n).style.display = (n === name ? '' : 'none'));
-  if (name !== 'log') loadInvoices();
+  ['log','inv','trk','exp'].forEach(n => document.getElementById('tab-' + n).style.display = (n === name ? '' : 'none'));
+  if (name === 'exp') loadExpenses();
+  else if (name !== 'log') loadInvoices();
+}
+
+// ── expenses debited to a client ────────────────────────────────────────────
+let _exp = null;
+async function loadExpenses(month) {
+  const r = await fetch('/api/hamir/expenses' + (month ? '?month=' + month : ''));
+  if (!r.ok) { alert('Could not load expenses (' + r.status + ')'); return; }
+  _exp = await r.json(); renderExpenses();
+}
+function renderExpenses() {
+  const d = _exp;
+  const sel = document.getElementById('exp-month');
+  sel.innerHTML = d.months.map(m => `<option value="${m}" ${m === d.month ? 'selected' : ''}>${mon(m)}</option>`).join('');
+  document.getElementById('exp-fx').value = d.fx.rate;
+  document.getElementById('exp-fxdate').value = d.fx.date || '';
+  document.getElementById('exp-fxnote').textContent = d.fx.custom ? '' : '(default rate from Invoice details — save to set this month)';
+  document.getElementById('exp-kpis').innerHTML = d.clients.map(c => {
+    const s = d.summary[c];
+    const val = s.currency === 'USD' ? '$' + s.converted.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : inr(s.converted);
+    return `<div class="kpi"><div class="kpi-label">Debit to ${c} · ${mon(d.month)}</div><div class="kpi-val">${s.count ? val : '—'}</div>
+      <div style="font-size:11px;color:#94a3b8;">${s.count} expense${s.count === 1 ? '' : 's'}${s.count ? ' · ' + inr(s.inr) : ''}${s.count ? ` · <a href="/hamir-advisors/expenses/${c}/spec" target="_blank">preview specification</a>` : ''}</div></div>`;
+  }).join('');
+  document.getElementById('exp-rows').innerHTML = d.rows.length ? d.rows.map(r => `<tr>
+    <td class="nowrap">${dmy(r.date)}</td><td>${esc(r.paid_to)}<div style="font-size:11px;color:#94a3b8;">${esc(r.desc)}</div></td><td>${esc(r.heading)}</td>
+    <td class="r">${inr(r.amount)}</td>
+    <td><select ${r.locked ? 'disabled' : ''} onchange="tagExp('${r.txn_id}', {type: this.value})" ${r.client ? '' : 'disabled'}>${d.types.map(t => `<option ${t === r.type ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+    <td>${r.locked ? esc(r.client) : `<label style="margin-right:8px;white-space:nowrap"><input type="radio" name="c${r.txn_id}" ${!r.client ? 'checked' : ''} onclick="tagExp('${r.txn_id}', {client: ''})"> none</label>` +
+         d.clients.map(c => `<label style="margin-right:8px;white-space:nowrap"><input type="radio" name="c${r.txn_id}" ${r.client === c ? 'checked' : ''} onclick="tagExp('${r.txn_id}', {client: '${c}'})"> ${c}</label>`).join('')}</td>
+    <td><input ${r.client && !r.locked ? '' : 'disabled'} value="${esc(r.note)}" placeholder="${esc(r.paid_to)}" style="width:100%;border:1px solid #e2e8f0;border-radius:4px;padding:2px 6px;" onchange="tagExp('${r.txn_id}', {note: this.value})"></td>
+    <td style="font-size:11.5px;color:#475569;">${esc(r.status)}</td></tr>`).join('')
+    : '<tr><td colspan="8" class="empty">No expenses from the Hamir account in this month.</td></tr>';
+}
+async function tagExp(txnId, patch) {
+  const r = await fetch('/api/hamir/expenses', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({txn_id: txnId, ...patch})});
+  if (!r.ok) { const j = await r.json().catch(() => ({})); alert(j.error || 'Could not save'); }
+  loadExpenses(_exp.month);
+}
+async function saveExpFx() {
+  const rate = document.getElementById('exp-fx').value, date = document.getElementById('exp-fxdate').value;
+  await fetch('/api/hamir/expenses', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({fx_month: _exp.month, rate, date})});
+  loadExpenses(_exp.month);
 }
 
 // ── invoices ────────────────────────────────────────────────────────────────

@@ -53,7 +53,8 @@
     <thead><tr><th style="width:90px">Date</th><th>Description</th><th class="r" style="width:60px">Hours</th><th class="r" style="width:120px">Amount ({{ inv.currency }})</th></tr></thead>
     <tbody>
       {% for l in inv.lines %}<tr><td>{{ l.date|dmy }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>
-      {% else %}<tr><td colspan="4" class="muted">No entries.</td></tr>{% endfor %}
+      {% else %}{% if not inv.expenses %}<tr><td colspan="4" class="muted">No entries.</td></tr>{% endif %}{% endfor %}
+      {% for e in inv.expenses %}<tr><td>{{ e.date|dmy }}</td><td>Out-of-pocket expense: {{ e.type }} — {{ e.comment }}</td><td></td><td class="r">{{ '{:,.2f}'.format(e.amount_c) }}</td></tr>{% endfor %}
     </tbody>
   </table>
   <table class="tot" style="margin-top:8px;">
@@ -62,7 +63,7 @@
     <tr class="grand"><td></td><td class="r">Total payable ({{ inv.currency }})</td><td class="r">{{ '{:,.2f}'.format(inv.total_c) }}</td></tr>
   </table>
   <div class="box">Amount in words: <b>{{ 'US Dollars' if inv.currency == 'USD' else 'Rupees' }} {{ inv.amount_words }} only</b></div>
-  {% if inv.currency != 'INR' %}<div class="box"><b>Indian rupee equivalent</b> at Rs {{ '{:,.2f}'.format(inv.fx) }} per {{ inv.currency }}{% if inv.fx_date %} ({{ inv.fx_date }}){% endif %}: fee Rs {{ '{:,.2f}'.format(inv.subtotal) }}{% if inv.gst_pct %} + {{ inv.gst_label }} Rs {{ '{:,.2f}'.format(inv.gst_amount) }}{% endif %} = <b>Rs {{ '{:,.2f}'.format(inv.total) }}</b></div>{% endif %}
+  {% if inv.currency != 'INR' %}<div class="box"><b>Indian rupee equivalent</b> at Rs {{ '{:,.2f}'.format(inv.fx) }} per {{ inv.currency }}{% if inv.fx_date %} ({{ inv.fx_date }}){% endif %}: fee Rs {{ '{:,.2f}'.format(inv.fees_inr) }}{% if inv.expenses %} + expenses Rs {{ '{:,.2f}'.format(inv.exp_inr) }}{% endif %}{% if inv.gst_pct %} + {{ inv.gst_label }} Rs {{ '{:,.2f}'.format(inv.gst_amount) }}{% endif %} = <b>Rs {{ '{:,.2f}'.format(inv.total) }}</b></div>{% endif %}
   {% if inv.export %}<div class="box">Export of services. Supplied under Letter of Undertaking{% if prof.llp.lut %} {{ prof.llp.lut }}{% endif %}; no IGST charged.</div>{% endif %}
   {% if prof.llp.bank_account or prof.llp.bank_ifsc %}
   <div class="box"><b>Bank details</b><br>{{ prof.llp.name }} — {{ prof.llp.bank_name }}
@@ -79,8 +80,12 @@
     <thead><tr><th style="width:84px">Date</th><th style="width:92px">Time</th><th>Work</th><th class="r" style="width:50px">Hours</th><th>Basis</th><th class="r" style="width:110px">Amount ({{ inv.currency }})</th></tr></thead>
     <tbody>
       {% for l in inv.lines %}<tr><td>{{ l.date|dmy }}</td><td>{{ l.time }}</td><td>{{ l.description }}</td><td class="r">{{ '' if l.hours is none else l.hours }}</td><td>{{ l.basis }}</td><td class="r">{{ '{:,.2f}'.format(l.amount_c) }}</td></tr>{% endfor %}
-      <tr><td colspan="3"><b>Total</b></td><td class="r"><b>{{ inv.hours_total }}</b></td><td></td><td class="r"><b>{{ '{:,.2f}'.format(inv.subtotal_c) }}</b></td></tr>
+      <tr><td colspan="3"><b>Total</b></td><td class="r"><b>{{ inv.hours_total }}</b></td><td></td><td class="r"><b>{{ '{:,.2f}'.format(inv.fees_c) }}</b></td></tr>
     </tbody>
   </table>
 </div>
+{% if inv.expenses %}<div class="page" style="page-break-before:always">
+  {% include "_hamir_letterhead.html" %}
+  {% include "_hamir_expense_spec.html" %}
+</div>{% endif %}
 </body></html>

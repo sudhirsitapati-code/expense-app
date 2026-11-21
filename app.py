@@ -610,6 +610,71 @@ def _inr_words(n):
     return " ".join(parts)
 
 
+# ── Hamir expenses recharged to a client (out-of-pocket expenses on the invoice) ─────────────
+# The ledger stays plain. A tick on the Hamir "Expenses" tab (stored here) pulls the expense onto the client's next
+# unsent invoice, converted into the invoice currency at that month's rate; issued invoices keep a frozen copy.
+_HAMIR_RECHARGE_KEY = "hamir_recharges"
+_HAMIR_EXP_TYPES = ["Travel", "Taxi", "Hotel", "Meals", "Other"]
+_HAMIR_EXP_DEFAULT_TYPE = {"Hamir Travel": "Travel", "Holiday": "Travel"}
+
+
+def _hamir_recharge_store():
+    s = db.load(_HAMIR_RECHARGE_KEY)
+    if not isinstance(s, dict):
+        s = {}
+    s.setdefault("tags", {})
+    s.setdefault("fx", {})
+    return s
+
+
+def _hamir_expense_rows():
+    """Expenses paid from the Hamir bank account (ICICI-1691), oldest first."""
+    from src.master_ledger import _parse_date as _pd
+    out = []
+    for t in db.load("master_ledger") or []:
+        if t.get("account") != "ICICI-1691" or (t.get("type") or "").lower() != "expense":
+            continue
+        amt = float(t.get("debit") or 0)
+        d = _pd(t.get("date", ""))
+        if amt <= 0 or not d:
+            continue
+        out.append({"txn_id": t["txn_id"], "date": d.strftime("%Y-%m-%d"), "paid_to": t.get("paid_to") or "",
+                    "desc": " ".join((t.get("raw_description") or "").split())[:80], "heading": t.get("heading") or "",
+                    "remarks": t.get("remarks") or "", "amount": round(amt, 2)})
+    out.sort(key=lambda r: (r["date"], r["txn_id"]))
+    return out
+
+
+def _hamir_month_fx(rc, month, cl):
+    """(rate, date) used to convert that month's expenses: the month-end rate typed on the Expenses tab, else the client's default."""
+    m = rc["fx"].get(month) or {}
+    if m.get("rate"):
+        return float(m["rate"]), m.get("date") or ""
+    return float(cl.get("fx") or 96.0), cl.get("fx_date") or ""
+
+
+def _inv_expense_lines(inv, cl):
+    """Out-of-pocket expense lines for an invoice. Drafts read the ticks live; issued invoices use their frozen copy."""
+    if inv.get("status") != "draft":
+        return [dict(e) for e in inv.get("expenses", [])]
+    rc = _hamir_recharge_store()
+    taken = set()
+    for o in _hamir_invoice_store():
+        if o["id"] != inv["id"] and o.get("status") != "draft":
+            taken.update(e["txn_id"] for e in o.get("expenses", []))
+    cur = (cl.get("currency") or "INR").upper()
+    out = []
+    for r in _hamir_expense_rows():
+        tg = rc["tags"].get(r["txn_id"])
+        if not tg or tg.get("client") != inv["client"] or r["txn_id"] in taken or r["date"][:7] > inv["period"]:
+            continue
+        rate, rdate = _hamir_month_fx(rc, r["date"][:7], cl) if cur == "USD" else (1.0, "")
+        out.append({"txn_id": r["txn_id"], "date": r["date"], "type": tg.get("type") or _HAMIR_EXP_DEFAULT_TYPE.get(r["heading"], "Other"),
+                    "comment": (tg.get("note") or r["paid_to"] or r["desc"])[:120], "currency": "INR", "fx": rate, "fx_date": rdate,
+                    "amount": r["amount"], "amount_c": round(r["amount"] / rate, 2)})
+    return out
+
+
 def _inv_enrich(inv, prof, taken_for_draft=None):
     """Return the invoice with live totals; drafts re-read their lines from the billing log."""
     inv = dict(inv)
@@ -622,7 +687,10 @@ def _inv_enrich(inv, prof, taken_for_draft=None):
     cl = prof["clients"].get(inv["client"], {})
     cur = (cl.get("currency") or "INR").upper()
     fx = float(cl.get("fx") or 96.0) if cur == "USD" else 1.0
-    subtotal = round(sum(l["amount"] for l in inv.get("lines", [])), 2)          # INR (books)
+    fees_inr = round(sum(l["amount"] for l in inv.get("lines", [])), 2)          # INR (books)
+    exps = _inv_expense_lines(inv, cl)
+    exp_inr = round(sum(e["amount"] for e in exps), 2)
+    subtotal = round(fees_inr + exp_inr, 2)
     gst_pct = float(inv.get("gst_pct") or 0)
     gst = round(subtotal * gst_pct / 100.0, 2)
     total = round(subtotal + gst, 2)
@@ -630,10 +698,13 @@ def _inv_enrich(inv, prof, taken_for_draft=None):
     tds_pct = float(tds_raw) if str(tds_raw).strip() != "" else float(prof.get("tds_pct") or 0)
     for l in inv.get("lines", []):
         l["amount_c"] = round(l["amount"] / fx, 2)
-    sub_c = round(sum(l["amount_c"] for l in inv.get("lines", [])), 2)
+    fees_c = round(sum(l["amount_c"] for l in inv.get("lines", [])), 2)
+    exp_c = round(sum(e["amount_c"] for e in exps), 2)
+    sub_c = round(fees_c + exp_c, 2)
     gst_c = round(sub_c * gst_pct / 100.0, 2)
     tot_c = round(sub_c + gst_c, 2)
-    inv.update({"subtotal": subtotal, "gst_amount": gst, "total": total,
+    inv.update({"fees_inr": fees_inr, "fees_c": fees_c, "exp_inr": exp_inr, "exp_c": exp_c, "expenses": exps,
+                "subtotal": subtotal, "gst_amount": gst, "total": total,
                 "currency": cur, "fx": fx, "subtotal_c": sub_c, "gst_c": gst_c, "total_c": tot_c,
                 "expected_net": round(total - subtotal * tds_pct / 100.0, 2),
                 "hours_total": round(sum(float(l.get("hours") or 0) for l in inv.get("lines", [])), 2),
@@ -680,7 +751,7 @@ def _inv_enrich(inv, prof, taken_for_draft=None):
                 "project": inv.get("project") or cl.get("project") or "",
                 "reference": inv.get("reference") or cl.get("reference_person") or "",
                 "day_rate": day_rate,
-                "service_days": round(sub_c / day_rate, 2) if day_rate else None,
+                "service_days": round(fees_c / day_rate, 2) if day_rate else None,
                 "period_from": dates[0] if dates else "", "period_to": dates[-1] if dates else ""})
     return inv
 
@@ -847,11 +918,12 @@ def api_hamir_invoice_update(inv_id):
         if body["status"] == "issued" and inv["status"] == "draft":
             snap = _inv_enrich(inv, prof)           # freeze the lines as they stand today
             inv["lines"] = snap["lines"]
+            inv["expenses"] = snap["expenses"]
         inv["status"] = body["status"]
     if isinstance(body.get("submitted"), dict):
         inv["submitted"] = {"done": bool(body["submitted"].get("done")), "date": str(body["submitted"].get("date") or "")[:10]}
         if inv["submitted"]["done"] and inv["status"] == "draft":
-            inv["lines"] = _inv_enrich(inv, prof)["lines"]; inv["status"] = "issued"
+            snap = _inv_enrich(inv, prof); inv["lines"] = snap["lines"]; inv["expenses"] = snap["expenses"]; inv["status"] = "issued"
     if isinstance(body.get("paid"), dict):
         p = body["paid"]
         done = bool(p.get("done"))
@@ -859,10 +931,111 @@ def api_hamir_invoice_update(inv_id):
         inv["paid"] = {"done": done, "date": str(p.get("date") or "")[:10],
                        "amount": (None if amt in (None, "") else round(float(amt), 2)), "txn_id": str(p.get("txn_id") or "")[:40]}
         if done and inv["status"] == "draft":
-            inv["lines"] = _inv_enrich(inv, prof)["lines"]; inv["status"] = "issued"
+            snap = _inv_enrich(inv, prof); inv["lines"] = snap["lines"]; inv["expenses"] = snap["expenses"]; inv["status"] = "issued"
         _inv_sync_entry_paid(inv, done)
     db.save(_HAMIR_INV_KEY, store)
     return jsonify({"ok": True})
+
+
+def _hamir_expense_status(row, tag, store):
+    """Where a ticked expense ends up: a frozen invoice, a live draft, or the next invoice that is not created yet."""
+    if not tag:
+        return ""
+    for o in store:
+        if o.get("status") != "draft" and any(e["txn_id"] == row["txn_id"] for e in o.get("expenses", [])):
+            return f"On invoice {o['number']}"
+    for o in sorted(store, key=lambda x: x["period"]):
+        if o.get("status") == "draft" and o["client"] == tag["client"] and o["period"] >= row["date"][:7]:
+            return f"On draft invoice {o['number']}"
+    return f"Waiting for the next {tag['client']} invoice"
+
+
+@app.route("/api/hamir/expenses", methods=["GET"])
+@login_required
+def api_hamir_expenses_get():
+    if session.get("user") != HAMIR_OWNER:
+        return jsonify({"error": "forbidden"}), 403
+    rows_all = _hamir_expense_rows()
+    months = sorted({r["date"][:7] for r in rows_all}, reverse=True)
+    month = request.args.get("month") or (months[0] if months else datetime.now().strftime("%Y-%m"))
+    rc = _hamir_recharge_store()
+    store = _hamir_invoice_store()
+    prof = _hamir_profile()
+    rows = []
+    for r in rows_all:
+        if r["date"][:7] != month:
+            continue
+        tg = rc["tags"].get(r["txn_id"])
+        rows.append({**r, "client": (tg or {}).get("client", ""), "type": (tg or {}).get("type") or _HAMIR_EXP_DEFAULT_TYPE.get(r["heading"], "Other"),
+                     "note": (tg or {}).get("note", ""), "status": _hamir_expense_status(r, tg, store),
+                     "locked": _hamir_expense_status(r, tg, store).startswith("On invoice")})
+    cl = prof["clients"]["EQT"]
+    rate, rdate = _hamir_month_fx(rc, month, cl)
+    summary = {}
+    for c in HAMIR_CLIENTS:
+        cur = (prof["clients"][c].get("currency") or "INR").upper()
+        inr_ = round(sum(x["amount"] for x in rows if x["client"] == c), 2)
+        summary[c] = {"inr": inr_, "currency": cur, "converted": round(inr_ / rate, 2) if cur == "USD" else inr_, "count": sum(1 for x in rows if x["client"] == c)}
+    return jsonify({"month": month, "months": months or [month], "rows": rows, "types": _HAMIR_EXP_TYPES,
+                    "fx": {"rate": rate, "date": rdate, "custom": month in rc["fx"]}, "summary": summary, "clients": list(HAMIR_CLIENTS)})
+
+
+@app.route("/api/hamir/expenses", methods=["POST"])
+@login_required
+def api_hamir_expenses_post():
+    if session.get("user") != HAMIR_OWNER:
+        return jsonify({"error": "forbidden"}), 403
+    body = request.get_json(force=True) or {}
+    rc = _hamir_recharge_store()
+    if "fx_month" in body:
+        try:
+            rate = float(body.get("rate") or 0)
+        except ValueError:
+            rate = 0
+        if rate <= 0:
+            rc["fx"].pop(str(body["fx_month"]), None)
+        else:
+            rc["fx"][str(body["fx_month"])] = {"rate": rate, "date": str(body.get("date") or "")[:10]}
+        db.save(_HAMIR_RECHARGE_KEY, rc)
+        return jsonify({"ok": True})
+    tid = str(body.get("txn_id") or "")
+    row = next((r for r in _hamir_expense_rows() if r["txn_id"] == tid), None)
+    if not row:
+        return jsonify({"error": "expense not found"}), 404
+    store = _hamir_invoice_store()
+    if _hamir_expense_status(row, rc["tags"].get(tid), store).startswith("On invoice"):
+        return jsonify({"error": "already on an issued invoice"}), 400
+    client = str(body.get("client") or "")
+    if client and client not in HAMIR_CLIENTS:
+        return jsonify({"error": "unknown client"}), 400
+    cur = rc["tags"].get(tid) or {}
+    if not client:
+        rc["tags"].pop(tid, None)
+    else:
+        typ = str(body.get("type") or cur.get("type") or _HAMIR_EXP_DEFAULT_TYPE.get(row["heading"], "Other"))
+        rc["tags"][tid] = {"client": client, "type": typ if typ in _HAMIR_EXP_TYPES else "Other",
+                           "note": str(body["note"])[:200] if "note" in body else cur.get("note", "")}
+    db.save(_HAMIR_RECHARGE_KEY, rc)
+    return jsonify({"ok": True})
+
+
+@app.route("/hamir-advisors/expenses/<client>/spec")
+@login_required
+def hamir_expense_spec_preview(client):
+    """What the expense specification for the client's next invoice looks like right now."""
+    if session.get("user") != HAMIR_OWNER:
+        return redirect(url_for("home"))
+    if client not in HAMIR_CLIENTS:
+        return "Unknown client", 404
+    prof = _hamir_profile()
+    cl = prof["clients"][client]
+    cur = (cl.get("currency") or "INR").upper()
+    pseudo = {"id": "preview", "client": client, "status": "draft", "period": "9999-12"}
+    exps = _inv_expense_lines(pseudo, cl)
+    inv = {"number": "next " + client + " invoice (preview)", "currency": cur, "project": cl.get("project") or client,
+           "expenses": exps, "exp_c": round(sum(e["amount_c"] for e in exps), 2), "exp_inr": round(sum(e["amount"] for e in exps), 2),
+           "client": client}
+    return render_template("hamir_expense_spec.html", inv=inv, prof=prof, client=cl, letterhead=_hamir_letterhead_path() is not None)
 
 
 @app.route("/api/hamir/invoice-profile", methods=["POST"])
@@ -946,8 +1119,31 @@ def _docx_annexure(doc, inv, cur, dmy):
         c[3].text = "" if l.get("hours") is None else f"{l['hours']:g}"; c[4].text = l.get("basis", ""); c[5].text = f"{l['amount_c']:,.2f}"
         c[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
     c = tb.add_row().cells
-    c[2].text = "Total"; c[3].text = f"{inv['hours_total']:g}"; c[5].text = f"{inv['subtotal_c']:,.2f}"
+    c[2].text = "Total"; c[3].text = f"{inv['hours_total']:g}"; c[5].text = f"{inv['fees_c']:,.2f}"
     c[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    for cc in c:
+        for rr in cc.paragraphs[0].runs:
+            rr.bold = True
+
+
+def _docx_expense_spec(doc, inv, cur, dmy):
+    """Expense details appendix in EQT's column layout (also used for other clients)."""
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    if not inv.get("expenses"):
+        return
+    doc.add_page_break()
+    sp = doc.add_paragraph(); r = sp.add_run(f"Expense details - appendix to invoice {inv['number']} for out-of-pocket expenses"); r.bold = True; r.font.size = Pt(12)
+    tb = doc.add_table(rows=1, cols=7); tb.style = "Light Grid Accent 1"
+    for i, hd in enumerate(("Date", "Project", "Type of expense", "Comment", "Currency of expense", "FX rate", f"Amount ({cur})")):
+        tb.rows[0].cells[i].text = hd
+    for e in inv["expenses"]:
+        c = tb.add_row().cells
+        c[0].text = dmy(e["date"]); c[1].text = inv.get("project") or ""; c[2].text = e["type"]; c[3].text = e["comment"]
+        c[4].text = f"{e['currency']} {e['amount']:,.2f}"; c[5].text = (f"{e['fx']:,.2f}" + (f" ({dmy(e['fx_date'])})" if e.get("fx_date") else "")) if cur != "INR" else ""
+        c[6].text = f"{e['amount_c']:,.2f}"; c[6].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    c = tb.add_row().cells
+    c[3].text = "Total"; c[6].text = f"{inv['exp_c']:,.2f}"; c[6].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
     for cc in c:
         for rr in cc.paragraphs[0].runs:
             rr.bold = True
@@ -1014,9 +1210,9 @@ def _inv_docx_eqt(inv, prof):
     c[0].text = "Advisory fee for full days of"
     c[1].text = "" if inv.get("service_days") is None else f"{inv['service_days']:g}"
     c[2].text = f"{inv['day_rate']:,.2f}" if inv.get("day_rate") else ""
-    c[3].text = f"{inv['subtotal_c']:,.2f}"
+    c[3].text = f"{inv['fees_c']:,.2f}"
     c = f.add_row().cells
-    c[0].text = "Out of pocket expenses"; c[3].text = "0.00"
+    c[0].text = "Out of pocket expenses" + (" (see attached specification of expenses)" if inv["expenses"] else ""); c[3].text = f"{inv['exp_c']:,.2f}"
     if inv["gst_pct"]:
         c = f.add_row().cells
         c[0].text = f"{inv['gst_label']} @ {inv['gst_pct']:g}%"; c[3].text = f"{inv['gst_c']:,.2f}"
@@ -1033,7 +1229,8 @@ def _inv_docx_eqt(inv, prof):
         fxd = f" (rate of {dmy(inv['fx_date'])})" if inv.get("fx_date") else ""
         pr = doc.add_paragraph(); pr.paragraph_format.space_before = Pt(6)
         pr.add_run("Indian rupee equivalent: ").bold = True
-        pr.add_run(f"converted at Rs {inv['fx']:,.2f} per {cur}{fxd}. Fee Rs {inv['subtotal']:,.2f}"
+        pr.add_run(f"converted at Rs {inv['fx']:,.2f} per {cur}{fxd}. Fee Rs {inv['fees_inr']:,.2f}"
+                   + (f"; out-of-pocket expenses Rs {inv['exp_inr']:,.2f} (converted at the rates in the expense specification)" if inv["expenses"] else "")
                    + (f"; {inv['gst_label']} @ {inv['gst_pct']:g}% Rs {inv['gst_amount']:,.2f}" if inv["gst_pct"] else "")
                    + f"; total Rs {inv['total']:,.2f}.")
     doc.add_paragraph("Reverse charge liability for VAT (art 44 of the EU VAT Directive)")
@@ -1049,6 +1246,7 @@ def _inv_docx_eqt(inv, prof):
     if inv.get("notes"):
         doc.add_paragraph(inv["notes"])
     _docx_annexure(doc, inv, cur, dmy)
+    _docx_expense_spec(doc, inv, cur, dmy)
     buf = BytesIO(); doc.save(buf); buf.seek(0)
     safe = inv["number"].replace("/", "-")
     return send_file(buf, as_attachment=True, download_name=f"Invoice_{safe}_{inv['client']}.docx",
@@ -1113,6 +1311,11 @@ def hamir_invoice_docx(inv_id):
         c[0].text = dmy(l["date"]); c[1].text = l["description"]
         c[2].text = "" if l.get("hours") is None else f"{l['hours']:g}"; c[3].text = f"{l['amount_c']:,.2f}"
         c[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    for e in inv["expenses"]:
+        c = tb.add_row().cells
+        c[0].text = dmy(e["date"]); c[1].text = f"Out-of-pocket expense: {e['type']} - {e['comment']}"
+        c[3].text = f"{e['amount_c']:,.2f}"; c[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
     def total_row(label, val, bold=False):
         c = tb.add_row().cells
         c[1].text = label; c[3].text = val
@@ -1145,6 +1348,7 @@ def hamir_invoice_docx(inv_id):
         doc.add_paragraph(inv["notes"])
     doc.add_paragraph("This is a computer-generated invoice.").paragraph_format.space_before = Pt(14)
     _docx_annexure(doc, inv, cur, dmy)
+    _docx_expense_spec(doc, inv, cur, dmy)
     buf = BytesIO(); doc.save(buf); buf.seek(0)
     safe = inv["number"].replace("/", "-")
     return send_file(buf, as_attachment=True, download_name=f"Invoice_{safe}_{inv['client']}.docx",
